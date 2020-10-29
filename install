@@ -1,3 +1,1 @@
-rm -rf ./build ./dist ./lslyatomo.egg-info
-python3.7 setup.py install --user
-
+pip install .
