@@ -1827,3 +1827,40 @@ class VoidCatalog(Catalog):
         print(np.mean(radius_values))
         np.savetxt("central_average_values",np.transpose(np.stack([center_values,delta_values,radius_values])),header="Central value     Average value    Radius")
         return(center_values, delta_values)
+
+
+
+
+
+    def get_delta_void(self,size_map,void_dict_name,rmin,rmax,nr,nameout):
+        if(os.path.isfile("{}_rmin{}_rmax{}_nr{}.fits".format(nameout,rmin,rmax,nr))):
+            return()
+        r_array = np.linspace(rmin,rmax,nr)
+        rmask = rmax + 2.
+        tomo = tomography.TreatClamato(self.pwd,MapName=self.box_DM_name,shapeMap=self.shape_map,PixelName=None)
+        map_3D= tomo.readClamatoMapFile()
+        void_dict = pickle.load(open(void_dict_name,"rb"))
+        coord = void_dict["coord"]
+# shape/size
+        pixels_per_mpc = (np.array(self.shape_map)-1)/np.array(size_map)
+        pixels_per_mpc = (np.array(self.shape_map))/np.array(size_map)
+        coord_pixels = np.round(coord * pixels_per_mpc,0).astype(int)
+        indice_mpc = np.transpose(np.indices(map_3D.shape),axes=(1,2,3,0))/pixels_per_mpc
+        delta_array = []
+        for i in range(len(coord)):
+            index = coord_pixels[i]
+            number_pixel_maximal_radius = [int(round((rmask*pixels_per_mpc)[0],0)),int(round((rmask*pixels_per_mpc)[1],0)),int(round((rmask*pixels_per_mpc)[2],0))]
+            map_local = map_3D[max(index[0]-number_pixel_maximal_radius[0],0):min(map_3D.shape[0],index[0]+number_pixel_maximal_radius[0]),max(index[1]-number_pixel_maximal_radius[1],0):min(map_3D.shape[1],index[1]+number_pixel_maximal_radius[1]),max(index[2]-number_pixel_maximal_radius[2],0):min(map_3D.shape[2],index[2]+number_pixel_maximal_radius[2])]
+            indice_local = indice_mpc[max(index[0]-number_pixel_maximal_radius[0],0):min(map_3D.shape[0],index[0]+number_pixel_maximal_radius[0]),max(index[1]-number_pixel_maximal_radius[1],0):min(map_3D.shape[1],index[1]+number_pixel_maximal_radius[1]),max(index[2]-number_pixel_maximal_radius[2],0):min(map_3D.shape[2],index[2]+number_pixel_maximal_radius[2])] - coord[i]
+            distance_map_local = np.sqrt(indice_local[:,:,:,0]**2 + indice_local[:,:,:,1]**2 + indice_local[:,:,:,2]**2)
+            mask = distance_map_local < rmask
+            delta_list = map_local[mask]
+            r_list = distance_map_local[mask]
+            delta = interpolate.interp1d(r_list,delta_list)
+            delta_array.append(delta(r_array))
+        del map_3D,indice_mpc
+        delta_array = np.mean(delta_array,axis=0)
+        h = fitsio.FITS("{}_rmin{}_rmax{}_nr{}.fits".format(nameout,rmin,rmax,nr),"rw",clobber=True)
+        h.write(r_array,extname="R")
+        h.write(delta_array,extname="DELTA")
+        h.close()
