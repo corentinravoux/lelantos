@@ -22,7 +22,6 @@ Tested on cori (NERSC)
 
 import fitsio,os
 import numpy as np
-import pickle
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm,Normalize
 from scipy import interpolate
