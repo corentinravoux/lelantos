@@ -5,7 +5,7 @@ Date : 17/05/2019
 
 Author: Corentin Ravoux
 
-Description : 
+Description :
 """
 
 
@@ -27,21 +27,21 @@ try:
 except:
     import lslyatomo.picca.data as data
     raise Warning("Picca might be updated, we suggest to install picca independently")
-    
+
 from lslyatomo import utils
 from scipy.ndimage.filters import gaussian_filter
 import multiprocessing as mp
 
 
 ### Copy to utils ####
-    
-    
+
+
 def verify_file(file):
     if(not(os.path.isfile(file))):
         raise ValueError("No property file {} was found".format(file))
 
-    
-    
+
+
 #############################################################################
 #############################################################################
 ############################### CLASSES #####################################
@@ -71,7 +71,7 @@ def verify_file(file):
 
 
 class TomographicMap(object):
-    
+
     def __init__(self,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None):
         self.name = name
         self.shape = shape
@@ -82,14 +82,14 @@ class TomographicMap(object):
         self.coordinate_transform = coordinate_transform
         self.property_file = property_file
         self.Omega_m = Omega_m
-            
+
     @classmethod
     def init_classic(cls,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None):
         if(property_file is not None):
             return(cls.init_from_property_files(property_file,map_array=map_array,name=name))
         else:
             return(cls(map_array=map_array,name=name,shape=shape,size=size,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,property_file=property_file,Omega_m=Omega_m))
-            
+
     @classmethod
     def init_from_property_files(cls,property_file,map_array=None,name=None):
         Property = MapPixelProperty(name=property_file)
@@ -108,7 +108,7 @@ class TomographicMap(object):
     @classmethod
     def init_by_merging(cls,launching_file_name,name_map,property_file):
         """ Need to generalized (maybe in the task manager class for reading and writting launching files) + naming filename must not be define there"""
-        a = pickle.load(open(os.path.join(launching_file_name),"rb")) 
+        a = pickle.load(open(os.path.join(launching_file_name),"rb"))
         listname,Dachshundparams,numberChunks,overlaping = a[0],a[1],a[2],a[3]
         mapChunks = {}
         sizemap = {}
@@ -157,7 +157,7 @@ class TomographicMap(object):
                 elif(i == numberChunks[0] - 1):
                     lx = lx + sizemap[filename][0] - overlaping
                 else :
-                    lx = lx + sizemap[filename][0] - 2*overlaping             
+                    lx = lx + sizemap[filename][0] - 2*overlaping
             for j in range(numberChunks[1]):
                 filename = f'{0:03d}' + f'{j:03d}'
                 if ((j==0)&(j == numberChunks[1] - 1)):
@@ -168,7 +168,7 @@ class TomographicMap(object):
                     ly = ly + sizemap[filename][1] - overlaping
                 else :
                     ly = ly + sizemap[filename][1] - 2 * overlaping
-                        
+
         else :
             for i in range(numberChunks[0]):
                 filename = f'{i:03d}' + f'{0:03d}'
@@ -203,7 +203,7 @@ class TomographicMap(object):
     def pixel_per_mpc(self):
         return((np.array(self.shape))/np.array(self.size))
         # return((np.array(self.shape)-1)/np.array(self.size))
-    
+
 
     def read(self):
         if(self.name is None):
@@ -221,10 +221,10 @@ class TomographicMap(object):
             raise ValueError("No")
         listmap=np.ravel(self.map_array)
         listmap.tofile(self.name)
-        
+
     def write_property_file(self,property_file_name):
         property_file = MapPixelProperty(name=property_file_name,size=self.size,shape=self.shape,boundary_cartesian_coord=self.boundary_cartesian_coord,boundary_sky_coord=self.boundary_sky_coord,coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m)
-        property_file.write()   
+        property_file.write()
 
     def rebin_map(self,new_shape, operation='mean'):
         self.map_array = utils.bin_ndarray(self.map_array, new_shape, operation=operation)
@@ -249,10 +249,10 @@ class TomographicMap(object):
     def mask_map_from_name(self,distance_map_name,distance):
         distance_map = DistanceMap.init_from_tomographic_map(self,name=distance_map_name)
         mask = distance_map.get_mask_distance(distance)
-        self.map_array = np.ma.masked_where(mask,self.map_array) 
+        self.map_array = np.ma.masked_where(mask,self.map_array)
 
     def mask_map_from_mask(self,mask):
-        self.map_array = np.ma.masked_where(mask,self.map_array) 
+        self.map_array = np.ma.masked_where(mask,self.map_array)
 
 
 
@@ -306,7 +306,7 @@ class TomographicMap(object):
 
 
 class DistanceMap(TomographicMap):
-    
+
     def __init__(self,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None):
         super(DistanceMap,self).__init__(map_array=map_array,name=name,shape=shape,size=size,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,property_file=property_file,Omega_m=Omega_m)
 
@@ -389,7 +389,7 @@ class DistanceMap(TomographicMap):
         cls.log.add("Getting the map from shared array")
         distance_array = DistanceMap.mp_array_to_numpyarray(shared_arr).reshape(tomographic_map.shape)
         cls.log.add("Writing of the map")
-        return(distance_array)   
+        return(distance_array)
 
     @classmethod
     def worker_create_distance_map(cls,pixels,shape):
@@ -415,7 +415,7 @@ class DistanceMap(TomographicMap):
         distance_array = np.full(shape,np.inf)
         shared_arr = mp.Array('d', distance_array.flatten())
         del distance_array
-        
+
     @staticmethod
     def mp_array_to_numpyarray(mp_arr):
         return np.frombuffer(mp_arr.get_obj())
@@ -433,20 +433,20 @@ class DistanceMap(TomographicMap):
             maxlist = pickle.load(open(maxlist_name,'rb'))
             minz,minredshift = maxlist[4],maxlist[6]
             Cosmo = constants.cosmo(Om)
-            self.rcomoving = Cosmo.r_comoving    
+            self.rcomoving = Cosmo.r_comoving
             redshift = fsolve(self.f,minredshift,args=(dist_mpc + minz))[0]
             print(redshift)
 
 
-        
+
     def get_mask_distance(self,distance):
         return(self.map_array > distance)
-        
-   
+
+
 
 
 class StackMap(TomographicMap):
-    
+
     def __init__(self,tomo_map=None,catalog=None,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None):
         super(StackMap,self).__init__(map_array=map_array,name=name,shape=shape,size=size,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,property_file=property_file,Omega_m=Omega_m)
 
@@ -470,14 +470,14 @@ class StackMap(TomographicMap):
         for i in range(len(index_catalog_clean)):
             local_maps[i] = tomographic_map.map_array[index_catalog_clean[i][0]-shape_stack[0]:index_catalog_clean[i][0]+shape_stack[0]+1,index_catalog_clean[i][1]-shape_stack[1]:index_catalog_clean[i][1]+shape_stack[1]+1,index_catalog_clean[i][2]-shape_stack[2]:index_catalog_clean[i][2]+shape_stack[2]+1]
         stack = np.mean(local_maps,axis=0)
-        
-        
+
+
         boundary_cartesian_coord = None
         boundary_sky_coord = None
-        
+
         return(cls(tomo_map=tomographic_map,catalog=catalog,map_array=stack,name=name,shape=shape_stack,size=size_stack,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=tomographic_map.coordinate_transform,property_file=None))
-        
-     
+
+
     @classmethod
     def init_stack_by_property_file(cls,property_file_name,name=None,tomographic_map_name=None,property_file_map=None,catalog_name=None,type_catalog=None):
         tomographic_map, catalog = None, None
@@ -490,7 +490,7 @@ class StackMap(TomographicMap):
         stack.tomo_map = tomographic_map
         stack.catalog = catalog
         return(stack)
-    
+
 
 
 
@@ -512,9 +512,9 @@ class StackMap(TomographicMap):
         return(listxyz)
 
 
- 
-        
-        
+
+
+
     def stack_voids(self,map_3D,size_map,coord,radius,size_stack,normalized=None,shape="CUBIC",number=None):
         if(normalized is None):
             voids = coord
@@ -539,7 +539,7 @@ class StackMap(TomographicMap):
             for i in range(nb_void):
                 local_maps[i] = map_3D[clean_voids[i][0]-shape_stack[0]:clean_voids[i][0]+shape_stack[0]+1,clean_voids[i][1]-shape_stack[1]:clean_voids[i][1]+shape_stack[1]+1,clean_voids[i][2]-shape_stack[2]:clean_voids[i][2]+shape_stack[2]+1]
             stack = np.mean(local_maps,axis=0)
-            return(stack) 
+            return(stack)
         else :
             voids = coord
             radius = radius
@@ -572,11 +572,11 @@ class StackMap(TomographicMap):
                         for l in range(2*shape_stack_min[2]+1):
                             local_maps[i,j,k,l] = map_3D[int(round(clean_voids[i][0]/number_Mpc_per_pixels[0] + r_overrmin * (j-shape_stack_min[0]),0)),int(round(clean_voids[i][1]/number_Mpc_per_pixels[1] + r_overrmin * (k-shape_stack_min[1]),0)),int(round(clean_voids[i][2]/number_Mpc_per_pixels[2] + r_overrmin * (l-shape_stack_min[2]),0))]
             stack = np.mean(local_maps,axis=0)
-            return(stack)       
-        
-        
-        
-        
+            return(stack)
+
+
+
+
     def stack_voids_correction_xyztildestack(self,map_3D,size_map,coord,size_stack,shape="CUBIC"):
         voids = np.array(coord) + np.array([self.minx,self.miny,self.minz])
 # shape/size
@@ -618,9 +618,9 @@ class StackMap(TomographicMap):
         local_maps = np.array(local_maps)
         stack = np.mean(local_maps,axis=0)
         del local_maps
-        return(stack) 
-        
-        
+        return(stack)
+
+
     def stack_voids_correction_xyzstack(self,map_3D,size_map,coord,size_stack,shape="CUBIC"):
         voids = np.array(coord) + np.array([self.minx,self.miny,self.minz])
 # shape/size
@@ -663,9 +663,9 @@ class StackMap(TomographicMap):
         for i in range(nb_void):
             local_maps[i] = map_3D[clean_voids[i][0]-shape_stack[0]:clean_voids[i][0]+shape_stack[0]+1,clean_voids[i][1]-shape_stack[1]:clean_voids[i][1]+shape_stack[1]+1,clean_voids[i][2]-shape_stack[2]:clean_voids[i][2]+shape_stack[2]+1]
         stack = np.mean(local_maps,axis=0)
-        return(stack) 
+        return(stack)
 
-        
+
     def initialize_coordinates_conversion(self,Om,maxlist_name):
         Cosmo = constants.cosmo(Om)
         maxlist = pickle.load(open(maxlist_name,'rb'))
@@ -684,29 +684,29 @@ class StackMap(TomographicMap):
         self.meanredshift = (minredshift + maxredshift)/2
         self.rcomoving = Cosmo.r_comoving
         self.redshift_to_dm = Cosmo.dm
-        
+
 
 
     def xyz_to_xyztilde(self,x,y,z,redshift=None):
         z_tilde = z
         if(redshift is None):Z = self.z_to_redshift(z)
         else: Z = redshift
-        x_tilde = (self.redshift_to_dm(Z)/self.redshift_to_dm(self.meanredshift)) * (x) 
-        y_tilde = (self.redshift_to_dm(Z)/self.redshift_to_dm(self.meanredshift)) * (y) 
+        x_tilde = (self.redshift_to_dm(Z)/self.redshift_to_dm(self.meanredshift)) * (x)
+        y_tilde = (self.redshift_to_dm(Z)/self.redshift_to_dm(self.meanredshift)) * (y)
         return(x_tilde,y_tilde,z_tilde)
 
     def xyztilde_to_xyz(self,x_tilde,y_tilde,z_tilde,redshift=None):
         z = z_tilde
         if(redshift is None):Z = self.z_to_redshift(z)
         else: Z = redshift
-        x = (self.redshift_to_dm(self.meanredshift)/self.redshift_to_dm(Z)) * x_tilde 
+        x = (self.redshift_to_dm(self.meanredshift)/self.redshift_to_dm(Z)) * x_tilde
         y = (self.redshift_to_dm(self.meanredshift)/self.redshift_to_dm(Z)) * y_tilde
         return(x,y,z)
-        
+
 
     def rcomoving_inverse(self,redshift,z):
-        return(self.rcomoving(redshift) - (z))         
-        
+        return(self.rcomoving(redshift) - (z))
+
 
     def z_to_redshift_scalar(self,z):
         redshift = fsolve(self.rcomoving_inverse,self.minredshift,args=(z))[0]
@@ -737,7 +737,7 @@ class StackMap(TomographicMap):
 
 
 
-        
+
 
     def read_stacks(self,name,shape_stack):
         stack = np.fromfile(name)
@@ -756,11 +756,11 @@ class StackMap(TomographicMap):
         if(los_z is not None):
             np.savetxt("lenght_between_los_and_quasar.txt",[los_z],header="difference in Mpc between end of LOS and quasar center\n")
         stack.tofile(name)
-        
- 
+
+
 
 class Pixel(object):
-    
+
     def __init__(self,pixel_array=None,name=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None):
         self.name = name
         self.pixel_array = pixel_array
@@ -773,9 +773,9 @@ class Pixel(object):
         self.z_array = None
         self.dperp_array = None
         self.density_array = None
-        
-        
-        
+
+
+
     @classmethod
     def init_from_property_files(cls,property_file,pixel_array=None,name=None):
         Property = MapPixelProperty(name=property_file)
@@ -798,7 +798,7 @@ class Pixel(object):
                 pixel_data = np.fromfile(f,dtype=np.float64)
                 self.pixel_array = pixel_data.reshape((len(pixel_data)//5,5))
 
-                
+
     def write(self):
         if(self.pixel_array is None):
             raise ValueError("No")
@@ -864,7 +864,7 @@ class Pixel(object):
             maxz = 0.0 #self.boundary_cartesian_coord[1][2]
             self.z_array,self.dperp_array,self.density_array = Pixel.return_mean_distance_density(x,y,z,minra,maxra,mindec,maxdec,minz,maxz)
         return(self.z_array,self.dperp_array,self.density_array)
-        
+
 
     def compute_mean_distance_histogram(self,z_value):
         x,y,z = self.repack_by_los()
@@ -933,8 +933,8 @@ class Pixel(object):
 
 
 class MapPixelProperty(object):
-    
-    
+
+
     def __init__(self,name=None,size=None,shape=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,Omega_m=None):
         self.name = name
         self.size = size
@@ -943,8 +943,8 @@ class MapPixelProperty(object):
         self.boundary_sky_coord = boundary_sky_coord
         self.coordinate_transform = coordinate_transform
         self.Omega_m = Omega_m
-        
-        
+
+
     def read(self):
         if(self.name is None):
             raise ValueError("No name was given")
@@ -956,8 +956,8 @@ class MapPixelProperty(object):
             self.boundary_sky_coord = file["boundary_sky_coord"]
             self.coordinate_transform = file["coordinate_transform"]
             self.Omega_m = file["Omega_m"]
-            
-            
+
+
     def write(self):
         if(self.name is None):
             raise ValueError("No name was given")
@@ -984,8 +984,8 @@ class Delta(object):
         self.delta_file = delta_file
         self.delta_array = delta_array
         self.pk1d_type = pk1d_type
-        
-        
+
+
     def read(self):
         if(self.name == None):
             raise ValueError("No")
@@ -1007,8 +1007,8 @@ class Delta(object):
             h['DELTA'] =delta.de
             h['LOGLAM'] = delta.ll
             h['IVAR'] = delta.iv
-            h['DIFF'] = delta.diff 
-            head['MEANSNR'] = delta.mean_SNR 
+            h['DIFF'] = delta.diff
+            head['MEANSNR'] = delta.mean_SNR
             head['MEANRESO'] = delta.mean_reso
             head['MEANZ'] = delta.mean_z
             head['DLL'] = delta.dll
@@ -1017,7 +1017,7 @@ class Delta(object):
             h['DELTA'] =delta.de
             h['LOGLAM'] = delta.ll
             h['WEIGHT'] = delta.we
-            h['CONT'] = delta.co 
+            h['CONT'] = delta.co
         head['THING_ID'] = delta.thid
         head['RA'] = delta.ra
         head['DEC'] = delta.dec
@@ -1026,7 +1026,7 @@ class Delta(object):
         head['MJD'] = delta.mjd
         head['FIBERID'] = delta.fid
         return(h,head)
-        
+
 
     def write_from_delta_list(self):
         fits = fitsio.FITS(self.name,'rw',clobber=True)
@@ -1037,7 +1037,7 @@ class Delta(object):
 
     def close(self):
         self.delta_file.close()
-            
+
 
 
 
@@ -1055,7 +1055,7 @@ class Delta(object):
 
 
 class Catalog(object):
-    
+
     def __init__(self,name=None,coord=None,primary_key=None,catalog_type="sky"):
         self.name = name
         self.coord = coord
@@ -1118,8 +1118,8 @@ class QSOCatalog(Catalog):
         self.plate = plate
         self.modern_julian_date = modern_julian_date
         self.fiber_id = fiber_id
-        
-        
+
+
     @classmethod
     def init_from_fits(cls,name,redshift_name="Z"):
         catalog = Catalog.load_from_fits(name)
@@ -1206,9 +1206,9 @@ class DLACatalog(Catalog):
         self.z_qso=z_qso
         self.conf_dla=conf_dla
         self.nhi_dla=nhi_dla
-        
-        
-        
+
+
+
     @classmethod
     def init_from_fits(cls,name):
         catalog = Catalog.load_from_fits(name)
@@ -1247,7 +1247,7 @@ class DLACatalog(Catalog):
 
     def cut_dla_catalogs(self,ramin,ramax,decmin,decmax):
         ## to do with cutDLA functions
-        
+
         return()
 
 
@@ -1279,7 +1279,7 @@ class GalaxyCatalog(Catalog):
 
     # def __init__(self,pwd,name_file,type_file,zmin,zmax,confidence,std,omega_m,pk_1d_read_fits=True,ref_redshift="min"):
     #     self.pwd = pwd
-        
+
     #     self.name_file = name_file
     #     self.type_file = type_file
     #     self.zmin = zmin
@@ -1288,12 +1288,12 @@ class GalaxyCatalog(Catalog):
     #     self.std = std
     #     self.omega_m = omega_m
     #     self.ref_redshift=ref_redshift
-        
+
 
     # def get_hsc(self,maxlist=False,figsigma = False,mag_max=None):
     #     f = fitsio.FITS(self.name_file)
     #     init = 1
-    #     dec = np.array(f[init]["dec"][:])    
+    #     dec = np.array(f[init]["dec"][:])
     #     ra = np.array(f[init]["ra"][:])
     #     photoz = np.array(f[init]["PHOTOZ_BEST"][:])
     #     mask = (photoz < self.zmax) & (photoz > self.zmin)
@@ -1356,9 +1356,9 @@ class VoidCatalog(Catalog):
         self.central_value = central_value
         self.filling_factor = filling_factor
         self.weights = weights
-        
-        
-        
+
+
+
     @classmethod
     def init_from_fits(cls,name):
         catalog = Catalog.load_from_fits(name)
@@ -1381,11 +1381,11 @@ class VoidCatalog(Catalog):
         if("CROSSING" in catalog[1].get_colnames()): crossing_param = catalog[1]["CROSSING"][:]
         if("VALUE" in catalog[1].get_colnames()): central_value = catalog[1]["VALUE"][:]
         if("FILLING_FACTOR" in catalog[1].read_header()): filling_factor = catalog[1].read_header()["FILLING_FACTOR"]
-        
+
         Catalog.close(catalog)
         return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,catalog_type=catalog_type))
-        
-    
+
+
     @classmethod
     def init_from_dictionary(cls,name,radius,coord,catalog_type,other_arrays=None,other_array_names = None):
         central_value, weights, filling_factor, primary_key, crossing_param = None, None, None, None, None
@@ -1478,7 +1478,7 @@ class VoidCatalog(Catalog):
             coord_voids_mpc_in_the_box[:,0] = coord_voids[:,0]
             coord_voids_mpc_in_the_box[:,1] = coord_voids[:,1]
             coord_voids_mpc_in_the_box[:,2] = coord_voids[:,2]
-            
+
             if((mode=="distance_redshift")|(mode=="cartesian")):
                 redshift = self.compute_redshift_array(minredshift,coord_voids[:,2],minz)
                 coord_voids_ra_dec[:,0] = ((coord_voids[:,0]/dist_angular) + minra ) * (180/np.pi)
@@ -1501,12 +1501,12 @@ class VoidCatalog(Catalog):
                 coord_qso = np.asarray(catalogs[i]["crossing_qso"])
                 for j in range(len(coord_qso)):
                     coord_qso_mpc_ij = np.zeros(coord_qso[j].shape)
-                    coord_qso_ra_dec_ij = np.zeros(coord_qso[j].shape)  
-                    
+                    coord_qso_ra_dec_ij = np.zeros(coord_qso[j].shape)
+
                     coord_qso_mpc_ij[:,0] = coord_qso[j][:,0] + minx
                     coord_qso_mpc_ij[:,1] = coord_qso[j][:,1] + miny
                     coord_qso_mpc_ij[:,2] = coord_qso[j][:,2]
-                    
+
                     coord_qso_ra_dec_ij[:,0] = ((coord_qso[j][:,0]/dist_angular) + minra ) * (180/np.pi)
                     coord_qso_ra_dec_ij[:,1] = ((coord_qso[j][:,1]/dist_angular) + mindec ) * (180/np.pi)
                     if((mode=="distance_redshift")|(mode=="cartesian")):
@@ -1515,7 +1515,7 @@ class VoidCatalog(Catalog):
                         redshift_qso = self.compute_redshift(minredshift,np.mean(coord_qso[j][:,2]),minz)*(coord_qso[j][:,2]/np.mean(coord_qso[j][:,2]))
                     elif(mode=="full"):
                         redshift_qso = self.compute_redshift_array(minredshift,coord_qso[j][:,2],minz)
-                    coord_qso_ra_dec_ij[:,2] = redshift_qso   
+                    coord_qso_ra_dec_ij[:,2] = redshift_qso
                     coord_qso_mpc.append(coord_qso_mpc_ij)
                     coord_qso_ra_dec.append(coord_qso_ra_dec_ij)
             radius.append(radius_voids)
@@ -1535,18 +1535,18 @@ class VoidCatalog(Catalog):
             dict_mpc["crossing_qso"]=coord_qso_mpc
             dict_ra_dec["crossing_qso"]=coord_qso_ra_dec
         return(dict_mpc,dict_ra_dec,dict_mpc_in_the_box)
-        
-        
-        
-        
-        
+
+
+
+
+
     def save_void_catalog(self,dict_mpc,dict_ra_dec,dict_mpc_in_the_box,name,format_file,fake_qso=False,mode="distance_redshift"):
         write_voids = piccaconverter.Write_Fits_Ascii(self.pwd)
         if(format_file == "PICKLE"):
-            pickle.dump(dict_ra_dec,open(name + "_RADEC.pickle",'wb'))        
-            pickle.dump(dict_mpc,open(name + "_Mpc.pickle",'wb'))        
-            pickle.dump(dict_mpc_in_the_box,open(name + "_Mpc_in_the_box.pickle",'wb'))        
-                
+            pickle.dump(dict_ra_dec,open(name + "_RADEC.pickle",'wb'))
+            pickle.dump(dict_mpc,open(name + "_Mpc.pickle",'wb'))
+            pickle.dump(dict_mpc_in_the_box,open(name + "_Mpc_in_the_box.pickle",'wb'))
+
         if(format_file == "FITS"):
             radius = dict_mpc["radius"]
             coord_ra_dec = dict_ra_dec["coord"]
@@ -1574,10 +1574,10 @@ class VoidCatalog(Catalog):
             else:
                 write_voids.write_voids_catalogs(radius,coord_mpc,name + "_Mpc.fits",ra_dec=False)
             write_voids.write_voids_catalogs(radius,coord_mpc_in_the_box,name + "_Mpc_in_the_box.fits",ra_dec=False)
-            pickle.dump(dict_ra_dec,open(name + "_RADEC.pickle",'wb'))        
-            pickle.dump(dict_mpc,open(name + "_Mpc.pickle",'wb'))        
-            pickle.dump(dict_mpc_in_the_box,open(name + "_Mpc_in_the_box.pickle",'wb'))                 
-        
+            pickle.dump(dict_ra_dec,open(name + "_RADEC.pickle",'wb'))
+            pickle.dump(dict_mpc,open(name + "_Mpc.pickle",'wb'))
+            pickle.dump(dict_mpc_in_the_box,open(name + "_Mpc_in_the_box.pickle",'wb'))
+
 
     def cut_catalogs(self,catalogs,method_cut=None,dist_map_params=None,cut_crossing_param=None,cut_radius=None,PixelNames=None,save_cut=False,get_crossing_qso=None,sizemap=None):
         dict_catalogs = []
@@ -1605,18 +1605,18 @@ class VoidCatalog(Catalog):
             dict_catalogs.append(dict_void)
             if(save_cut):
                 if(method_cut == "CROSSING"):
-                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutcrossing{}.pickle".format(cut_crossing_param),'wb'))                
+                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutcrossing{}.pickle".format(cut_crossing_param),'wb'))
                 elif(method_cut == "DIST"):
-                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutdistance_{}Mpc_{}percent.pickle".format(param_cut,percent_cut),'wb'))              
+                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutdistance_{}Mpc_{}percent.pickle".format(param_cut,percent_cut),'wb'))
                 elif(method_cut == "RADIUS"):
-                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutradius{}.pickle".format(cut_radius),'wb'))              
+                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutradius{}.pickle".format(cut_radius),'wb'))
                 elif(method_cut == "BORDER"):
-                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutborder.pickle",'wb'))              
+                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutborder.pickle",'wb'))
                 elif(method_cut == "ALL"):
                     if(cut_radius is None):
-                        pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutcrossing{}_cutdistance_{}Mpc_{}percent.pickle".format(cut_crossing_param,param_cut,percent_cut),'wb'))               
+                        pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutcrossing{}_cutdistance_{}Mpc_{}percent.pickle".format(cut_crossing_param,param_cut,percent_cut),'wb'))
                     else:
-                        pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutcrossing{}_cutdistance_{}Mpc_{}percent_cutradius{}.pickle".format(cut_crossing_param,param_cut,percent_cut,cut_radius),'wb'))               
+                        pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutcrossing{}_cutdistance_{}Mpc_{}percent_cutradius{}.pickle".format(cut_crossing_param,param_cut,percent_cut,cut_radius),'wb'))
         return(dict_catalogs)
 
 
@@ -1661,7 +1661,7 @@ class VoidCatalog(Catalog):
         void_dict["crossing_criteria"] = crossing_criteria
         if(get_crossing_quasars is not None):
             void_dict["crossing_qso"] = np.asarray(coord_crossing_qso)
-        pickle.dump(void_dict,open(name,'wb'))        
+        pickle.dump(void_dict,open(name,'wb'))
 
     def cut_radius(self,void_dict,minradius):
         radius = void_dict["radius"]
@@ -1693,11 +1693,11 @@ class VoidCatalog(Catalog):
                 void_dict[key] = np.array(void_dict[key])[~mask]
         return(void_dict)
 
-        
+
     def cut_dist_map(self,dict_void,dist_map_name,shape_map,size_map,param_cut,percent_cut):
         Treat = tomography.TreatClamato(self.pwd,dist_map_name,shape_map,"")
         dist_map = Treat.readClamatoMapFile()
-        mask = dist_map < param_cut  
+        mask = dist_map < param_cut
 # shape/size
         number_Mpc_per_pixels = np.array(size_map)/(np.array(shape_map)-1)
         number_Mpc_per_pixels = np.array(size_map)/(np.array(shape_map))
@@ -1721,12 +1721,12 @@ class VoidCatalog(Catalog):
                 newcoord.append(coord[i])
                 for key in list(dict_void.keys()):
                     if((key!="coord")&(key!="radius")&(key!="filling_factor")):
-                        other_param["new" + key].append(other_param[key][i])                
+                        other_param["new" + key].append(other_param[key][i])
         new_dict = {"coord" : newcoord,"radius" : newradius, "filling_factor" : filling_factor}
         for key in list(dict_void.keys()):
             if((key!="coord")&(key!="radius")&(key!="filling_factor")):
                 new_dict[key] = other_param["new" + key]
-        return(new_dict)                
+        return(new_dict)
 
 
     def merge_cut_and_save_catalogs(self,catalogs,Om,extremum_list_names,nameout,format_file,ref_redshift = "mean",method_cut=None,dist_map_params=None,cut_crossing_param=None,PixelNames=None,save_cut=False,get_crossing_qso=None,fake_qso=False,cut_radius=None,sizemap=None,mode="distance_redshift"):
@@ -1737,36 +1737,36 @@ class VoidCatalog(Catalog):
     def cut_and_save_catalogs(self,catalogs,method_cut=None,dist_map_params=None,cut_crossing_param=None,PixelNames=None,get_crossing_qso=None,cut_radius=None,sizemap=None):
         self.cut_catalogs(catalogs,method_cut=method_cut,dist_map_params=dist_map_params,cut_crossing_param=cut_crossing_param,PixelNames=PixelNames,save_cut=True,get_crossing_qso=get_crossing_qso,cut_radius=cut_radius,sizemap=sizemap)
 
-        
+
     def merge_and_save_catalogs(self,catalogs,Om,extremum_list_names,nameout,format_file,ref_redshift = "mean",fake_qso=False,mode="distance_redshift"):
         catalog_dict = self.load_dictionary_list(catalogs)
         (dict_mpc,dict_ra_dec,dict_mpc_in_the_box) = self.merge_voids_catalogs(catalog_dict,Om,extremum_list_names,ref_redshift = ref_redshift,mode=mode)
-        self.save_void_catalog(dict_mpc,dict_ra_dec,dict_mpc_in_the_box,nameout,format_file,fake_qso=fake_qso,mode=mode)        
-       
+        self.save_void_catalog(dict_mpc,dict_ra_dec,dict_mpc_in_the_box,nameout,format_file,fake_qso=fake_qso,mode=mode)
+
 
 
 
     def compute_redshift(self,minredshift,z,minz):
         return(fsolve(self.f,minredshift,args=(z + minz))[0])
-        
+
     def compute_redshift_array(self,minredshift,z,minz):
         redshift = []
         for i in range(len(z)):
             red = fsolve(self.f,minredshift,args=(z[i] + minz))
             redshift.append(red[0])
         return(np.array(redshift))
-    
+
     def f(self,redshift,z):
-        return(self.rcomoving(redshift) - (z)) 
-    
-    
-    
-        
+        return(self.rcomoving(redshift) - (z))
+
+
+
+
     def compute_filling_factor(self,radius,sizemap):
         volume_map = sizemap[0]*sizemap[1]*sizemap[2]
         volume_void = np.sum((4/3)*np.pi*(np.array(radius))**3)
         return(volume_void/volume_map)
-        
+
 
 
     def assessement_matrix_huge_voids(self,catalogs,rmin,d_position,d_radius):
@@ -1794,7 +1794,7 @@ class VoidCatalog(Catalog):
                     nij = nij + len(r_big_j[mask2])
                 assessement_matrix[i,j] = nij /((ni+nj)/2)
         return(assessement_matrix)
-        
+
     def get_protocluster_values(self,maximal_radius,map_name,shapeMap,mapsize,name_dict):
         delta_values = []
         center_values = []
@@ -1811,7 +1811,7 @@ class VoidCatalog(Catalog):
             map_3D = np.array(treat_clamato_map.readClamatoMapFile())
             number_pixel_maximal_radius = [int(round((maximal_radius/number_Mpc_per_pixels)[0],0)),int(round((maximal_radius/number_Mpc_per_pixels)[1],0)),int(round((maximal_radius/number_Mpc_per_pixels)[2],0))]
             indice = np.transpose(np.indices(map_3D.shape),axes=(1,2,3,0))
-            
+
             for i in range(len(coord)):
                 index = np.round(coord[i] * pixelsperMpc,0).astype(int)
                 map_local = map_3D[max(index[0]-number_pixel_maximal_radius[0],0):min(map_3D.shape[0],index[0]+number_pixel_maximal_radius[0]),max(index[1]-number_pixel_maximal_radius[1],0):min(map_3D.shape[1],index[1]+number_pixel_maximal_radius[1]),max(index[2]-number_pixel_maximal_radius[2],0):min(map_3D.shape[2],index[2]+number_pixel_maximal_radius[2])]
@@ -1827,8 +1827,3 @@ class VoidCatalog(Catalog):
         print(np.mean(radius_values))
         np.savetxt("central_average_values",np.transpose(np.stack([center_values,delta_values,radius_values])),header="Central value     Average value    Radius")
         return(center_values, delta_values)
-    
-
-
-
-
