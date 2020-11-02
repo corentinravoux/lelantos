@@ -68,6 +68,7 @@ class Treat_box():
         self.nb_processors=nb_processors
         self.lines_per_box = {"vx" : 5,"vy" : 5,"vz" : 5,"eta_xx":1,"eta_xy":1,"eta_xz":1,"eta_yx":1,"eta_yy":1,"eta_yz":1,"eta_zx":1,"eta_zy":1,"eta_zz":1}
         self.interpolation_method = interpolation_method
+        
 
 
 
