@@ -39,7 +39,7 @@ from lslyatomo import tomographic_objects
 
 
 class VoidFinder(object):
-    
+
     def __init__(self,pwd,map_name,params_void_finder,map_shape=None,map_size=None,property_file=None,number_core=1,restart=False,find_cluster=False,split_map=None,split_overlap=None,delete_option="CLUSTERS"):
         self.pwd = pwd
         self.map_name = map_name
@@ -50,17 +50,17 @@ class VoidFinder(object):
         self.split_map = split_map
         self.split_overlap = split_overlap
         self.delete_option = delete_option
-        
+
         self.tomographic_map = tomographic_objects.TomographicMap.init_classic(name=map_name,shape=map_shape,size=map_size,property_file=property_file)
         self.tomographic_map.read()
         self.create_Report()
-        
+
     def create_Report(self):
         currentdir = os.getcwd()
         os.chdir(self.pwd)
         logging.basicConfig(filename='Python_Report',level=logging.INFO,format='%(asctime)s :: %(levelname)s :: %(message)s')
-        os.chdir(currentdir)  
-        
+        os.chdir(currentdir)
+
     def add_Report(self,line):
         logging.info(line)
 
@@ -92,7 +92,7 @@ class VoidFinder(object):
                 map_output = pool.map(self.find_voids_watershed,list_map_chunks)
                 for i in range(len(list_chunks)):
                     Chunks[list_chunks[i][0]]["radius"],Chunks[list_chunks[i][0]]["coord_Mpc"],Chunks[list_chunks[i][0]]["other_arrays"],Chunks[list_chunks[i][0]]["other_array_names"]= map_output[i]
-                del list_chunks,map_output   
+                del list_chunks,map_output
             else:
                 for i in range(self.split_map[0]):
                     for j in range(self.split_map[1]):
@@ -109,66 +109,6 @@ class VoidFinder(object):
         new_coord_Mpc, new_radius, new_other_arrays = self.delete_voids(self.tomographic_map,radius,coord_Mpc,other_arrays=other_arrays,mpc=True)
         self.save_voids(new_radius, new_coord_Mpc,new_other_arrays,other_array_names)
         return(new_radius, new_coord_Mpc)
-
-    def cutInChunks(self,Om,numberChunks,overlaping,shuffle=None):
-        if overlaping == None :
-            overlaping = 0.0
-        (x,y,z,deltas,sigmas,maxlist,zqso,redshift,redshift_qso,zdlas) = self.getdata(Om)
-        if(shuffle is not None):
-            if(shuffle["method"] == "delta") :            
-                deltas = self.shuffle_deltas(deltas)
-            elif(shuffle["method"] == "radec"):
-                x,y = self.shuffle_radec(x,y)
-            elif(shuffle["method"] == "delta_sigma") :            
-                deltas,sigmas = self.shuffle_deltas_sigmas(deltas,sigmas)
-            self.createDachshundInput(Om,shuffle["name"],x,y,z,deltas,sigmas)
-        pickle.dump([x,y,zqso], open("DataQSOposition.pickle","wb"))
-        if(self.dla_catalog is not None):
-            dla_array = []    
-            for i in range(len(zdlas)):
-                for j in range(len(zdlas[i])):
-                    dla_array.append([x[i],y[i],zdlas[i][j]])
-            dla_array = np.transpose(np.array(dla_array))
-            pickle.dump(dla_array, open("DataDLAposition.pickle","wb"))
-        minx,maxx,miny,maxy= tuple(maxlist[0:4])
-        intervalx = (maxx - minx)
-        intervaly = (maxy - miny)
-        subIntervalx = intervalx/numberChunks[0]
-        subIntervaly = intervaly/numberChunks[1]
-        Chunks = {}
-        for i in range(numberChunks[0]):
-            for j in range(numberChunks[1]):
-                Chunks[str(i) + str(j)]=[[],[],[],[],[]]
-        for i in range(numberChunks[0]):
-            for j in range(numberChunks[1]):
-                if((i==numberChunks[0]-1)&(i==0)):
-                    intervalxChunk = [i*subIntervalx, (i+1)*subIntervalx]
-                elif i == 0 :
-                    intervalxChunk = [i*subIntervalx, (i+1)*subIntervalx + overlaping]
-                elif i == numberChunks[0]-1 :
-                    intervalxChunk = [i*subIntervalx - overlaping, maxx - minx]
-                else:
-                    intervalxChunk = [i*subIntervalx - overlaping, (i+1)*subIntervalx + overlaping]
-                if((j==numberChunks[1]-1)&(j==0)):
-                    intervalyChunk = [  j*subIntervaly, (j+1)*subIntervaly]
-                elif j == 0 :
-                    intervalyChunk = [  j*subIntervaly, (j+1)*subIntervaly + overlaping]
-                elif j == numberChunks[1]-1 :
-                    intervalyChunk = [ j*subIntervaly - overlaping , maxy - miny]
-                else:
-                    intervalyChunk = [  j*subIntervaly -overlaping, (j+1)*subIntervaly + overlaping]
-                for k in range(len(x)):
-                    if((x[k]<intervalxChunk[1])&(x[k]>=intervalxChunk[0])&(y[k]<intervalyChunk[1])&(y[k]>=intervalyChunk[0])):
-                        Chunks[str(i) + str(j)][0].append(x[k])
-                        Chunks[str(i) + str(j)][1].append(y[k])
-                        Chunks[str(i) + str(j)][2].append(z[k])
-                        Chunks[str(i) + str(j)][3].append(deltas[k])
-                        Chunks[str(i) + str(j)][4].append(sigmas[k])
-                Chunks[str(i) + str(j)].append([intervalxChunk[0],intervalxChunk[1],intervalyChunk[0],intervalyChunk[1],maxlist[4],maxlist[5]])
-                Chunks[str(i) + str(j)][0] = np.asarray(Chunks[str(i) + str(j)][0]) - intervalxChunk[0]
-                Chunks[str(i) + str(j)][1] = np.asarray(Chunks[str(i) + str(j)][1]) - intervalyChunk[0]
-        Chunks["overlaping"]=overlaping
-        return(Chunks)
 
 
     def split_map_in_chunks(self):
@@ -220,7 +160,7 @@ class VoidFinder(object):
         other_arrays_to_contatenate = [[] for i in range(len(other_array_names))]
         for i in range(self.split_map[0]):
             for j in range(self.split_map[1]):
-                coord_mpc = Chunks[str(i) + str(j)]["coord_Mpc"] 
+                coord_mpc = Chunks[str(i) + str(j)]["coord_Mpc"]
                 if(self.split_overlap is not None):
                     if((i==self.split_map[0]-1)&(i==0)):
                         pixel_x_interval = [0,0]
@@ -254,8 +194,8 @@ class VoidFinder(object):
             other_arrays_to_contatenate[k] = np.concatenate(other_arrays_to_contatenate[k],axis=0)
         return(radius, coord_Mpc,other_arrays_to_contatenate,other_array_names)
 
-        
-                
+
+
     def find_voids_watershed(self,tomographic_map):
         self.add_Report("Beginning of the Watershed finding for the map {}".format(tomographic_map.name))
         number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
@@ -296,7 +236,7 @@ class VoidFinder(object):
         del map_3D,mask,mask_clust,mask_radius,cluster_map,clusters,map_under_density,centers,index_under_density,radius_shed
         self.add_Report("End of the Watershed finding for the map {}".format(tomographic_map.name))
         return(new_radius, new_coord_Mpc,new_other_arrays,other_array_names)
-        
+
 
 
 
@@ -336,7 +276,7 @@ class VoidFinder(object):
         cluster_map = AgglomerativeClustering(distance_threshold=1.5,n_clusters=None,linkage=linkage).fit(indices).labels_
         clusters = np.unique(cluster_map)
         return(cluster_map,clusters)
-        
+
     def create_watershed_clusters3(self,indices):
         from scipy.cluster.hierarchy import fclusterdata
         cluster_map = fclusterdata(indices, t=1,criterion="distance")
@@ -363,7 +303,7 @@ class VoidFinder(object):
         radius = np.full(len(coord),-1)
         self.add_Report("Number of pixels for the map {} = {}".format(tomographic_map.name,len(coord)))
         if(self.restart):
-            radius = self.restart_calculation(radius,coord)            
+            radius = self.restart_calculation(radius,coord)
         mask = radius < 0
         radius_to_compute = radius[mask]
         coord_to_compute = coord[mask]
@@ -382,7 +322,7 @@ class VoidFinder(object):
                     radius_to_compute[i] = self.find_the_sphere_cluster(number_Mpc_per_pixels,number_pixel_maximal_radius,coord_to_compute[i])
             else:
                 for i in range(len(radius_to_compute)):
-                    radius_to_compute[i] = self.find_the_sphere(number_Mpc_per_pixels,number_pixel_maximal_radius,coord_to_compute[i])                
+                    radius_to_compute[i] = self.find_the_sphere(number_Mpc_per_pixels,number_pixel_maximal_radius,coord_to_compute[i])
         radius[mask] = radius_to_compute
         del mask,radius_to_compute,coord_to_compute
         mask = radius == 0
@@ -465,9 +405,9 @@ class VoidFinder(object):
         else :
             return(new_coord,new_radius,None)
 
-        
 
-        
+
+
     def delete_overlapers(self,tomographic_map,radius,coord,other_arrays=None,mpc=False):
         number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
         if(other_arrays is not None):
@@ -601,9 +541,9 @@ class VoidFinder(object):
         del line, line_file
         self.add_Report("restart coordinates")
         mask = radius >= 0
-        self.add_Report("Sphere found : R = " + str(radius[mask]) + ", Coord = " + str(coord[mask]))        
+        self.add_Report("Sphere found : R = " + str(radius[mask]) + ", Coord = " + str(coord[mask]))
         return(radius)
-        
+
 
 
     def convert_to_Mpc(self,tomographic_map,new_coord,new_radius):
@@ -626,17 +566,17 @@ class VoidFinder(object):
         else:
             name_out= "Voids"
         if(self.params_void_finder["method"]=="SPHERICAL"):
-            name = "Dictionary_{}_{}_{}threshold_{}average_{}rmin_{}_deletion".format(name_out,self.params_void_finder["method"],self.params_void_finder["threshold"],self.params_void_finder["average"],self.params_void_finder["minimal_radius"],self.delete_option)        
+            name = "Dictionary_{}_{}_{}threshold_{}average_{}rmin_{}_deletion".format(name_out,self.params_void_finder["method"],self.params_void_finder["threshold"],self.params_void_finder["average"],self.params_void_finder["minimal_radius"],self.delete_option)
         elif(self.params_void_finder["method"]=="WATERSHED"):
-            name = "Dictionary_{}_{}_{}threshold_{}dist_clusters_{}rmin_{}_deletion".format(name_out,self.params_void_finder["method"],self.params_void_finder["threshold"],self.params_void_finder["dist_clusters"],self.params_void_finder["minimal_radius"],self.delete_option)        
+            name = "Dictionary_{}_{}_{}threshold_{}dist_clusters_{}rmin_{}_deletion".format(name_out,self.params_void_finder["method"],self.params_void_finder["threshold"],self.params_void_finder["dist_clusters"],self.params_void_finder["minimal_radius"],self.delete_option)
         else :
-            raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")  
+            raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
         void = tomographic_objects.VoidCatalog.init_from_dictionary(f"{name}.fits",radius,coord,"cartesian",other_arrays=other_arrays,other_array_names = other_array_names)
         void.write()
 
 
 
-        
+
 
 
 
@@ -645,13 +585,13 @@ class VoidFinder(object):
 
 
 class VoidPlot(object):
-    
+
     def __init__(self,pwd):
         self.pwd = pwd
 
-    
 
-    
+
+
     def create_void_histogram_multiple(self,radius,nb_bins,rmin,rmax,name,norm=False):
         plt.figure()
         bins = np.linspace(rmin,rmax, nb_bins)
@@ -659,7 +599,7 @@ class VoidPlot(object):
         n = np.mean(n,axis=0)
         pickle.dump([n,bins],open(name,'wb'))
 
-    
+
     def plot_radius_vs_redshift(self,name_dict,name):
         dict_void = self.load_dictionary(name_dict)
         radius = dict_void["radius"]
@@ -712,7 +652,7 @@ class VoidPlot(object):
         plt.xlabel("Radius of the void in Mpc.h-1")
         plt.savefig("histogram_voids_radius_"+ name + ".pdf",format="pdf")
 
-        
+
 
     def load_and_plot_comparison(self,name1,name2,nb_bins,name,legend,rmin,rmax,norm=False,hist1=False,hist2=False,log_scale=True,supplementary_void=None,factor_add=None,legend_supp=None,expo_fit=False):
         bins1,bins2 = False,False
@@ -748,13 +688,13 @@ class VoidPlot(object):
 
     def expo(self,x,a,b):
         return(np.exp(a*x+b))
-        
+
     def plot_void_histogram_comparison(self,radius1,radius2,nb_bins,name,legend,rmin,rmax,norm=False,hist1=False,hist2=False,log_scale=True,radius_supp=None,legend_supp=None,expo_fit=False):
         plt.figure()
         bins = np.linspace(rmin,rmax, nb_bins)
         if(not hist1):
             (n1, bins1, patches1)  = plt.hist(radius1, bins, alpha=0.5, label=legend[0],density=norm)
-        else :            
+        else :
             (n1, bins1, patches1)  = plt.hist(bins[:-1],bins,weights=radius1, alpha=0.5, label=legend[0],density=norm)
         if(not hist2):
             (n2, bins2, patches2)  = plt.hist(radius2, bins, alpha=0.5, label=legend[1],density=norm)
@@ -771,7 +711,7 @@ class VoidPlot(object):
             fit = curve_fit(self.expo,bins_fit,n1)
             fit2 = curve_fit(self.expo,bins_fit,n2)
             plt.plot(bins_fit,self.expo(bins_fit,*fit[0]),'r')
-            plt.plot(bins_fit,self.expo(bins_fit,*fit2[0]),'b')    
+            plt.plot(bins_fit,self.expo(bins_fit,*fit2[0]),'b')
             perr = np.sqrt(np.diag(fit[1]))
             perr2 = np.sqrt(np.diag(fit2[1]))
             print(perr,perr2)
@@ -811,7 +751,3 @@ class VoidPlot(object):
             for j in range(len(cross[i])):
                 file.write("{} , {} , {} , {}\n".format(i+1,cross[i][j][0],cross[i][j][1],cross[i][j][2]))
         file.close()
-
-
-
-

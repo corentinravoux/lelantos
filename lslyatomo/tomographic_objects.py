@@ -815,7 +815,12 @@ class Pixel(object):
             z.append(coord[:,2][(coord[:,0]==x[i])&(coord[:,1]==y[i])])
         return(x,y,np.asarray(z))
 
-
+    def compute_mean_separation(self):
+        coord_pixels = self.pixel_array[:,0:3]
+        coord_distance = coord_pixels[1:,:] - coord_pixels[0:-1,:]
+        distance = np.sqrt(coord_distance[:,0]**2 +coord_distance[:,1]**2 + coord_distance[:,2]**2)
+        mask_distance = distance < distance.mean()*10
+        return(np.mean(distance[mask_distance]))
 
 
     @staticmethod
@@ -1442,6 +1447,125 @@ class VoidCatalog(Catalog):
 
 
 
+    def compute_filling_factor(self,size=None,property_name=None):
+        if(size is not None):
+            map_size = size
+        elif(property_name is not None):
+            prop = MapPixelProperty(name=property_name)
+            prop.read()
+            map_size = prop.size
+        volume_map = map_size[0]*map_size[1]*map_size[2]
+        volume_void = np.sum((4/3)*np.pi*(np.array(self.radius))**3)
+        self.filling_factor = volume_void/volume_map
+
+
+    def create_crossing_criteria(self,pixel_name):
+        if(self.crossing_param is not None):
+            return()
+        pixel = Pixel(name=pixel_name)
+        pixel.read()
+        coord_pixels = pixel.pixel_array[:,0:3]
+        separation_pixels = pixel.compute_mean_separation()
+        crossing_param = np.zeros(self.radius.shape)
+        for i in range(len(self.radius)):
+            diff_pixel = coord_pixels - self.coord[i]
+            distance_pixel = np.sqrt(diff_pixel[:,0]**2 + diff_pixel[:,1]**2 +diff_pixel[:,2]**2)
+            mask = distance_pixel < self.radius[i]
+            length = len(distance_pixel[mask])
+            crossing_param[i] = (length * separation_pixels)/self.radius[i]
+        self.crossing_param = crossing_param
+
+    def get_crossing_qso(self,qso_name):
+        qso = QSOCatalog.init_from_fits(qso_name)
+        coord_crossing_qso = []
+        for i in range(len(self.radius)):
+            diff_pixel = qso.coord - self.coord[i]
+            distance_pixel = np.sqrt(diff_pixel[:,0]**2 + diff_pixel[:,1]**2)
+            mask = distance_pixel < self.radius[i]
+            coord_crossing_qso.append(qso.coord[mask])
+        return(coord_crossing_qso)
+
+
+
+    def cut_catalogs(self,method_cut,cut_crossing_param=None,pixel_name=None,cut_radius=None,distance_map_name=None,distance_map_prop=None,distance_map_param=None,distance_map_percent=None,cut_border_prop=None):
+        string_to_add = ""
+        if type(method_cut) == str :
+            if method_cut == "ALL":
+                method_cut = ["CROSSING","RADIUS","DIST","BORDER"]
+            else:
+                method_cut = [method_cut]
+        if("CROSSING" in method_cut):
+            if ((cut_crossing_param is None)|(pixel_name is None)) : raise KeyError("Give a crossing parameter and a Pixel file name")
+            self.create_crossing_criteria(pixel_name)
+            self.cut_crossing_parameter(cut_crossing_param)
+            string_to_add = string_to_add + f"_crossing{cut_crossing_param}"
+        if("RADIUS" in method_cut):
+            if (cut_radius is None) : raise KeyError("Give a radius cutting parameter")
+            self.cut_radius(cut_radius)
+            string_to_add = string_to_add + f"_cutradius{cut_radius}"
+        if("BORDER" in method_cut):
+            if cut_border_prop is None : raise KeyError("Give a property file for border cutting")
+            self.cut_border(cut_border_prop)
+            string_to_add = string_to_add + "_cutborder"
+        if("DIST" in method_cut):
+            if ((distance_map_name is None)|(distance_map_prop is None)|(distance_map_param is None)|(distance_map_percent is None)) is None : raise KeyError("Give a dist map parameter, map and property file please")
+            # distance_map,param_cut,shape_map,size_map,percent_cut = dist_map_param["map"],dist_map_param["param_cut"],dist_map_param["shape"],dist_map_param["size"],dist_map_param["percent_cut"]
+            self.cut_distance_map(distance_map_name,distance_map_prop,distance_map_param,distance_map_percent)
+            string_to_add = string_to_add + f"_cutdistance_{distance_map_param}Mpc_{distance_map_percent}percent"
+        name_out = f"""{self.name.split(".fits")[0]}{string_to_add}.fits"""
+        return(name_out)
+
+
+    def apply_mask(self,mask):
+        if(self.radius is not None):self.radius = self.radius[mask]
+        if(self.coord is not None):self.coord = self.coord[mask]
+        if(self.primary_key is not None):self.primary_key = self.primary_key[mask]
+        if(self.crossing_param is not None):self.crossing_param = self.crossing_param[mask]
+        if(self.central_value is not None):self.central_value = self.central_value[mask]
+        if(self.weights is not None):self.weights = self.weights[mask]
+
+
+    def cut_crossing_parameter(self,cut_crossing_param):
+        mask = self.crossing_param > cut_crossing_param
+        self.apply_mask(mask)
+
+    def cut_radius(self,cut_radius):
+        mask = (self.radius >= cut_radius[0])&(self.radius < cut_radius[1])
+        self.apply_mask(mask)
+
+
+    def cut_border(self,cut_border_prop):
+        prop = MapPixelProperty(name=cut_border_prop)
+        prop.read()
+        cut_border_size = prop.size
+        mask = (self.coord[:,0] - self.radius < 0)|(self.coord[:,0] + self.radius > cut_border_size[0])
+        mask |= (self.coord[:,1] - self.radius < 0)|(self.coord[:,1] + self.radius > cut_border_size[1])
+        mask |= (self.coord[:,2] - self.radius < 0)|(self.coord[:,2] + self.radius > cut_border_size[2])
+        self.apply_mask(~mask)
+
+
+
+    # CR - to test
+    def cut_distance_map(self,distance_map_name,distance_map_prop,distance_map_param,distance_map_percent):
+        distance_map = DistanceMap.init_classic(name=distance_map_name,property_file=distance_map_prop)
+        distance_map.read()
+        mask = distance_map.get_mask_distance(distance_map_param)
+        mask_cut = np.full(self.radius.shape,False)
+        for i in range(len(self.coord)):
+            x_coord_min  = max(int(round((self.coord[i][0] - self.radius[i]) / distance_map.mpc_per_pixel[0],0)),0)
+            x_coord_max  = min(int(round((self.coord[i][0] + self.radius[i]) / distance_map.mpc_per_pixel[0],0)),distance_map.shape[0]-1)
+            y_coord_min  = max(int(round((self.coord[i][1] - self.radius[i]) / distance_map.mpc_per_pixel[1],0)),0)
+            y_coord_max  = min(int(round((self.coord[i][1] + self.radius[i]) / distance_map.mpc_per_pixel[1],0)),distance_map.shape[1]-1)
+            z_coord_min  = max(int(round((self.coord[i][2] - self.radius[i]) / distance_map.mpc_per_pixel[2],0)),0)
+            z_coord_max  = min(int(round((self.coord[i][2] + self.radius[i]) / distance_map.mpc_per_pixel[2],0)),distance_map.shape[2]-1)
+            sub_mask = mask[x_coord_min:x_coord_max+1,y_coord_min:y_coord_max+1,z_coord_min:z_coord_max+1]
+            if(len(sub_mask[sub_mask == True])/len(sub_mask[sub_mask != None]) >= distance_map_percent):
+                mask_cut[i] = True
+        self.apply_mask(mask_cut)
+
+
+
+
 
 
 
@@ -1536,216 +1660,6 @@ class VoidCatalog(Catalog):
             dict_ra_dec["crossing_qso"]=coord_qso_ra_dec
         return(dict_mpc,dict_ra_dec,dict_mpc_in_the_box)
 
-
-
-
-
-    def save_void_catalog(self,dict_mpc,dict_ra_dec,dict_mpc_in_the_box,name,format_file,fake_qso=False,mode="distance_redshift"):
-        write_voids = piccaconverter.Write_Fits_Ascii(self.pwd)
-        if(format_file == "PICKLE"):
-            pickle.dump(dict_ra_dec,open(name + "_RADEC.pickle",'wb'))
-            pickle.dump(dict_mpc,open(name + "_Mpc.pickle",'wb'))
-            pickle.dump(dict_mpc_in_the_box,open(name + "_Mpc_in_the_box.pickle",'wb'))
-
-        if(format_file == "FITS"):
-            radius = dict_mpc["radius"]
-            coord_ra_dec = dict_ra_dec["coord"]
-            coord_mpc = dict_mpc["coord"]
-            coord_mpc_in_the_box = dict_mpc_in_the_box["coord"]
-            write_voids.write_voids_catalogs(radius,coord_ra_dec,name + "_RADEC.fits",ra_dec=True,fake_qso=False)
-            if(fake_qso is True):
-                write_voids.write_voids_catalogs(radius,coord_ra_dec,name + "_RADEC_fakeqso.fits",ra_dec=True,fake_qso=True)
-            if(mode == "cartesian"):
-                write_voids.write_voids_catalogs(radius,coord_mpc,name + "_Mpc.fits",ra_dec=False,redshift=coord_ra_dec[:,2])
-            else:
-                write_voids.write_voids_catalogs(radius,coord_mpc,name + "_Mpc.fits",ra_dec=False)
-            write_voids.write_voids_catalogs(radius,coord_mpc_in_the_box,name + "_Mpc_in_the_box.fits",ra_dec=False)
-
-        if(format_file == "ALL"):
-            radius = dict_mpc["radius"]
-            coord_ra_dec = dict_ra_dec["coord"]
-            coord_mpc = dict_mpc["coord"]
-            coord_mpc_in_the_box = dict_mpc_in_the_box["coord"]
-            write_voids.write_voids_catalogs(radius,coord_ra_dec,name + "_RADEC.fits",ra_dec=True,fake_qso=False)
-            if(fake_qso is True):
-                write_voids.write_voids_catalogs(radius,coord_ra_dec,name + "_RADEC_fakeqso.fits",ra_dec=True,fake_qso=True)
-            if(mode == "cartesian"):
-                write_voids.write_voids_catalogs(radius,coord_mpc,name + "_Mpc.fits",ra_dec=False,redshift=coord_ra_dec[:,2])
-            else:
-                write_voids.write_voids_catalogs(radius,coord_mpc,name + "_Mpc.fits",ra_dec=False)
-            write_voids.write_voids_catalogs(radius,coord_mpc_in_the_box,name + "_Mpc_in_the_box.fits",ra_dec=False)
-            pickle.dump(dict_ra_dec,open(name + "_RADEC.pickle",'wb'))
-            pickle.dump(dict_mpc,open(name + "_Mpc.pickle",'wb'))
-            pickle.dump(dict_mpc_in_the_box,open(name + "_Mpc_in_the_box.pickle",'wb'))
-
-
-    def cut_catalogs(self,catalogs,method_cut=None,dist_map_params=None,cut_crossing_param=None,cut_radius=None,PixelNames=None,save_cut=False,get_crossing_qso=None,sizemap=None):
-        dict_catalogs = []
-        for i in range(len(catalogs)):
-            dict_void = self.load_dictionary(catalogs[i])
-            if((method_cut == "CROSSING")|(method_cut=="ALL")):
-                if ((cut_crossing_param is None)|(PixelNames is None)) : raise KeyError("Give a crossing parameter and a Pixel file list")
-                Treat = tomography.TreatClamato(self.pwd,"",[],PixelNames[i])
-                Pixels = Treat.readClamatoPixelFile()
-                if(get_crossing_qso is not None):
-                    self.create_crossing_criteria(catalogs[i],Pixels,recompute_crossing=True,get_crossing_quasars=get_crossing_qso[i])
-                else :
-                    self.create_crossing_criteria(catalogs[i],Pixels)
-                dict_void = self.load_dictionary(catalogs[i])
-                dict_void = self.cut_crossing_parameter(dict_void,cut_crossing_param)
-            if(((method_cut == "RADIUS")|(method_cut=="ALL"))&(cut_radius is not None)):
-                dict_void = self.cut_radius(dict_void,cut_radius)
-            if((method_cut == "DIST")|(method_cut=="ALL")):
-                if dist_map_params is None : raise KeyError("Give a dist map please")
-                dist_map_param = dist_map_params[i]
-                dist_map,param_cut,shape_map,size_map,percent_cut = dist_map_param["map"],dist_map_param["param_cut"],dist_map_param["shape"],dist_map_param["size"],dist_map_param["percent_cut"]
-                dict_void = self.cut_dist_map(dict_void,dist_map,shape_map,size_map,param_cut,percent_cut)
-            if((method_cut == "BORDER")|(method_cut=="ALL")):
-                self.cut_border(dict_void,sizemap)
-            dict_catalogs.append(dict_void)
-            if(save_cut):
-                if(method_cut == "CROSSING"):
-                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutcrossing{}.pickle".format(cut_crossing_param),'wb'))
-                elif(method_cut == "DIST"):
-                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutdistance_{}Mpc_{}percent.pickle".format(param_cut,percent_cut),'wb'))
-                elif(method_cut == "RADIUS"):
-                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutradius{}.pickle".format(cut_radius),'wb'))
-                elif(method_cut == "BORDER"):
-                    pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutborder.pickle",'wb'))
-                elif(method_cut == "ALL"):
-                    if(cut_radius is None):
-                        pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutcrossing{}_cutdistance_{}Mpc_{}percent.pickle".format(cut_crossing_param,param_cut,percent_cut),'wb'))
-                    else:
-                        pickle.dump(dict_void,open(catalogs[i].split(".pickle")[0] + "_cutcrossing{}_cutdistance_{}Mpc_{}percent_cutradius{}.pickle".format(cut_crossing_param,param_cut,percent_cut,cut_radius),'wb'))
-        return(dict_catalogs)
-
-
-
-
-
-    def getcoord(self,zqso_name):
-        zqso = np.transpose(np.asarray(pickle.load(open(zqso_name,'rb'))))
-        zqso = zqso[zqso[:,0].argsort()]
-        return(zqso)
-
-
-
-    def create_crossing_criteria(self,name,pixels,recompute_crossing=None,get_crossing_quasars=None):
-        void_dict = self.load_dictionary(name)
-        if("crossing_criteria" in void_dict):
-            if(recompute_crossing is None):
-                return()
-        radius, coord = void_dict["radius"], void_dict["coord"]
-        coord_pixels = pixels[:,0:3]
-        coord_z = abs(pixels[1:len(pixels),2] - pixels[0:len(pixels)-1,2])
-        mask = coord_z < np.mean(coord_z) + 2
-        coord_z = coord_z[mask]
-        separation_pixels = np.mean(coord_z)
-        crossing_criteria = np.zeros(radius.shape)
-        if(get_crossing_quasars is not None):
-            coord_qso = self.getcoord(get_crossing_quasars)
-            coord_crossing_qso = []
-        for i in range(len(radius)):
-            void_coordinate = coord[i]
-            void_radius = radius[i]
-            diff_pixel = coord_pixels - void_coordinate
-            distance_pixel = np.sqrt(diff_pixel[:,0]**2 + diff_pixel[:,1]**2 +diff_pixel[:,2]**2)
-            mask = distance_pixel < void_radius
-            length = len(distance_pixel[mask])
-            if(get_crossing_quasars is not None):
-                diff_pixel2 = coord_qso - void_coordinate
-                distance_pixel2 = np.sqrt(diff_pixel2[:,0]**2 + diff_pixel2[:,1]**2)
-                mask2 = distance_pixel2 < void_radius
-                coord_crossing_qso.append(coord_qso[mask2])
-            crossing_criteria[i] = (length * separation_pixels)/void_radius
-        void_dict["crossing_criteria"] = crossing_criteria
-        if(get_crossing_quasars is not None):
-            void_dict["crossing_qso"] = np.asarray(coord_crossing_qso)
-        pickle.dump(void_dict,open(name,'wb'))
-
-    def cut_radius(self,void_dict,minradius):
-        radius = void_dict["radius"]
-        if((type(minradius) == int)|(type(minradius) == float)):
-            minimalradius=minradius
-            mask = radius >= minimalradius
-        else:
-            minimalradius,maximalradius = minradius[0],minradius[1]
-            mask = (radius >= minimalradius)&(radius < maximalradius)
-        for key in list(void_dict.keys()):
-            if(key!="filling_factor"):
-                void_dict[key] = void_dict[key][mask]
-        return(void_dict)
-
-    def cut_crossing_parameter(self,void_dict,mincross):
-        crossing_criteria = void_dict["crossing_criteria"]
-        mask = crossing_criteria > mincross
-        for key in list(void_dict.keys()):
-            if(key!="filling_factor"):
-                void_dict[key] = void_dict[key][mask]
-        return(void_dict)
-
-
-    def cut_border(self,void_dict,sizemap):
-        coord,radius = void_dict["coord"],void_dict["radius"]
-        mask = (coord[:,0] - radius < 0)|(coord[:,0] + radius > sizemap[0])|(coord[:,1] - radius < 0)|(coord[:,1] + radius > sizemap[1])|(coord[:,2] - radius < 0)|(coord[:,2] + radius > sizemap[2])
-        for key in list(void_dict.keys()):
-            if(key!="filling_factor"):
-                void_dict[key] = np.array(void_dict[key])[~mask]
-        return(void_dict)
-
-
-    def cut_dist_map(self,dict_void,dist_map_name,shape_map,size_map,param_cut,percent_cut):
-        Treat = tomography.TreatClamato(self.pwd,dist_map_name,shape_map,"")
-        dist_map = Treat.readClamatoMapFile()
-        mask = dist_map < param_cut
-# shape/size
-        number_Mpc_per_pixels = np.array(size_map)/(np.array(shape_map)-1)
-        number_Mpc_per_pixels = np.array(size_map)/(np.array(shape_map))
-        radius, coord, filling_factor = dict_void["radius"], dict_void["coord"], dict_void["filling_factor"]
-        other_param = {}
-        for key in list(dict_void.keys()):
-            if((key!="coord")&(key!="radius")&(key!="filling_factor")):
-                other_param["new" + key] = []
-                other_param[key] = dict_void[key]
-        newradius,newcoord = [],[]
-        for i in range(len(coord)):
-            x_coord_min  = max(int(round((coord[i][0] - radius[i]) / number_Mpc_per_pixels[0],0)),0)
-            x_coord_max  = min(int(round((coord[i][0] + radius[i]) / number_Mpc_per_pixels[0],0)),shape_map[0]-1)
-            y_coord_min  = max(int(round((coord[i][1] - radius[i]) / number_Mpc_per_pixels[1],0)),0)
-            y_coord_max  = min(int(round((coord[i][1] + radius[i]) / number_Mpc_per_pixels[1],0)),shape_map[1]-1)
-            z_coord_min  = max(int(round((coord[i][2] - radius[i]) / number_Mpc_per_pixels[2],0)),0)
-            z_coord_max  = min(int(round((coord[i][2] + radius[i]) / number_Mpc_per_pixels[2],0)),shape_map[2]-1)
-            sub_mask = mask[x_coord_min:x_coord_max+1,y_coord_min:y_coord_max+1,z_coord_min:z_coord_max+1]
-            if(len(sub_mask[sub_mask == True])/len(sub_mask[sub_mask != None]) >= percent_cut):
-                newradius.append(radius[i])
-                newcoord.append(coord[i])
-                for key in list(dict_void.keys()):
-                    if((key!="coord")&(key!="radius")&(key!="filling_factor")):
-                        other_param["new" + key].append(other_param[key][i])
-        new_dict = {"coord" : newcoord,"radius" : newradius, "filling_factor" : filling_factor}
-        for key in list(dict_void.keys()):
-            if((key!="coord")&(key!="radius")&(key!="filling_factor")):
-                new_dict[key] = other_param["new" + key]
-        return(new_dict)
-
-
-    def merge_cut_and_save_catalogs(self,catalogs,Om,extremum_list_names,nameout,format_file,ref_redshift = "mean",method_cut=None,dist_map_params=None,cut_crossing_param=None,PixelNames=None,save_cut=False,get_crossing_qso=None,fake_qso=False,cut_radius=None,sizemap=None,mode="distance_redshift"):
-        catalog_cut = self.cut_catalogs(catalogs,method_cut=method_cut,dist_map_params=dist_map_params,cut_crossing_param=cut_crossing_param,PixelNames=PixelNames,save_cut=save_cut,get_crossing_qso=get_crossing_qso,cut_radius=cut_radius,sizemap=sizemap)
-        (dict_mpc,dict_ra_dec,dict_mpc_in_the_box) = self.merge_voids_catalogs(catalog_cut,Om,extremum_list_names,ref_redshift = ref_redshift,mode=mode)
-        self.save_void_catalog(dict_mpc,dict_ra_dec,dict_mpc_in_the_box,nameout,format_file,fake_qso=fake_qso,mode=mode)
-
-    def cut_and_save_catalogs(self,catalogs,method_cut=None,dist_map_params=None,cut_crossing_param=None,PixelNames=None,get_crossing_qso=None,cut_radius=None,sizemap=None):
-        self.cut_catalogs(catalogs,method_cut=method_cut,dist_map_params=dist_map_params,cut_crossing_param=cut_crossing_param,PixelNames=PixelNames,save_cut=True,get_crossing_qso=get_crossing_qso,cut_radius=cut_radius,sizemap=sizemap)
-
-
-    def merge_and_save_catalogs(self,catalogs,Om,extremum_list_names,nameout,format_file,ref_redshift = "mean",fake_qso=False,mode="distance_redshift"):
-        catalog_dict = self.load_dictionary_list(catalogs)
-        (dict_mpc,dict_ra_dec,dict_mpc_in_the_box) = self.merge_voids_catalogs(catalog_dict,Om,extremum_list_names,ref_redshift = ref_redshift,mode=mode)
-        self.save_void_catalog(dict_mpc,dict_ra_dec,dict_mpc_in_the_box,nameout,format_file,fake_qso=fake_qso,mode=mode)
-
-
-
-
     def compute_redshift(self,minredshift,z,minz):
         return(fsolve(self.f,minredshift,args=(z + minz))[0])
 
@@ -1762,10 +1676,6 @@ class VoidCatalog(Catalog):
 
 
 
-    def compute_filling_factor(self,radius,sizemap):
-        volume_map = sizemap[0]*sizemap[1]*sizemap[2]
-        volume_void = np.sum((4/3)*np.pi*(np.array(radius))**3)
-        return(volume_void/volume_map)
 
 
 
