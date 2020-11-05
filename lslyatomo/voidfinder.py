@@ -29,7 +29,6 @@ from functools import partial
 from lslyatomo import tomographic_objects
 
 
-
 #############################################################################
 #############################################################################
 ############################### CLASSES #####################################
@@ -85,7 +84,7 @@ class VoidFinder(object):
     def find_voids_map_split(self):
         Chunks = self.split_map_in_chunks()
         if(self.params_void_finder["method"] == "WATERSHED"):
-            if(self.number_core !=1):
+            if(self.number_core > 1):
                 list_chunks = list(Chunks.items())
                 list_map_chunks = [tomographic_objects.TomographicMap.init_classic(name=Chunks[str(i) + str(j)]["map_name"],shape=Chunks[str(i) + str(j)]["map_shape"],size=Chunks[str(i) + str(j)]["map_size"],map_array=Chunks[str(i) + str(j)]["map"]) for i in range(self.split_map[0]) for j in range(self.split_map[1])]
                 pool = Pool(self.number_core)
@@ -213,6 +212,7 @@ class VoidFinder(object):
         centers = np.zeros((len(clusters),3))
         radius_shed = np.zeros(len(clusters))
         delta_max = np.zeros((len(clusters)))
+        delta_mean = np.zeros((len(clusters)))
         volume_cell = number_Mpc_per_pixels[0]*number_Mpc_per_pixels[1]*number_Mpc_per_pixels[2]
         for i in range(len(clusters)):
             mask_clust = cluster_map == clusters[i]
@@ -221,6 +221,7 @@ class VoidFinder(object):
             else :
                 arg_center = np.argmax(map_under_density[mask_clust])
             delta_max[i] = map_under_density[mask_clust][arg_center]
+            delta_mean[i] = np.mean(map_under_density[mask_clust])
             centers[i] = index_under_density[mask_clust][arg_center]
             volume_shed = len(map_under_density[mask_clust]) * volume_cell
             radius_shed[i] = ((3 * volume_shed)/(4*np.pi))**(1/3)
@@ -229,9 +230,10 @@ class VoidFinder(object):
         radius = radius_shed[mask_radius]
         coord = centers[mask_radius]
         delta_max = delta_max[mask_radius]
+        delta_mean = delta_mean[mask_radius]
         self.add_Report("Masking of low radius done for the map {}".format(tomographic_map.name))
-        new_coord, new_radius, new_other_arrays = self.delete_voids(tomographic_map,radius,coord,other_arrays=[delta_max])
-        other_array_names =["VALUE"]
+        new_coord, new_radius, new_other_arrays = self.delete_voids(tomographic_map,radius,coord,other_arrays=[delta_max,delta_mean])
+        other_array_names =["VALUE","MEAN"]
         new_coord_Mpc = self.convert_to_Mpc(tomographic_map,new_coord,new_radius)
         del map_3D,mask,mask_clust,mask_radius,cluster_map,clusters,map_under_density,centers,index_under_density,radius_shed
         self.add_Report("End of the Watershed finding for the map {}".format(tomographic_map.name))
@@ -288,7 +290,7 @@ class VoidFinder(object):
 
     def find_voids_sphere(self,tomographic_map):
         self.add_Report("Beginning of the Simple spherical finding for the map {}".format(tomographic_map.name))
-        number_Mpc_per_pixels = tomographic_map.mpc_per_pixels
+        number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
         number_pixel_maximal_radius = [int(round((self.params_void_finder["maximal_radius"]/number_Mpc_per_pixels)[0],0)),int(round((self.params_void_finder["maximal_radius"]/number_Mpc_per_pixels)[1],0)),int(round((self.params_void_finder["maximal_radius"]/number_Mpc_per_pixels)[2],0))]
         global map_3D
         map_3D = tomographic_map.map_array
@@ -307,33 +309,38 @@ class VoidFinder(object):
         mask = radius < 0
         radius_to_compute = radius[mask]
         coord_to_compute = coord[mask]
-        if(self.number_core != 0):
+        mean_value = np.zeros(len(radius_to_compute))
+        if(self.number_core > 1):
             self.add_Report("Start of pool for the map {}".format(tomographic_map.name))
             if(self.find_cluster):
                 func = partial(self.find_the_sphere_cluster,number_Mpc_per_pixels,number_pixel_maximal_radius)
             else:
                 func = partial(self.find_the_sphere,number_Mpc_per_pixels,number_pixel_maximal_radius)
             pool = Pool(self.number_core)
-            radius_to_compute = pool.map(func,coord_to_compute)
+            out_pool = np.array(pool.map(func,coord_to_compute))
+            radius_to_compute , mean_value = out_pool[:,0], out_pool[:,1]
             self.add_Report("End of pool for the map {}".format(tomographic_map.name))
         else :
             if(self.find_cluster):
                 for i in range(len(radius_to_compute)):
-                    radius_to_compute[i] = self.find_the_sphere_cluster(number_Mpc_per_pixels,number_pixel_maximal_radius,coord_to_compute[i])
+                    radius_to_compute[i],mean_value[i] = self.find_the_sphere_cluster(number_Mpc_per_pixels,number_pixel_maximal_radius,coord_to_compute[i])
             else:
                 for i in range(len(radius_to_compute)):
-                    radius_to_compute[i] = self.find_the_sphere(number_Mpc_per_pixels,number_pixel_maximal_radius,coord_to_compute[i])
+                    radius_to_compute[i],mean_value[i] = self.find_the_sphere(number_Mpc_per_pixels,number_pixel_maximal_radius,coord_to_compute[i])
         radius[mask] = radius_to_compute
         del mask,radius_to_compute,coord_to_compute
         mask = radius == 0
         coord = coord[~mask]
         radius = radius[~mask]
-        new_coord, new_radius = self.delete_voids(tomographic_map,radius,coord)
+        mean_value = mean_value[~mask]
+        new_coord, new_radius, new_other_arrays = self.delete_voids(tomographic_map,radius,coord,other_arrays=[mean_value])
+        nearest_coord = np.round(new_coord,0).astype(int)
+        new_other_arrays.append(map_3D[nearest_coord[:,0],nearest_coord[:,1],nearest_coord[:,2]])
         new_coord_Mpc = self.convert_to_Mpc(tomographic_map,new_coord,new_radius)
-        other_arrays,other_array_names=[],[]
+        other_array_names=["MEAN","VALUE"]
         del indice,coord,map_3D,mask,radius
         self.add_Report("End of the Simple spherical finding for the map {}".format(tomographic_map.name))
-        return(new_radius, new_coord_Mpc,other_arrays,other_array_names)
+        return(new_radius, new_coord_Mpc,new_other_arrays,other_array_names)
 
 
     def find_the_sphere(self,number_Mpc_per_pixels,number_pixel_maximal_radius,index):
@@ -345,10 +352,13 @@ class VoidFinder(object):
         boolean = np.mean(map_local[distance_map < rayon]) > self.params_void_finder["average"]
         while(boolean&(rayon<self.params_void_finder["maximal_radius"])):
             rayon = rayon + self.params_void_finder["radius_step"]
-            boolean = np.mean(map_local[distance_map < rayon]) > self.params_void_finder["average"]
+            mean_value = np.mean(map_local[distance_map < rayon])
+            boolean = mean_value > self.params_void_finder["average"]
         del distance_map,map_local,boolean
-        if((rayon>=self.params_void_finder["maximal_radius"])|(rayon<=self.params_void_finder["minimal_radius"])):return(0)
-        return(rayon)
+        if((rayon>=self.params_void_finder["maximal_radius"])|(rayon<=self.params_void_finder["minimal_radius"])):
+            return(0)
+        else:
+            return(rayon,mean_value)
 
 
     def find_the_sphere_cluster(self,number_Mpc_per_pixels,number_pixel_maximal_radius,index):
@@ -360,11 +370,13 @@ class VoidFinder(object):
         boolean = np.mean(map_local[distance_map < rayon]) < self.params_void_finder["average"]
         while(boolean&(rayon<self.params_void_finder["maximal_radius"])):
             rayon = rayon + self.params_void_finder["radius_step"]
-            boolean = np.mean(map_local[distance_map < rayon]) < self.params_void_finder["average"]
+            mean_value = np.mean(map_local[distance_map < rayon])
+            boolean = mean_value < self.params_void_finder["average"]
         del distance_map,map_local,boolean
-        if((rayon>=self.params_void_finder["maximal_radius"])|(rayon<=self.params_void_finder["minimal_radius"])):return(0)
-        return(rayon)
-
+        if((rayon>=self.params_void_finder["maximal_radius"])|(rayon<=self.params_void_finder["minimal_radius"])):
+            return(0)
+        else:
+            return(rayon,mean_value)
 
 
 ### Overlapper deletion algorithms
