@@ -23,8 +23,15 @@ Tested on irene and cobalt (CCRT)
 import numpy as np
 import logging, time
 import scipy
+import fitsio
 
-
+try :
+    from SaclayMocks import box as saclay_mock_box
+    from SaclayMocks import constant as saclay_mock_constant
+except :
+    from lslyatomo.saclaymocks import box as saclay_mock_box
+    from lslyatomo.saclaymocks import constant as saclay_mock_constant
+    raise Warning("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
 from scipy import interpolate
 try:
     from picca import constants
@@ -370,3 +377,70 @@ def latex_float(float_input,decimals_input="{0:.2g}"):
 
 def return_key(dictionary,string,default_value):
     return(dictionary[string] if string in dictionary.keys() else default_value)
+
+
+saclay_mock_lines_per_box = {"box" : 5,"vx" : 5,"vy" : 5,"vz" : 5,"eta_xx":1,"eta_xy":1,"eta_xz":1,"eta_yx":1,"eta_yy":1,"eta_yz":1,"eta_zx":1,"eta_zy":1,"eta_zz":1}
+
+def saclay_mock_box_cosmo_parameters(box_shape,size_cell):
+    import cosmolopy.distance as dist
+    NZ = box_shape[2]
+    DZ = size_cell
+    LZ = NZ*DZ
+
+    h = saclay_mock_constant.h
+    Om = saclay_mock_constant.omega_M_0
+    OL = saclay_mock_constant.omega_lambda_0
+    Ok = saclay_mock_constant.omega_k_0
+    z0 = saclay_mock_constant.z0
+
+    cosmo_fid = {'omega_M_0':Om, 'omega_lambda_0':OL, 'omega_k_0':Ok, 'h':h}
+    R_of_z, z_of_R = dist.quick_distance_function(dist.comoving_distance, return_inverse=True, **cosmo_fid)
+    R0 = h * R_of_z(z0)
+    Rmin = R0 - LZ/2
+    Rmax = R0 + LZ/2
+    return(R0,z0,R_of_z,z_of_R,Rmin,Rmax,h)
+
+def saclay_mock_center_of_the_box(box_bound):
+    ra0_box = (box_bound[0] + box_bound[1])/2
+    dec0_box = (box_bound[2] + box_bound[3])/2
+    return(ra0_box, dec0_box)
+
+
+def saclay_mock_coord_dm_map(X,Y,Z,Rmin,size_cell,box_shape,interpolation_method):
+    size_cell = size_cell
+    center_x = (box_shape[0]-1) / 2
+    center_y = (box_shape[1]-1) / 2
+    if(interpolation_method.upper() == "NEAREST"):
+        n_i = (np.round(center_x + X/size_cell,0)).astype(int)
+        n_j = (np.round(center_y + Y/size_cell,0)).astype(int)
+        n_k = np.round((Z - Rmin)/size_cell,0).astype(int)
+    else:
+        n_i = center_x + X/size_cell
+        n_j = center_y + Y/size_cell
+        n_k = (Z - Rmin)/size_cell
+    return(n_i,n_j,n_k)
+
+def saclay_mock_read_box(box_dir,n_x,name_box):
+    name = "{}-{}.fits".format(name_box,str(n_x))
+    box = fitsio.FITS(box_dir + "/" + name)[0][:,:,:][0]
+    return(box)
+
+def saclay_mock_get_box(box_dir,box_shape,name_box="box"):
+    line_per_box = saclay_mock_lines_per_box[name_box]
+    DM_mocks = np.zeros((box_shape[0],box_shape[1],box_shape[2]))
+    for i in range(box_shape[0]//line_per_box):
+        DM_mocks[i*line_per_box:(i+1)*line_per_box,:,:] = saclay_mock_read_box(box_dir,i,name_box)[:,:]
+    return(DM_mocks)
+
+
+def saclay_mock_sky_to_cartesian(ra,dec,R,ra0,dec0):
+    '''
+    XYZ of a point P (ra,dec,R) in a frame with
+    observer at O, Z along OP, X along ra0, Y along dec0
+    angles in radians
+    tested that ra,dec, R = box.ComputeRaDecR(R0,ra0,dec0,X,Y,Z)
+    x,y,z = box.ComputeXYZ(ra[0],dec[0],R,ra0,dec0)
+    print x-X,y-Y,z-R0-Z        prints ~1E-13  for random inputs
+    '''
+    X,Y,Z = saclay_mock_box.ComputeXYZ2(ra*(np.pi/180),dec*(np.pi/180),R,ra0*(np.pi/180),dec0*(np.pi/180))
+    return(X,Y,Z)
