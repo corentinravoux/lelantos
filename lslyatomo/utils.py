@@ -24,7 +24,8 @@ import numpy as np
 import logging, time
 import scipy
 import fitsio
-
+from scipy.ndimage.filters import gaussian_filter
+from scipy import interpolate
 try :
     from SaclayMocks import box as saclay_mock_box
     from SaclayMocks import constant as saclay_mock_constant
@@ -32,7 +33,8 @@ except :
     from lslyatomo.saclaymocks import box as saclay_mock_box
     from lslyatomo.saclaymocks import constant as saclay_mock_constant
     raise Warning("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
-from scipy import interpolate
+
+
 try:
     from picca import constants
 except:
@@ -201,6 +203,12 @@ def bin_ndarray(ndarray, new_shape, operation='mean'):
                 newndarray[j] = np.average(ndarray[j],axis=0,weights=gaussian_weights)
             ndarray =newndarray
     return ndarray
+
+
+def gaussian_smoothing(mapdata,sigma):
+    gaussian_map = gaussian_filter(mapdata,sigma)
+    return(gaussian_map)
+
 
 
 class gaussian_fitter_2d(object):
