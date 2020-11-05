@@ -323,7 +323,7 @@ class BoxExtractor():
 
 
 
-    def create_box(self,map_property_file,name,rsd_box=False,growth_multipication=True,matter_field=True,gaussian_smoothing=None,shape_map_output=None):
+    def create_box(self,map_property_file,name,rsd_box=False,growth_multiplication=True,matter_field=True,gaussian_smoothing=None,shape_map_output=None):
         prop = tomographic_objects.MapPixelProperty(name=map_property_file)
         prop.read()
         if(shape_map_output is None):
@@ -338,7 +338,7 @@ class BoxExtractor():
             (dm_map,prop_maps,prop) = self.extract_box_multiple(ra_array,dec_array,z_array,shape_map_output,rsd_box)
         else :
             (dm_map,prop_maps,prop) = self.extract_box(ra_array,dec_array,z_array,shape_map_output,rsd_box)
-        if(growth_multipication): dm_map = self.multiply_by_growth(dm_map,z_array)
+        if(growth_multiplication): dm_map = self.multiply_by_growth(dm_map,z_array)
         if(matter_field): dm_map = self.convert_to_matter_field(dm_map)
         if(gaussian_smoothing is not None): dm_map = utils.gaussian_smoothing(dm_map,gaussian_smoothing)
         dm_map_object = tomographic_objects.TomographicMap(map_array=dm_map,name=name)
@@ -352,7 +352,7 @@ class BoxExtractor():
 
 
 
-    def create_LOS(self,pixel_name,name,growth_multipication=True,matter_field=True):
+    def create_LOS(self,pixel_name,name,growth_multiplication=True,matter_field=True):
         pixel = tomographic_objects.Pixel(name=pixel_name)
         pixel.read()
         ra_array,dec_array,z_array = np.array(pixel.pixel_array[:,0]),np.array(pixel.pixel_array[:,1]),np.array(pixel.pixel_array[:,2])
@@ -361,7 +361,7 @@ class BoxExtractor():
         else :
             los = self.extract_los_multiple(ra_array,dec_array,z_array)
         self.add_Report("Multiplying by growth factor at redshift of the LOS")
-        if(growth_multipication):
+        if(growth_multiplication):
             los = self.multiply_los_by_growth(los,z_array)
         if(matter_field):
             los = self.convert_to_matter_field(los)
