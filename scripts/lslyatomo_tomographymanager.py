@@ -1,5 +1,5 @@
 import os
-pwd = os.getcwd()
+pwd = "./"
 from lslyatomo import task_manager
 
 
@@ -23,6 +23,6 @@ machine = "pc"
 
 if __name__ =="__main__":
     manager = task_manager.TomographyManager(pwd,software,machine,name_pixel,launch_file)
-#    manager.launch_all()
+    manager.launch_all()
     manager.copy()
 
