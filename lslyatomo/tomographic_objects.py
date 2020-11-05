@@ -31,7 +31,7 @@ except:
 from lslyatomo import utils
 from scipy.ndimage.filters import gaussian_filter
 import multiprocessing as mp
-
+from scipy.interpolate import interp1d
 
 ### Copy to utils ####
 
@@ -493,28 +493,6 @@ class StackMap(TomographicMap):
 
 
 
-
-    def getcoord(self,pixels):
-        listxy = np.asarray(pixels)[:,0:3]
-        i = 0
-        listxyz=[]
-        while(i<len(listxy)-1):
-            z = []
-            x = listxy[i][0]
-            y = listxy[i][1]
-            while((listxy[i][0] == x)&(listxy[i][1] == y)):
-                z.append(listxy[i][2])
-                i = i + 1
-                if(i == len(listxy) - 1):
-                    z.append(listxy[i][2])
-                    break
-            listxyz.append([[x,y],z])
-        return(listxyz)
-
-
-
-
-
     def stack_voids(self,map_3D,size_map,coord,radius,size_stack,normalized=None,shape="CUBIC",number=None):
         if(normalized is None):
             voids = coord
@@ -737,8 +715,6 @@ class StackMap(TomographicMap):
 
 
 
-
-
     def read_stacks(self,name,shape_stack):
         stack = np.fromfile(name)
         return(stack.reshape(shape_stack))
@@ -756,6 +732,8 @@ class StackMap(TomographicMap):
         if(los_z is not None):
             np.savetxt("lenght_between_los_and_quasar.txt",[los_z],header="difference in Mpc between end of LOS and quasar center\n")
         stack.tofile(name)
+
+
 
 
 
@@ -1053,6 +1031,7 @@ class Delta(object):
 #############################################################################
 
 
+# CR - for the cutting routines, add a routine which automaticaly cut additive arrays
 
 
 
@@ -1060,6 +1039,7 @@ class Delta(object):
 
 
 class Catalog(object):
+
 
     def __init__(self,name=None,coord=None,primary_key=None,catalog_type="sky"):
         self.name = name
@@ -1091,9 +1071,58 @@ class Catalog(object):
         catalog.close()
 
 
+    def convert_to_absolute_coordinates(self,map_property_file):
+        prop = MapPixelProperty(name=map_property_file)
+        prop.read()
+        if(self.catalog_type=="cartesian"):
+            boundary = prop.boundary_cartesian_coord
+        if(self.catalog_type=="sky"):
+            boundary = prop.boundary_sky_coord
+        self.coord[:,0] = self.coord[:,0]  + boundary[0][0]
+        self.coord[:,1] = self.coord[:,1]  + boundary[0][1]
+        self.coord[:,2] = self.coord[:,2]  + boundary[0][2]
+
+    def convert_to_normalized_coordinates(self,map_property_file):
+        prop = MapPixelProperty(name=map_property_file)
+        prop.read()
+        if(self.catalog_type=="cartesian"):
+            boundary = prop.boundary_cartesian_coord
+        if(self.catalog_type=="sky"):
+            boundary = prop.boundary_sky_coord
+        self.coord[:,0] = self.coord[:,0]  - boundary[0][0]
+        self.coord[:,1] = self.coord[:,1]  - boundary[0][1]
+        self.coord[:,2] = self.coord[:,2]  - boundary[0][2]
+
+    def convert_to_sky(self,map_property_file,mode):
+        prop = MapPixelProperty(name=map_property_file)
+        prop.read()
+        self.convert_to_absolute_coordinates(map_property_file)
+        if((mode.lower()=="middle")|(mode.lower()=="full_angle")|(mode.lower()=="full")):
+            Omega_m = prop.Omega_m
+            suplementary_parameters = utils.return_suplementary_parameters(self.coordinate_transform,property=prop)
+            (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(Omega_m)
+            self.coord[:,0],self.coord[:,1],self.coord[:,2] = utils.convert_cartesian_to_sky(self.coord[:,0],self.coord[:,1],self.coord[:,2],mode,inv_rcomov=inv_rcomov,inv_distang=inv_distang,distang=distang,suplementary_parameters=suplementary_parameters)
+            self.catalog_type = "sky"
+        else:
+            raise KeyError("Conversion mode not available, please choose between : middle, full or full_angle")
+
+    def convert_to_cartesian(self,map_property_file,mode):
+        prop = MapPixelProperty(name=map_property_file)
+        prop.read()
+        if((mode.lower()=="middle")|(mode.lower()=="full_angle")|(mode.lower()=="full")):
+            Omega_m = prop.Omega_m
+            suplementary_parameters = utils.return_suplementary_parameters(self.coordinate_transform,property=prop)
+            (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(Omega_m)
+            self.coord[:,0],self.coord[:,1],self.coord[:,2] = utils.convert_sky_to_cartesian(self.coord[:,0],self.coord[:,1],self.coord[:,2],mode,rcomov=rcomov,distang=distang,suplementary_parameters=suplementary_parameters)
+            self.catalog_type = "cartesian"
+        else:
+            raise KeyError("Conversion mode not available, please choose between : middle, full or full_angle")
+        self.convert_to_normalized_coordinates(map_property_file)
 
 
-    def cut_catalog(self,coord_min,coord_max,center_x_coord=False):
+
+
+    def cut_catalog(self,coord_min=None,coord_max=None,center_x_coord=False):
         if(self.coord.shape[1] != 3):
             raise ValueError("The catalog is not at the good shape for using this function")
         x = self.coord.copy()[:,0]
@@ -1102,16 +1131,13 @@ class Catalog(object):
         if(center_x_coord):
             mask = x > 180
             x[mask] = x[mask] - 360
-        mask_select = (x<coord_max[0]) & (x > coord_min[0]) & (y<coord_max[1]) & (y > coord_min[1]) &(z<coord_max[2]) & (z > coord_min[2])
-        self.coord = self.coord[mask_select]
-        self.primary_key = self.primary_key[mask_select]
+        mask_select = np.full(self.coord.shape[0],True)
+        if(coord_min is not None):
+            mask_select &= (x > coord_min[0]) & (y > coord_min[1]) & (z > coord_min[2])
+        if(coord_max is not None):
+            mask_select &= (x<coord_max[0])  & (y<coord_max[1]) & (z<coord_max[2])
         return(mask_select)
-        if(self.plate is not None):
-            self.plate = self.plate[mask_select]
-        if(self.modern_julian_date is not None):
-            self.modern_julian_date = self.modern_julian_date[mask_select]
-        if(self.fiber_id is not None):
-            self.fiber_id = self.fiber_id[mask_select]
+
 
 
 
@@ -1162,8 +1188,12 @@ class QSOCatalog(Catalog):
         return(cls(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type))
 
 
-    def cut_quasars_catalogs(self,coord_min,coord_max):
-        mask_select = self.cut_catalog(coord_min,coord_max,center_x_coord=True)
+    def cut_catalog_qso(self,coord_min=None,coord_max=None):
+        mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=True)
+        if(self.coord is not None):
+            self.coord = self.coord[mask_select]
+        if(self.primary_key is not None):
+            self.primary_key = self.primary_key[mask_select]
         if(self.plate is not None):
             self.plate = self.plate[mask_select]
         if(self.modern_julian_date is not None):
@@ -1195,7 +1225,6 @@ class QSOCatalog(Catalog):
 
 
 
-
     def cut_write_catalog(self,name_out,coord_min,coord_max):
         self.read_from_fits()
         self.cut_quasars_catalogs(coord_min,coord_max)
@@ -1206,11 +1235,11 @@ class QSOCatalog(Catalog):
 
 class DLACatalog(Catalog):
 
-    def __init__(self,name=None,coord=None,primary_key=None,z_qso=None,conf_dla=None,nhi_dla=None,catalog_type="sky"):
+    def __init__(self,name=None,coord=None,primary_key=None,z_qso=None,confidence=None,nhi=None,catalog_type="sky"):
         super(DLACatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type)
         self.z_qso=z_qso
-        self.conf_dla=conf_dla
-        self.nhi_dla=nhi_dla
+        self.confidence=confidence
+        self.nhi=nhi
 
 
 
@@ -1226,7 +1255,7 @@ class DLACatalog(Catalog):
             nhi_dla = catalog["DLA_CAT"]["NHI_DLA"][:]
             catalog_type = "sky"
             Catalog.close(catalog)
-            return(cls(name=name,coord=coord,primary_key=primary_key,z_qso=z_qso,conf_dla=conf_dla,nhi_dla=nhi_dla,catalog_type=catalog_type))
+            return(cls(name=name,coord=coord,primary_key=primary_key,z_qso=z_qso,confidence=conf_dla,nhi=nhi_dla,catalog_type=catalog_type))
         if("X" in catalog[1].get_colnames()):
             coord_ra = catalog["DLA_CAT"]["X"][:]
             coord_dec = catalog["DLA_CAT"]["Y"][:]
@@ -1250,10 +1279,23 @@ class DLACatalog(Catalog):
 
 
 
-    def cut_dla_catalogs(self,ramin,ramax,decmin,decmax):
-        ## to do with cutDLA functions
+    def cut_catalog_dla(self,coord_min=None,coord_max=None,confidence_min=None,nhi_min=None):
+        mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=True) & (self.coord[:,2]!=-1.0)
+        if(confidence_min is not None):
+            mask_select &= (self.confidence > confidence_min)
+        if(nhi_min is not None):
+            mask_select &= (self.nhi > nhi_min)
+        if(self.coord is not None):
+            self.coord = self.coord[mask_select]
+        if(self.primary_key is not None):
+            self.primary_key = self.primary_key[mask_select]
+        if(self.confidence is not None):
+            self.confidence = self.confidence[mask_select]
+        if(self.nhi is not None):
+            self.nhi = self.nhi[mask_select]
+        if(self.z_qso is not None):
+            self.z_qso = self.z_qso[mask_select]
 
-        return()
 
 
     def write(self):
@@ -1279,81 +1321,57 @@ class DLACatalog(Catalog):
 
 class GalaxyCatalog(Catalog):
 
-    def __init__(self,name=None,catalog=None,coord=None,primary_key=None,catalog_type="sky"):
-        super(GalaxyCatalog,self).__init__(name=name,catalog=catalog,coord=coord,primary_key=primary_key,catalog_type=catalog_type)
+    def __init__(self,name=None,coord=None,primary_key=None,confidence=None,standard_deviation=None,magnitude=None,catalog_type="sky"):
+        super(GalaxyCatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type)
 
-    # def __init__(self,pwd,name_file,type_file,zmin,zmax,confidence,std,omega_m,pk_1d_read_fits=True,ref_redshift="min"):
-    #     self.pwd = pwd
-
-    #     self.name_file = name_file
-    #     self.type_file = type_file
-    #     self.zmin = zmin
-    #     self.zmax = zmax
-    #     self.confidence = confidence
-    #     self.std = std
-    #     self.omega_m = omega_m
-    #     self.ref_redshift=ref_redshift
+        self.confidence = confidence
+        self.standard_deviation = standard_deviation
+        self.magnitude = magnitude
 
 
-    # def get_hsc(self,maxlist=False,figsigma = False,mag_max=None):
-    #     f = fitsio.FITS(self.name_file)
-    #     init = 1
-    #     dec = np.array(f[init]["dec"][:])
-    #     ra = np.array(f[init]["ra"][:])
-    #     photoz = np.array(f[init]["PHOTOZ_BEST"][:])
-    #     mask = (photoz < self.zmax) & (photoz > self.zmin)
-    #     dec_extremum = dec[mask]
-    #     ra_extremum= ra[mask]
-    #     photoz_extremum = photoz[mask]
-    #     confidence = np.array(f[init]["PHOTOZ_CONF_BEST"][:])[mask]
-    #     standard_deviation = np.array(f[init]["PHOTOZ_STD_BEST"][:])[mask]
-    #     mag = np.array(f[init]["z_cmodel_mag"][:])[mask]
-    #     if(figsigma):
-    #         plt.hist(standard_deviation/(1+photoz_extremum),300)
-    #         plt.title("Histogram of std/(1+z)")
-    #         plt.grid()
-    #         plt.savefig("histo_std_photoz.pdf",format = "pdf")
-    #     f.close()
-    #     mask2 = (confidence > self.confidence)&(standard_deviation < self.std)
-    #     if (mag_max is not None):
-    #         mask2 &= (mag < mag_max)
-    #     dec_clean = dec_extremum[mask2]
-    #     ra_clean = ra_extremum[mask2]
-    #     photoz_clean = photoz_extremum[mask2]
-    #     del photoz_extremum,photoz,ra_extremum,ra,dec_extremum,dec
-    #     dict_hsc = {"ra" : ra_clean, "dec" : dec_clean, "photo_z": photoz_clean, "standard_deviation" : standard_deviation[mask2],"std_max" : self.std,"confidence_min" : self.confidence}
-    #     if(maxlist):
-    #         max_list = pickle.load(open(maxlist,'rb'))
-    #         minredshift = max_list[6]
-    #         maxredshift = max_list[7]
-    #         minra = max_list[8]
-    #         mindec = max_list[10]
-    #         self.convert_to_the_box(dict_hsc,minredshift,maxredshift,minra,mindec)
-    #     pickle.dump(dict_hsc,open("Dict_" + self.name_file + ".pickle","wb"))
-    #     return(dict_hsc)
+    @classmethod
+    def init_from_fits(cls,name):
+        catalog = Catalog.load_from_fits(name)
+        dec = np.array(catalog[1]["dec"][:])
+        ra = np.array(catalog[1]["ra"][:])
+        photoz = np.array(catalog[1]["PHOTOZ_BEST"][:])
+        primary_key = np.array(catalog[1]["THING_ID"][:])
+        coord = np.vstack([ra,dec,photoz]).transpose()
+        confidence = np.array(catalog[1]["PHOTOZ_CONF_BEST"][:])
+        standard_deviation = np.array(catalog[1]["PHOTOZ_STD_BEST"][:])
+        magnitude = np.array(catalog[1]["z_cmodel_mag"][:])
+        Catalog.close(catalog)
+        catalog_type = "sky"
+        return(cls(name=None,coord=coord,primary_key=primary_key,confidence=confidence,standard_deviation=standard_deviation,magnitude=magnitude,catalog_type=catalog_type))
 
-    # def convert_to_the_box(self,dict_hsc,minredshift,maxredshift,minra,mindec):
-    #     Cosmo = constants.cosmo(self.omega_m)
-    #     self.rcomov = Cosmo.r_comoving
-    #     self.distang = Cosmo.dm
-    #     z = self.rcomov(dict_hsc["photo_z"]) - self.rcomov(minredshift)
-    #     stdz = self.rcomov(dict_hsc["photo_z"]+dict_hsc["standard_deviation"]/2) -self.rcomov(dict_hsc["photo_z"]-dict_hsc["standard_deviation"]/2)
-    #     if(self.ref_redshift == "min"):
-    #         dist_angular = self.distang(minredshift)
-    #     elif(self.ref_redshift == "mean"):
-    #         dist_angular = self.distang((minredshift + maxredshift)/2)
-    #     x =  dist_angular * (np.asarray(dict_hsc["ra"])*(np.pi/180)-minra)
-    #     y =  dist_angular * (np.asarray(dict_hsc["dec"]*(np.pi/180))-mindec)
-    #     dict_hsc["x"]=x
-    #     dict_hsc["y"]=y
-    #     dict_hsc["z"]=z
-    #     dict_hsc["stdz"]=stdz
+
+
+
+    def cut_catalog_galaxy(self,coord_min=None,coord_max=None,standard_deviation_max=None,confidence_min=None,magnitude_max=None):
+        mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=True)
+        if(standard_deviation_max is not None):
+            mask_select &= self.standard_deviation < standard_deviation_max
+        if(magnitude_max is not None):
+            mask_select &= self.magnitude < magnitude_max
+        if(confidence_min is not None):
+            mask_select &= self.confidence > confidence_min
+        if(self.coord is not None):
+            self.coord = self.coord[mask_select]
+        if(self.primary_key is not None):
+            self.primary_key = self.primary_key[mask_select]
+        if(self.confidence is not None):
+            self.confidence = self.confidence[mask_select]
+        if(self.standard_deviation is not None):
+            self.standard_deviation = self.standard_deviation[mask_select]
+        if(self.magnitude is not None):
+            self.magnitude = self.magnitude[mask_select]
+
 
 
 
 class VoidCatalog(Catalog):
 
-    def __init__(self,name=None,coord=None,primary_key=None,radius=None,weights=None,crossing_param=None,central_value=None,filling_factor=None,catalog_type="sky"):
+    def __init__(self,name=None,coord=None,primary_key=None,radius=None,weights=None,crossing_param=None,central_value=None,filling_factor=None,mean_value=None,catalog_type="sky"):
         super(VoidCatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type)
 
         self.radius = radius
@@ -1361,6 +1379,7 @@ class VoidCatalog(Catalog):
         self.central_value = central_value
         self.filling_factor = filling_factor
         self.weights = weights
+        self.mean_value = mean_value
 
 
 
@@ -1385,22 +1404,42 @@ class VoidCatalog(Catalog):
         crossing_param, central_value, filling_factor = None, None, None
         if("CROSSING" in catalog[1].get_colnames()): crossing_param = catalog[1]["CROSSING"][:]
         if("VALUE" in catalog[1].get_colnames()): central_value = catalog[1]["VALUE"][:]
+        if("MEAN" in catalog[1].get_colnames()): mean_value = catalog[1]["MEAN"][:]
         if("FILLING_FACTOR" in catalog[1].read_header()): filling_factor = catalog[1].read_header()["FILLING_FACTOR"]
 
         Catalog.close(catalog)
-        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,catalog_type=catalog_type))
+        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type))
 
 
     @classmethod
     def init_from_dictionary(cls,name,radius,coord,catalog_type,other_arrays=None,other_array_names = None):
-        central_value, weights, filling_factor, primary_key, crossing_param = None, None, None, None, None
+        central_value, weights, filling_factor, primary_key, crossing_param, mean_value = None, None, None, None, None, None
         if(other_array_names is not None):
             if("VALUE" in other_array_names):central_value = other_arrays[np.argwhere("VALUE" == np.asarray(other_array_names))[0][0]]
+            if("MEAN" in other_array_names):mean_value = other_arrays[np.argwhere("MEAN" == np.asarray(other_array_names))[0][0]]
             if("WEIGHT" in other_array_names):weights = other_arrays[np.argwhere("WEIGHT" == np.asarray(other_array_names))[0][0]]
             if("FILLING_FACTOR" in other_array_names):filling_factor = other_arrays[np.argwhere("FILLING_FACTOR" == np.asarray(other_array_names))[0][0]]
             if("THING_ID" in other_array_names):primary_key = other_arrays[np.argwhere("THING_ID" == np.asarray(other_array_names))[0][0]]
             if("CROSSING" in other_array_names):crossing_param = other_arrays[np.argwhere("CROSSING" == np.asarray(other_array_names))[0][0]]
-        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,catalog_type=catalog_type))
+        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type))
+
+
+    @classmethod
+    def init_by_merging(cls,catalog_name,name=None):
+        catalog = [VoidCatalog.init_from_fits(name) for name in catalog_name]
+        catalog_type = catalog[0].catalog_type
+        radius,coord,primary_key,crossing_param,central_value,mean_value,weights,filling_factor = None,None,None,None,None,None,None,None
+        if(catalog[0].radius is not None):radius = np.concatenate([cat.radius for cat in catalog])
+        if(catalog[0].coord is not None):coord = np.concatenate([cat.coord for cat in catalog])
+        if(catalog[0].primary_key is not None):primary_key = np.concatenate([cat.primary_key for cat in catalog])
+        if(catalog[0].crossing_param is not None):crossing_param = np.concatenate([cat.crossing_param for cat in catalog])
+        if(catalog[0].central_value is not None):central_value = np.concatenate([cat.central_value for cat in catalog])
+        if(catalog[0].mean_value is not None):mean_value = np.concatenate([cat.mean_value for cat in catalog])
+        if(catalog[0].weights is not None):weights = np.concatenate([cat.weights for cat in catalog])
+        if(catalog[0].filling_factor is not None):filling_factor = np.mean([cat.filling_factor for cat in catalog])
+        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type))
+
+
 
 
     def write(self,qso_like=False):
@@ -1442,6 +1481,8 @@ class VoidCatalog(Catalog):
             h["CROSSING"] = np.array(self.crossing_param).astype("f8")
         if(self.central_value is not None):
             h["VALUE"] = np.array(self.central_value).astype("f8")
+        if(self.mean_value is not None):
+            h["MEAN"] = np.array(self.mean_value).astype("f8")
         if(self.filling_factor is not None):
             head["FILLING_FACTOR"] = self.filling_factor
 
@@ -1487,31 +1528,33 @@ class VoidCatalog(Catalog):
 
 
 
-    def cut_catalogs(self,method_cut,cut_crossing_param=None,pixel_name=None,cut_radius=None,distance_map_name=None,distance_map_prop=None,distance_map_param=None,distance_map_percent=None,cut_border_prop=None):
+    def cut_catalog_void(self,method_cut,coord_min=None,coord_max=None,cut_crossing_param=None,pixel_name=None,cut_radius=None,distance_map_name=None,distance_map_prop=None,distance_map_param=None,distance_map_percent=None,cut_border_prop=None):
+        mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=False)
         string_to_add = ""
         if type(method_cut) == str :
             if method_cut == "ALL":
                 method_cut = ["CROSSING","RADIUS","DIST","BORDER"]
             else:
                 method_cut = [method_cut]
+
         if("CROSSING" in method_cut):
             if ((cut_crossing_param is None)|(pixel_name is None)) : raise KeyError("Give a crossing parameter and a Pixel file name")
             self.create_crossing_criteria(pixel_name)
-            self.cut_crossing_parameter(cut_crossing_param)
+            mask_select &= self.cut_crossing_parameter(cut_crossing_param)
             string_to_add = string_to_add + f"_crossing{cut_crossing_param}"
         if("RADIUS" in method_cut):
             if (cut_radius is None) : raise KeyError("Give a radius cutting parameter")
-            self.cut_radius(cut_radius)
+            mask_select &= self.cut_radius(cut_radius)
             string_to_add = string_to_add + f"_cutradius{cut_radius}"
         if("BORDER" in method_cut):
             if cut_border_prop is None : raise KeyError("Give a property file for border cutting")
-            self.cut_border(cut_border_prop)
+            mask_select &= self.cut_border(cut_border_prop)
             string_to_add = string_to_add + "_cutborder"
         if("DIST" in method_cut):
             if ((distance_map_name is None)|(distance_map_prop is None)|(distance_map_param is None)|(distance_map_percent is None)) is None : raise KeyError("Give a dist map parameter, map and property file please")
-            # distance_map,param_cut,shape_map,size_map,percent_cut = dist_map_param["map"],dist_map_param["param_cut"],dist_map_param["shape"],dist_map_param["size"],dist_map_param["percent_cut"]
-            self.cut_distance_map(distance_map_name,distance_map_prop,distance_map_param,distance_map_percent)
+            mask_select &= self.cut_distance_map(distance_map_name,distance_map_prop,distance_map_param,distance_map_percent)
             string_to_add = string_to_add + f"_cutdistance_{distance_map_param}Mpc_{distance_map_percent}percent"
+        self.apply_mask(mask_select)
         name_out = f"""{self.name.split(".fits")[0]}{string_to_add}.fits"""
         return(name_out)
 
@@ -1522,17 +1565,17 @@ class VoidCatalog(Catalog):
         if(self.primary_key is not None):self.primary_key = self.primary_key[mask]
         if(self.crossing_param is not None):self.crossing_param = self.crossing_param[mask]
         if(self.central_value is not None):self.central_value = self.central_value[mask]
+        if(self.mean_value is not None):self.mean_value = self.mean_value[mask]
         if(self.weights is not None):self.weights = self.weights[mask]
 
 
     def cut_crossing_parameter(self,cut_crossing_param):
         mask = self.crossing_param > cut_crossing_param
-        self.apply_mask(mask)
+        return(mask)
 
     def cut_radius(self,cut_radius):
         mask = (self.radius >= cut_radius[0])&(self.radius < cut_radius[1])
-        self.apply_mask(mask)
-
+        return(mask)
 
     def cut_border(self,cut_border_prop):
         prop = MapPixelProperty(name=cut_border_prop)
@@ -1541,15 +1584,13 @@ class VoidCatalog(Catalog):
         mask = (self.coord[:,0] - self.radius < 0)|(self.coord[:,0] + self.radius > cut_border_size[0])
         mask |= (self.coord[:,1] - self.radius < 0)|(self.coord[:,1] + self.radius > cut_border_size[1])
         mask |= (self.coord[:,2] - self.radius < 0)|(self.coord[:,2] + self.radius > cut_border_size[2])
-        self.apply_mask(~mask)
+        return(~mask)
 
 
-
-    # CR - to test
     def cut_distance_map(self,distance_map_name,distance_map_prop,distance_map_param,distance_map_percent):
         distance_map = DistanceMap.init_classic(name=distance_map_name,property_file=distance_map_prop)
         distance_map.read()
-        mask = distance_map.get_mask_distance(distance_map_param)
+        mask = ~distance_map.get_mask_distance(distance_map_param)
         mask_cut = np.full(self.radius.shape,False)
         for i in range(len(self.coord)):
             x_coord_min  = max(int(round((self.coord[i][0] - self.radius[i]) / distance_map.mpc_per_pixel[0],0)),0)
@@ -1561,132 +1602,50 @@ class VoidCatalog(Catalog):
             sub_mask = mask[x_coord_min:x_coord_max+1,y_coord_min:y_coord_max+1,z_coord_min:z_coord_max+1]
             if(len(sub_mask[sub_mask == True])/len(sub_mask[sub_mask != None]) >= distance_map_percent):
                 mask_cut[i] = True
-        self.apply_mask(mask_cut)
+        return(mask_cut)
 
 
 
+    def get_delta_void(self,rmin,rmax,nr,nameout,name_map,map_property_file):
+        if(os.path.isfile("{}_rmin{}_rmax{}_nr{}.fits".format(nameout,rmin,rmax,nr))):
+            return()
+        r_array = np.linspace(rmin,rmax,nr)
+        rmask = rmax + 2.
+        tomographic_map = TomographicMap.init_from_property_files(map_property_file,name=name_map)
+        tomographic_map.read()
+        pixels_per_mpc = tomographic_map.pixel_per_mpc
+        coord_pixels = np.round(self.coord * pixels_per_mpc,0).astype(int)
+        indice_mpc = np.transpose(np.indices(tomographic_map.map_array.shape),axes=(1,2,3,0))/pixels_per_mpc
+        delta_array = []
+        for i in range(len(self.coord)):
+            index = coord_pixels[i]
+            number_pixel_maximal_radius = [int(round((rmask*pixels_per_mpc)[0],0)),int(round((rmask*pixels_per_mpc)[1],0)),int(round((rmask*pixels_per_mpc)[2],0))]
+            map_local = tomographic_map.map_array[max(index[0]-number_pixel_maximal_radius[0],0):min(tomographic_map.shape[0],index[0]+number_pixel_maximal_radius[0]),
+                                                  max(index[1]-number_pixel_maximal_radius[1],0):min(tomographic_map.shape[1],index[1]+number_pixel_maximal_radius[1]),
+                                                  max(index[2]-number_pixel_maximal_radius[2],0):min(tomographic_map.shape[2],index[2]+number_pixel_maximal_radius[2])]
+            indice_local = indice_mpc[max(index[0]-number_pixel_maximal_radius[0],0):min(tomographic_map.shape[0],index[0]+number_pixel_maximal_radius[0]),
+                                      max(index[1]-number_pixel_maximal_radius[1],0):min(tomographic_map.shape[1],index[1]+number_pixel_maximal_radius[1]),
+                                      max(index[2]-number_pixel_maximal_radius[2],0):min(tomographic_map.shape[2],index[2]+number_pixel_maximal_radius[2])] - self.coord[i]
+            distance_map_local = np.sqrt(indice_local[:,:,:,0]**2 + indice_local[:,:,:,1]**2 + indice_local[:,:,:,2]**2)
+            mask = distance_map_local < rmask
+            delta_list = map_local[mask]
+            r_list = distance_map_local[mask]
+            delta = interp1d(r_list,delta_list)
+            delta_array.append(delta(r_array))
+        delta_array = np.mean(delta_array,axis=0)
+        h = fitsio.FITS("{}_rmin{}_rmax{}_nr{}.fits".format(nameout,rmin,rmax,nr),"rw",clobber=True)
+        h.write(r_array,extname="R")
+        h.write(delta_array,extname="DELTA")
+        h.close()
 
 
 
-
-    def merge_voids_catalogs(self,catalogs,Om,extremum_list_names,ref_redshift = "mean",mode="distance_redshift"):
-        Cosmo = constants.cosmo(Om)
-        self.rcomoving = Cosmo.r_comoving
-        self.distang = Cosmo.dm
-        coord_ra_dec = []
-        coord_mpc = []
-        coord_mpc_in_the_box = []
-        coord_qso_mpc = []
-        coord_qso_ra_dec = []
-        radius = []
-        radius_deg = []
-        f_factor = []
-        add_cross_qso = False
-        for i in range(len(catalogs)):
-            max_list = pickle.load(open(extremum_list_names[i],"rb"))
-            (minx,maxx,miny,maxy,minz,maxz,minredshift,maxredshift,minra,maxra,mindec,maxdec) = tuple(max_list)
-            if(ref_redshift == "min"):
-                dist_angular = self.distang(minredshift)
-            if(ref_redshift == "mean"):
-                dist_angular = self.distang((minredshift + maxredshift)/2)
-            radius_voids, coord_voids,filling_factor = np.asarray(catalogs[i]["radius"]),np.asarray(catalogs[i]["coord"]),np.asarray(catalogs[i]["filling_factor"])
-            f_factor.append(filling_factor)
-            coord_voids_mpc = np.zeros(coord_voids.shape)
-            coord_voids_mpc_in_the_box = np.zeros(coord_voids.shape)
-            coord_voids_ra_dec = np.zeros(coord_voids.shape)
-
-            coord_voids_mpc[:,0] = coord_voids[:,0] + minx
-            coord_voids_mpc[:,1] = coord_voids[:,1] + miny
-            coord_voids_mpc[:,2] = coord_voids[:,2] + minz
-
-            coord_voids_mpc_in_the_box[:,0] = coord_voids[:,0]
-            coord_voids_mpc_in_the_box[:,1] = coord_voids[:,1]
-            coord_voids_mpc_in_the_box[:,2] = coord_voids[:,2]
-
-            if((mode=="distance_redshift")|(mode=="cartesian")):
-                redshift = self.compute_redshift_array(minredshift,coord_voids[:,2],minz)
-                coord_voids_ra_dec[:,0] = ((coord_voids[:,0]/dist_angular) + minra ) * (180/np.pi)
-                coord_voids_ra_dec[:,0][coord_voids_ra_dec[:,0]<0] = coord_voids_ra_dec[:,0][coord_voids_ra_dec[:,0]<0]+360
-                coord_voids_ra_dec[:,1] = ((coord_voids[:,1]/dist_angular) + mindec ) * (180/np.pi)
-                coord_voids_ra_dec[:,2] = redshift
-
-            elif(mode=="full"):
-                for j in range(len(coord_voids)):
-                    redshift = self.compute_redshift(minredshift,coord_voids[j,2],minz)
-                    dist_angular = self.distang(redshift)
-                    coord_voids_ra_dec[j,0] = ((coord_voids[j,0] + minx)/dist_angular) * (180/np.pi)
-                    if(coord_voids_ra_dec[j,0]<0):
-                        coord_voids_ra_dec[j,0] = coord_voids_ra_dec[j,0]+360
-                    coord_voids_ra_dec[j,1] = ((coord_voids[j,1] + miny)/dist_angular) * (180/np.pi)
-                    coord_voids_ra_dec[j,2] = redshift
-
-            if("crossing_qso" in catalogs[i]):
-                add_cross_qso = True
-                coord_qso = np.asarray(catalogs[i]["crossing_qso"])
-                for j in range(len(coord_qso)):
-                    coord_qso_mpc_ij = np.zeros(coord_qso[j].shape)
-                    coord_qso_ra_dec_ij = np.zeros(coord_qso[j].shape)
-
-                    coord_qso_mpc_ij[:,0] = coord_qso[j][:,0] + minx
-                    coord_qso_mpc_ij[:,1] = coord_qso[j][:,1] + miny
-                    coord_qso_mpc_ij[:,2] = coord_qso[j][:,2]
-
-                    coord_qso_ra_dec_ij[:,0] = ((coord_qso[j][:,0]/dist_angular) + minra ) * (180/np.pi)
-                    coord_qso_ra_dec_ij[:,1] = ((coord_qso[j][:,1]/dist_angular) + mindec ) * (180/np.pi)
-                    if((mode=="distance_redshift")|(mode=="cartesian")):
-                        redshift_qso = self.compute_redshift_array(minredshift,coord_qso[j][:,2],minz)
-                    elif(mode=="simple"):
-                        redshift_qso = self.compute_redshift(minredshift,np.mean(coord_qso[j][:,2]),minz)*(coord_qso[j][:,2]/np.mean(coord_qso[j][:,2]))
-                    elif(mode=="full"):
-                        redshift_qso = self.compute_redshift_array(minredshift,coord_qso[j][:,2],minz)
-                    coord_qso_ra_dec_ij[:,2] = redshift_qso
-                    coord_qso_mpc.append(coord_qso_mpc_ij)
-                    coord_qso_ra_dec.append(coord_qso_ra_dec_ij)
-            radius.append(radius_voids)
-            radius_deg.append((radius_voids/dist_angular) *(180/np.pi) * 60)
-            coord_ra_dec.append(coord_voids_ra_dec)
-            coord_mpc.append(coord_voids_mpc)
-            coord_mpc_in_the_box.append(coord_voids_mpc_in_the_box)
-        radius_full= np.concatenate(radius)
-        radius_deg_full = np.concatenate(radius_deg)
-        coord_mpc_full = np.concatenate(coord_mpc)
-        coord_ra_dec_full = np.concatenate(coord_ra_dec)
-        coord_mpc_in_the_box_full = np.concatenate(coord_mpc_in_the_box)
-        dict_mpc = {"radius" : radius_full, "radius_deg" : radius_deg_full, "coord" : coord_mpc_full,"filling_factor" : np.mean(f_factor)}
-        dict_ra_dec = {"radius" : radius_full, "radius_deg" : radius_deg_full, "coord" : coord_ra_dec_full,"filling_factor" : np.mean(f_factor)}
-        dict_mpc_in_the_box = {"radius" : radius_full, "radius_deg" : radius_deg_full, "coord" : coord_mpc_in_the_box_full,"filling_factor" : np.mean(f_factor)}
-        if(add_cross_qso):
-            dict_mpc["crossing_qso"]=coord_qso_mpc
-            dict_ra_dec["crossing_qso"]=coord_qso_ra_dec
-        return(dict_mpc,dict_ra_dec,dict_mpc_in_the_box)
-
-    def compute_redshift(self,minredshift,z,minz):
-        return(fsolve(self.f,minredshift,args=(z + minz))[0])
-
-    def compute_redshift_array(self,minredshift,z,minz):
-        redshift = []
-        for i in range(len(z)):
-            red = fsolve(self.f,minredshift,args=(z[i] + minz))
-            redshift.append(red[0])
-        return(np.array(redshift))
-
-    def f(self,redshift,z):
-        return(self.rcomoving(redshift) - (z))
-
-
-
-
-
-
-
-    def assessement_matrix_huge_voids(self,catalogs,rmin,d_position,d_radius):
-        catalogs = np.array(catalogs)
-        radius_list = []
-        coord_list = []
-        for i in range(len(catalogs)):
-            radius_list.append(np.array(pickle.load(open(catalogs[i],'rb'))["radius"]))
-            coord_list.append(np.array(pickle.load(open(catalogs[i],'rb'))["coord"]))
-        assessement_matrix = np.zeros((catalogs.shape[0],catalogs.shape[0]))
+    @staticmethod
+    def assessement_matrix_huge_voids(catalog_name,rmin,d_position,d_radius):
+        catalog = [VoidCatalog.init_from_fits(name) for name in catalog_name]
+        radius_list = [cat.radius for cat in catalog]
+        coord_list = [cat.coord for cat in catalog]
+        assessement_matrix = np.zeros((len(radius_list),len(radius_list)))
         for i in range(len(radius_list)):
             mask = radius_list[i] > rmin
             ni = len(radius_list[i][mask])
@@ -1704,73 +1663,3 @@ class VoidCatalog(Catalog):
                     nij = nij + len(r_big_j[mask2])
                 assessement_matrix[i,j] = nij /((ni+nj)/2)
         return(assessement_matrix)
-
-    def get_protocluster_values(self,maximal_radius,map_name,shapeMap,mapsize,name_dict):
-        delta_values = []
-        center_values = []
-        radius_values = []
-        for j in range(len(map_name)):
-            treat_clamato_map = tomography.TreatClamato(self.pwd,MapName=map_name[j],shapeMap=shapeMap)
-            dict_void = pickle.load(open(name_dict[j],'rb'))
-            coord = dict_void["coord"]
-            radius = dict_void["radius"]
-# shape/size
-            pixelsperMpc = (np.array(shapeMap)-1)/np.array(mapsize[j])
-            pixelsperMpc = (np.array(shapeMap))/np.array(mapsize[j])
-            number_Mpc_per_pixels = 1/pixelsperMpc
-            map_3D = np.array(treat_clamato_map.readClamatoMapFile())
-            number_pixel_maximal_radius = [int(round((maximal_radius/number_Mpc_per_pixels)[0],0)),int(round((maximal_radius/number_Mpc_per_pixels)[1],0)),int(round((maximal_radius/number_Mpc_per_pixels)[2],0))]
-            indice = np.transpose(np.indices(map_3D.shape),axes=(1,2,3,0))
-
-            for i in range(len(coord)):
-                index = np.round(coord[i] * pixelsperMpc,0).astype(int)
-                map_local = map_3D[max(index[0]-number_pixel_maximal_radius[0],0):min(map_3D.shape[0],index[0]+number_pixel_maximal_radius[0]),max(index[1]-number_pixel_maximal_radius[1],0):min(map_3D.shape[1],index[1]+number_pixel_maximal_radius[1]),max(index[2]-number_pixel_maximal_radius[2],0):min(map_3D.shape[2],index[2]+number_pixel_maximal_radius[2])]
-                indice_local = indice[max(index[0]-number_pixel_maximal_radius[0],0):min(map_3D.shape[0],index[0]+number_pixel_maximal_radius[0]),max(index[1]-number_pixel_maximal_radius[1],0):min(map_3D.shape[1],index[1]+number_pixel_maximal_radius[1]),max(index[2]-number_pixel_maximal_radius[2],0):min(map_3D.shape[2],index[2]+number_pixel_maximal_radius[2])]
-                indice_local = (indice_local - index)/pixelsperMpc
-                distance_map = np.sqrt(indice_local[:,:,:,0]**2 + indice_local[:,:,:,1]**2 + indice_local[:,:,:,2]**2)
-                mask = distance_map < radius[i]
-                delta_values.append(np.mean(map_local[mask]))
-                radius_values.append(radius[i])
-                pixelcoord = tuple(np.round(coord[i] * pixelsperMpc,0).astype(int))
-                if((pixelcoord[0]<map_3D.shape[0])&(pixelcoord[1]<map_3D.shape[1])&(pixelcoord[2]<map_3D.shape[2])):
-                    center_values.append(map_3D[pixelcoord])
-        print(np.mean(radius_values))
-        np.savetxt("central_average_values",np.transpose(np.stack([center_values,delta_values,radius_values])),header="Central value     Average value    Radius")
-        return(center_values, delta_values)
-
-
-
-
-
-    def get_delta_void(self,size_map,void_dict_name,rmin,rmax,nr,nameout):
-        if(os.path.isfile("{}_rmin{}_rmax{}_nr{}.fits".format(nameout,rmin,rmax,nr))):
-            return()
-        r_array = np.linspace(rmin,rmax,nr)
-        rmask = rmax + 2.
-        tomo = tomography.TreatClamato(self.pwd,MapName=self.box_DM_name,shapeMap=self.shape_map,PixelName=None)
-        map_3D= tomo.readClamatoMapFile()
-        void_dict = pickle.load(open(void_dict_name,"rb"))
-        coord = void_dict["coord"]
-# shape/size
-        pixels_per_mpc = (np.array(self.shape_map)-1)/np.array(size_map)
-        pixels_per_mpc = (np.array(self.shape_map))/np.array(size_map)
-        coord_pixels = np.round(coord * pixels_per_mpc,0).astype(int)
-        indice_mpc = np.transpose(np.indices(map_3D.shape),axes=(1,2,3,0))/pixels_per_mpc
-        delta_array = []
-        for i in range(len(coord)):
-            index = coord_pixels[i]
-            number_pixel_maximal_radius = [int(round((rmask*pixels_per_mpc)[0],0)),int(round((rmask*pixels_per_mpc)[1],0)),int(round((rmask*pixels_per_mpc)[2],0))]
-            map_local = map_3D[max(index[0]-number_pixel_maximal_radius[0],0):min(map_3D.shape[0],index[0]+number_pixel_maximal_radius[0]),max(index[1]-number_pixel_maximal_radius[1],0):min(map_3D.shape[1],index[1]+number_pixel_maximal_radius[1]),max(index[2]-number_pixel_maximal_radius[2],0):min(map_3D.shape[2],index[2]+number_pixel_maximal_radius[2])]
-            indice_local = indice_mpc[max(index[0]-number_pixel_maximal_radius[0],0):min(map_3D.shape[0],index[0]+number_pixel_maximal_radius[0]),max(index[1]-number_pixel_maximal_radius[1],0):min(map_3D.shape[1],index[1]+number_pixel_maximal_radius[1]),max(index[2]-number_pixel_maximal_radius[2],0):min(map_3D.shape[2],index[2]+number_pixel_maximal_radius[2])] - coord[i]
-            distance_map_local = np.sqrt(indice_local[:,:,:,0]**2 + indice_local[:,:,:,1]**2 + indice_local[:,:,:,2]**2)
-            mask = distance_map_local < rmask
-            delta_list = map_local[mask]
-            r_list = distance_map_local[mask]
-            delta = interpolate.interp1d(r_list,delta_list)
-            delta_array.append(delta(r_array))
-        del map_3D,indice_mpc
-        delta_array = np.mean(delta_array,axis=0)
-        h = fitsio.FITS("{}_rmin{}_rmax{}_nr{}.fits".format(nameout,rmin,rmax,nr),"rw",clobber=True)
-        h.write(r_array,extname="R")
-        h.write(delta_array,extname="DELTA")
-        h.close()

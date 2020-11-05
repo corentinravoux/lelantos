@@ -5,7 +5,7 @@ Date : 17/05/2019
 
 Author: Corentin Ravoux
 
-Description : Classes to return a Dachshund input based on data that can be 
+Description : Classes to return a Dachshund input based on data that can be
 treated via picca software.
 """
 
@@ -57,7 +57,7 @@ def get_deltas(namefile,center_ra=True):
             if(delta.iv is not None): sigmas.append(1/np.sqrt(np.asarray(delta.iv)))
             else : sigmas.append(np.array([0.0 for i in range(len(delta.de))]))
             deltas.append(delta.de)
-            ids.append(delta.thid)                    
+            ids.append(delta.thid)
             z.append(((10**delta.ll / utils.lambdaLy)-1))
         delta_tomo.close()
     return(np.array(ra),np.array(dec),np.asarray(z),np.array(zqsos),np.array(ids),np.asarray(sigmas),np.asarray(deltas))
@@ -88,7 +88,7 @@ def get_merged_multiple_exposure_deltas(namefile):
             delta_tomo.close()
     # For each pack of LOS
     for i in range(len(Idlist)):
-        
+
         # Get the data
         zqso.append(Deltas[Idlist[i]][0].zqso)
         ra.append(Deltas[Idlist[i]][0].ra)
@@ -98,7 +98,7 @@ def get_merged_multiple_exposure_deltas(namefile):
             listsigmas.append(1/np.sqrt(np.asarray(Deltas[Idlist[i]][j].iv)))
             listdelta.append(Deltas[Idlist[i]][j].de)
             listz.append(((10**np.asarray(Deltas[Idlist[i]][j].ll) / utils.lambdaLy)-1))
-                
+
         # Get the list of common elements in the pack to have minimum and maximum redshifts
         zmin,zmax = 0, 10**10
         zcommon = listz[0]
@@ -106,7 +106,7 @@ def get_merged_multiple_exposure_deltas(namefile):
             zcommon = list(set(zcommon).intersection(listz[j]))
         zmin = np.min(zcommon)
         zmax = np.max(zcommon)
-        
+
         # Deleting pixels at the beginning and at the end of LOSs
         for j in range(len(listz)):
             lineToDeleteFirst = 0
@@ -122,12 +122,12 @@ def get_merged_multiple_exposure_deltas(namefile):
             listz[j] = listz[j][lineToDeleteFirst:len(listz[j])-lineToDeleteLast]
             listsigmas[j] = listsigmas[j][lineToDeleteFirst:len(listsigmas[j])-lineToDeleteLast]
             listdelta[j] = listdelta[j][lineToDeleteFirst:len(listdelta[j])-lineToDeleteLast]
-        
+
         # Ensuring that all LOS have the same lenght
         lenlists = []
         for j in range(len(listz)):
             lenlists.append(len(listz[j]))
-            
+
         # Selection of the pixels to delete in case of a missing pixel along one LOS + Deletion
         while(np.max(lenlists)!=np.min(lenlists)):
             eltTodelete = [[] for j in range(len(listz))]
@@ -158,7 +158,7 @@ def get_merged_multiple_exposure_deltas(namefile):
             lenlists = []
             for j in range(len(listz)):
                 lenlists.append(len(listz[j]))
-        
+
 
         # Weighted merging of the LOSs
         zmerged, sigmamerged, deltamerged = listz[0],[],[]
@@ -170,7 +170,7 @@ def get_merged_multiple_exposure_deltas(namefile):
                 sumsigma = sumsigma + 1/(listsigmas[m][k]**2)
             for m in range(len(listz)):
                 delta = delta + listdelta[m][k] / ((listsigmas[m][k]**2)*sumsigma)
-                
+
                 sigma = sigma + 1 / ((listsigmas[m][k]**2)*(sumsigma**2))
             sigma = np.sqrt(sigma/len(listz))
             sigmamerged.append(sigma)
@@ -200,13 +200,13 @@ def get_merged_multiple_exposure_deltas(namefile):
 
 
 
-        
+
 
 
 class DeltaConverter():
-    
+
     def __init__(self,pwd,Omega_m,delta_path,coordinate_transform,plot_pixel_properties,software,return_qso_catalog=None,return_dla_catalog=None,dla_catalog=None,return_sky_catalogs=False,repeat=False):
-        
+
         self.pwd = pwd
         self.delta_path = delta_path
         self.Omega_m = Omega_m
@@ -218,9 +218,9 @@ class DeltaConverter():
         self.return_sky_catalogs = return_sky_catalogs
         self.repeat = repeat
         self.software = software
- 
-      
-    
+
+
+
     def transform_delta_to_pixel_file(self,rebin=None,shuffle=None,sigma_min=None,sigma_max=None,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None):
         namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits"))
         properties_map_pixels = {}
@@ -229,7 +229,7 @@ class DeltaConverter():
             (ra,dec,z,zqso,ids,sigmas,deltas) = get_merged_multiple_exposure_deltas(namefile)
         else:
             (ra,dec,z,zqso,ids,sigmas,deltas)  = get_deltas(namefile)
-        
+
         if(shuffle is not None):
             (ra,dec,deltas,sigmas) = self.shuffle_data(shuffle,ra,dec,deltas,sigmas)
 
@@ -250,25 +250,26 @@ class DeltaConverter():
                     mask &=(dla_catalog.coord_z < z_cut_max)
                 zdlas.append(dla_catalog.coord_z[mask])
                 z_qso_dlas.append(dla_catalog.z_qso[mask])
-        
-        if(self.coordinate_transform == "middle"):
-            suplementary_parameters = [(z_cut_max + z_cut_min)/2]
-        else:
-            suplementary_parameters = None
-        
+
+
+
+
         sky_deltas = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j]] for i in range(len(ra)) for j in range(len(z[i]))])
         sky_deltas = sky_deltas[utils.cut_sky_catalog(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],ramin=ra_cut_min,ramax=ra_cut_max,decmin=dec_cut_min,decmax=dec_cut_max,zmin=z_cut_min,zmax=z_cut_max)]
+
+        suplementary_parameters = utils.return_suplementary_parameters(self.coordinate_transform,zmin=np.min(z),zmax=np.max(z))
         cartesian_deltas = np.zeros(sky_deltas.shape)
         cartesian_deltas[:,0],cartesian_deltas[:,1],cartesian_deltas[:,2] = utils.convert_sky_to_cartesian(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],self.coordinate_transform,rcomov=rcomov,distang=distang,suplementary_parameters=suplementary_parameters)
         cartesian_deltas[:,3],cartesian_deltas[:,4] = sky_deltas[:,3],sky_deltas[:,4]
         properties_map_pixels["minx"],properties_map_pixels["miny"],properties_map_pixels["minz"] = np.min(cartesian_deltas[:,0]),np.min(cartesian_deltas[:,1]),np.min(cartesian_deltas[:,2])
         cartesian_deltas = cartesian_deltas - np.array([properties_map_pixels["minx"],properties_map_pixels["miny"],properties_map_pixels["minz"],0,0])
 
+
         if(sigma_min is not None):
             cartesian_deltas[:,3][cartesian_deltas[:,3] < sigma_min] = sigma_min
         if(sigma_max is not None):
-            cartesian_deltas[:,3][cartesian_deltas[:,3] > sigma_max] = sigma_max     
-        
+            cartesian_deltas[:,3][cartesian_deltas[:,3] > sigma_max] = sigma_max
+
 
         if(self.return_qso_catalog is not None):
             sky_qso_catalog = np.array([[ra[i],dec[i],zqso[i],ids[i]] for i in range(len(ra))])
@@ -280,7 +281,7 @@ class DeltaConverter():
 
         else:
             sky_qso_catalog,cartesian_qso_catalog=None,None
-            
+
         if(self.return_dla_catalog is not None):
             sky_dla_catalog = np.array([[ra[i],dec[i],zdlas[i][j],z_qso_dlas[i][j]] for i in range(len(ra)) for j in range(len(zdlas[i]))])
             sky_dla_catalog = sky_dla_catalog[utils.cut_sky_catalog(sky_dla_catalog[:,0],sky_dla_catalog[:,1],sky_dla_catalog[:,2],ramin=ra_cut_min,ramax=ra_cut_max,decmin=dec_cut_min,decmax=dec_cut_max,zmin=z_cut_min,zmax=z_cut_max)]
@@ -291,15 +292,15 @@ class DeltaConverter():
         else:
             sky_dla_catalog,cartesian_dla_catalog=None,None
 
-      
+
         return(cartesian_deltas,cartesian_qso_catalog,cartesian_dla_catalog,sky_deltas,sky_qso_catalog,sky_dla_catalog,properties_map_pixels)
 
 
-            
+
     def shuffle_data(self,shuffle,ra,dec,deltas,sigmas):
         if(shuffle == "radec"):
             ra,dec = self.shuffle_arrays(ra,dec)
-        elif(shuffle == "deltasigma") :            
+        elif(shuffle == "deltasigma") :
             deltas,sigmas = self.shuffle_deltas_sigmas(deltas,sigmas)
         return(ra,dec,deltas,sigmas)
 
@@ -392,8 +393,8 @@ class DeltaConverter():
         f.write("option_noise_covar = 0\n")
         f.write("pixel_data_path = {}\n".format(namepixel))
         f.write("map_path = {}\n".format(namemap))
-        f.close() 
-        
+        f.close()
+
 
     def create_dachshund_map_pixel_property_file(self,name_out,cartesian_coordinates,sky_coordinates,shape,properties_map_pixels):
         size = (np.max(cartesian_coordinates[:,0]),np.max(cartesian_coordinates[:,1]),np.max(cartesian_coordinates[:,2]))
@@ -416,7 +417,7 @@ class DeltaConverter():
 
     def cut_in_chunks(self,cartesian_deltas,number_chunks,overlaping):
         if (overlaping is None) :
-            overlaping = 0.0      
+            overlaping = 0.0
         minx,maxx,miny,maxy= np.min(cartesian_deltas[:,0]),np.max(cartesian_deltas[:,0]),np.min(cartesian_deltas[:,1]),np.max(cartesian_deltas[:,1])
         intervalx = (maxx - minx)
         intervaly = (maxy - miny)
@@ -456,11 +457,11 @@ class DeltaConverter():
                 Chunks[filename]["limits"] = [intervalxChunk[0],intervalxChunk[1],intervalyChunk[0],intervalyChunk[1],np.min(cartesian_deltas[:,2]),np.max(cartesian_deltas[:,2])]
         Chunks["overlaping"]=overlaping
         return(Chunks)
-        
+
 
 
     def create_parallel_input(self,nameout,properties,cartesian_deltas,sky_deltas,number_chunks,overlaping,shape_sub_map,property_file_name,properties_map_pixels):
-        self.create_input_files(cartesian_deltas,properties,properties["name_pixel"],sky_deltas,create_launcher=nameout)        
+        self.create_input_files(cartesian_deltas,properties,properties["name_pixel"],sky_deltas,create_launcher=nameout)
         self.create_dachshund_map_pixel_property_file(property_file_name,cartesian_deltas,sky_deltas,None,properties_map_pixels)
         chunks = self.cut_in_chunks(cartesian_deltas,number_chunks,overlaping)
         filename = []
@@ -491,7 +492,7 @@ class DeltaConverter():
                 Dachshundparams[i]["namemap"]="map_{}_{}".format(properties["name_pixel"],key)
                 Dachshundparams[i]["nameinput"]= "input_{}.cfg".format(key)
         pickle.dump([filename,Dachshundparams,number_chunks,overlaping],open("data_launch_dachshund.pickle","wb"))
-        
+
 
 
     ### Modification : dissociate map properties and launcher properties
@@ -535,12 +536,12 @@ class DeltaConverter():
 
 
 class PixelAnalizer(object):
-    
+
     ### Include in pixel class instead of the coord
-    
-    
+
+
     def __init__(self,pwd,pixel=None):
-        
+
         self.pwd = pwd
         self.pixel = pixel
 
@@ -550,17 +551,17 @@ class PixelAnalizer(object):
     @staticmethod
     def write_density_file(z,dperp,name):
         pickle.dump([z,dperp],open(name,"wb"))
-    
+
     @staticmethod
     def write_dperp_file(z,dperp,name):
         pickle.dump([z,dperp],open(name,"wb"))
-    
-    
+
+
     @staticmethod
     def read_density_file(name):
         a = pickle.dump(open(name,"wb"))
         return(a[0],a[1])
-    
+
     @staticmethod
     def read_dperp_file(name):
         a = pickle.load(open(name,"wb"))
@@ -575,14 +576,14 @@ class PixelAnalizer(object):
         plt.hist(dmin,nb_bins)
         plt.xlabel("minimal distance histogram at Z={}".format(zpar))
         plt.savefig("{}_at_Z{}.pdf".format(name_histo,zpar),format="pdf")
-        
 
 
 
-    @staticmethod  
+
+    @staticmethod
     def plot_mean_distance_density(zpar,dperpz,densityz,nameout,coupled_plot=False,comparison=False,dperp_comparison=None,density_comparison=None,zpar_comparison=None,legend=None):
         if(coupled_plot is False):
-            
+
             plt.figure()
             plt.xlabel("Redshift")
             plt.ylabel("Mean los separation [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]")
@@ -601,11 +602,11 @@ class PixelAnalizer(object):
             if(comparison):
                 plt.plot(zpar_comparison,density_comparison)
                 plt.legend(legend)
-            plt.savefig("density_{}.pdf".format(nameout), format = "pdf")        
-            
+            plt.savefig("density_{}.pdf".format(nameout), format = "pdf")
+
         else:
             fig, ax1 = plt.subplots()
-            
+
             color = 'tab:blue'
             ax1.set_xlabel("Redshift z")
             ax1.set_ylabel("Mean separation [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]", color=color)
@@ -613,21 +614,21 @@ class PixelAnalizer(object):
             if(comparison):
                 ax1.plot(zpar_comparison,dperp_comparison, color=color,linestyle ="--")
             ax1.tick_params(axis='y', labelcolor=color)
-            
-            ax2 = ax1.twinx()  
-            
+
+            ax2 = ax1.twinx()
+
             color = 'tab:orange'
-            ax2.set_ylabel("Density [" + r"$\mathrm{deg^{-2}}$" + "]", color=color) 
+            ax2.set_ylabel("Density [" + r"$\mathrm{deg^{-2}}$" + "]", color=color)
             ax2.plot(zpar,densityz, color=color)
             if(comparison):
                 ax2.plot(zpar_comparison,density_comparison, color=color,linestyle ="--")
             ax2.tick_params(axis='y', labelcolor=color)
-            
+
             fig.tight_layout()
             if(comparison):
                 legend_elements = [Line2D([0], [0], color='k', lw=1, label=legend[0]),Line2D([0], [0], color='k',linestyle ="--", lw=1, label=legend[1])]
                 ax1.legend(handles=legend_elements,loc = "upper center")
-            plt.savefig("{}.pdf".format(nameout),format ="pdf",dpi=200)            
+            plt.savefig("{}.pdf".format(nameout),format ="pdf",dpi=200)
 
 
 ### Improved on lsstomo :
@@ -644,8 +645,8 @@ class PixelAnalizer(object):
         #     plt.legend(legend)
         #     plt.grid()
         #     plt.savefig("separation_{}.pdf".format(nameout), format = "pdf")
-            
-        
+
+
         #     plt.figure()
         #     plt.plot(stripe_density[0],stripe_density[1])
         #     plt.plot(saclay_density[0],saclay_density[1])
@@ -656,8 +657,8 @@ class PixelAnalizer(object):
         #     plt.xlabel("Redshift")
         #     plt.legend(legend)
         #     plt.grid()
-        #     plt.savefig("density_{}.pdf".format(nameout), format = "pdf")        
-            
+        #     plt.savefig("density_{}.pdf".format(nameout), format = "pdf")
+
         # else :
         #     fig, ax1 = plt.subplots()
         #     line = ["dotted","dashdot","densely dashdotdotted"]
@@ -670,9 +671,9 @@ class PixelAnalizer(object):
         #         for i in range(len(dperp_other)):
         #             ax1.plot(dperp_other[i][0],dperp_other[i][1], color=color,linestyle =line[i])
         #     ax1.tick_params(axis='y', labelcolor=color)
-            
+
         #     ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-            
+
         #     color = 'tab:orange'
         #     ax2.set_ylabel("Density [" + r"$\mathrm{deg^{-2}}$" + "]", color=color)  # we already handled the x-label with ax1
         #     ax2.plot(stripe_density[0],stripe_density[1], color=color)
@@ -681,14 +682,14 @@ class PixelAnalizer(object):
         #         for i in range(len(otherdensity)):
         #             ax2.plot(density_other[i][0],density_other[i][1], color=color,linestyle =line[i])
         #     ax2.tick_params(axis='y', labelcolor=color)
-            
+
         #     fig.tight_layout()  # otherwise the right y-label is slightly clipped
         #     legend_elements = [Line2D([0], [0], color='k', lw=1, label=legend[0]),Line2D([0], [0], color='k',linestyle ="--", lw=1, label=legend[1])]
         #     if(otherdperp is not None):
         #         for i in range(len(dperp_other)):
         #             legend_elements.append(Line2D([0], [0], color='k',linestyle =line[i], lw=1, label=legend[i+2]))
         #     ax1.legend(handles=legend_elements,loc = "upper center")
-        #     plt.savefig("{}.pdf".format(nameout),format ="pdf",dpi=200) 
+        #     plt.savefig("{}.pdf".format(nameout),format ="pdf",dpi=200)
 
 
 
@@ -703,7 +704,7 @@ class PixelAnalizer(object):
             zpar, dperp = PixelAnalizer.read_dperp_file(dpername1)
             zpar_comparison, dperp_comparison = PixelAnalizer.read_dperp_file(dpername2)
             zpar, density = PixelAnalizer.read_density_file(densityname1)
-            zpar_comparison, density_comparison = PixelAnalizer.read_density_file(densityname2)   
+            zpar_comparison, density_comparison = PixelAnalizer.read_density_file(densityname2)
         else :
             zpar, dperp  = np.mean([PixelAnalizer.read_dperp_file(dpername1[i]) for i in range(len(dpername1))],axis=0)
             zpar_comparison, dperp_comparison = np.mean([PixelAnalizer.read_dperp_file(dpername2[i]) for i in range(len(dpername2))],axis=0)
@@ -743,9 +744,9 @@ class PixelAnalizer(object):
 
 
 
-        
+
 class DeltaAnalyzer(object):
-    
+
     def __init__(self,pwd,delta_path,center_ra=True,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None,degree=True):
         self.pwd = pwd
         self.delta_path = delta_path
@@ -776,7 +777,7 @@ class DeltaAnalyzer(object):
 
     @staticmethod
     def plot_snr_diagram(sigmas,deltas,plot_name,nb_bin=100):
-        signal_noise = abs((deltas + 1)/sigmas) 
+        signal_noise = abs((deltas + 1)/sigmas)
         plt.hist(signal_noise,nb_bin,density=True)
         plt.xlabel("signal-to-noise ratio")
         plt.savefig(f"{plot_name}.pdf",format="pdf")
@@ -790,7 +791,7 @@ class DeltaAnalyzer(object):
             ramax,ramin,decmax,decmin = np.max(ra),np.min(ra),np.max(dec),np.min(dec)
             interval_ra_array = []
             for cut in range(nb_cut):
-                interval_ra_array.append([((cut)/(nb_cut))*(ramax-ramin) + ramin  , ((cut + 1)/(nb_cut))*(ramax-ramin) + ramin])     
+                interval_ra_array.append([((cut)/(nb_cut))*(ramax-ramin) + ramin  , ((cut + 1)/(nb_cut))*(ramax-ramin) + ramin])
             for i in range(len(interval_ra_array)):
                 plt.plot([interval_ra_array[i][0],interval_ra_array[i][1]],[decmin,decmin],color="orange", linewidth=2)
                 plt.plot([interval_ra_array[i][0],interval_ra_array[i][1]],[decmax,decmax],color="orange", linewidth=2)
@@ -803,10 +804,10 @@ class DeltaAnalyzer(object):
             plt.xlabel("RA [rad] (J2000)")
             plt.ylabel("DEC [rad] (J2000)")
         plt.grid()
-        plt.savefig("RA-DEC_diagram_{}.pdf".format(plot_name),format = "pdf")    
+        plt.savefig("RA-DEC_diagram_{}.pdf".format(plot_name),format = "pdf")
 
 
-        
+
     @staticmethod
     def plot_los_density(ra,dec,plot_name,nb_interval=20,different_sign_region=False):
         ra_interval = np.linspace(np.min(ra),np.max(ra),nb_interval)
@@ -925,8 +926,8 @@ class DeltaAnalyzer(object):
 
 
     ### COMPARE TWO DELTAs FOLDER ###
-        
-                
+
+
     def compare_deltas(self,delta_path2,log_scale=False):
         " Print different properties of two pickled deltas files to compare them"
 
@@ -934,7 +935,7 @@ class DeltaAnalyzer(object):
         (ra,dec,redshift,zqso,ids,sigmas,delta)  = self.get_ra_dec()
         comp = DeltaAnalyzer(self.pwd,delta_path2,center_ra=self.center_ra,z_cut_min=self.z_cut_min,z_cut_max=self.z_cut_max,dec_cut_min=self.dec_cut_min,dec_cut_max=self.dec_cut_max,ra_cut_min=self.ra_cut_min,ra_cut_max=self.ra_cut_max,degree=self.degree)
         (ra_comp,dec_comp,redshift_comp,zqso_comp,ids_comp,sigmas_comp,delta_comp)  = comp.get_ra_dec()
-    
+
         # Transform to list
         sigmas = np.concatenate(sigmas)
         sigmas_comp = np.concatenate(sigmas_comp)
@@ -942,9 +943,9 @@ class DeltaAnalyzer(object):
         delta_comp = np.concatenate(delta_comp)
         redshift = np.concatenate(redshift)
         redshift_comp = np.concatenate(redshift_comp)
-    
-    
-    
+
+
+
         # Histogram of sigmas
         plt.figure()
         bins = np.linspace(np.min(sigmas),np.max(sigmas), 100)
@@ -954,7 +955,7 @@ class DeltaAnalyzer(object):
         plt.legend(["Mocks","Stripe 82 data"])
         plt.savefig("histogram_sigmas_normalized_cutz.pdf",format="pdf")
 
-        
+
         # Mean sigma in function of redshift
         plt.figure()
         z = np.linspace(np.min(redshift),np.max(redshift),50)
@@ -968,12 +969,12 @@ class DeltaAnalyzer(object):
         plt.plot(z[:-1],sigma_mean)
         plt.plot(z[:-1],sigma_mean_comp)
         plt.savefig("sigmas_redshift_bin_DR16_mocks.pdf",format="pdf")
-        
+
         # Histogram of deltas
         plt.figure()
         bins = np.linspace(np.min(delta),np.max(delta), 100)
         plt.hist(delta, bins, alpha=0.5, label="mocks",density=True,log=log_scale)
-        plt.hist(delta_comp, bins, alpha=0.5, label="dataBOSS",density=True,log=log_scale)    
+        plt.hist(delta_comp, bins, alpha=0.5, label="dataBOSS",density=True,log=log_scale)
         plt.legend(["mocks","dataBOSS"])
         plt.savefig("histo_deltas_1D_mocks_DR16.pdf",format="pdf")
 
@@ -995,12 +996,12 @@ class DeltaAnalyzer(object):
 
 
     #### MAIN ROUTINES ####
-    
+
 
 
     def analyze_deltas(self,plot_name,plot_ra_dec=False,plot_histo_ra_dec=False,plot_density_ra_dec=False,plot_histo_delta=False,plot_snr=False,plot_binned_delta=False,nb_cut_ra_dec=None,nb_interval_histo_ra_dec = 20,nb_interval_density_ra_dec = 20,nb_bins_histo_ra_dec = 20,different_sign_region = False,nb_bins_histo_delta=200,delta_min_histo_delta=-2,delta_max_histo_delta=2,nb_bins_snr=100, nb_bins_binned_stat=50,error_bar_binned_stat=True):
         (ra,dec,z,zqso,ids,sigmas,deltas)=self.get_ra_dec()
-        
+
         if(plot_ra_dec):DeltaAnalyzer.plot_ra_dec_diagram(ra,dec,plot_name,nb_cut=nb_cut_ra_dec,deg=self.degree)
         if(plot_density_ra_dec):DeltaAnalyzer.plot_los_density(ra,dec,plot_name,nb_interval=nb_interval_density_ra_dec,different_sign_region=different_sign_region)
         if(plot_histo_ra_dec):DeltaAnalyzer.plot_los_histogram(ra,dec,plot_name,nb_bins=nb_bins_histo_ra_dec,different_sign_region=different_sign_region)
@@ -1015,10 +1016,10 @@ class DeltaAnalyzer(object):
 
 
 
-        
- 
+
+
 class DeltaModifier(object):
-    
+
     def __init__(self,pwd,delta_path,center_ra=True,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None,degree=True):
         self.pwd = pwd
         self.delta_path = delta_path
@@ -1033,7 +1034,7 @@ class DeltaModifier(object):
     def modify_deltas(self,name_out,number_cut,random_density_parameter=False,number_repeat=1,iterative_selection_parameters=None):
         deltas = self.get_new_healpix(number_cut,random_density_parameter=random_density_parameter,number_repeat=number_repeat,iterative_selection_parameters=None)
         self.save_deltas(deltas,name_out,number_cut)
-        
+
 
     def save_deltas(self,deltas,name_out,number_cut):
         for cut in range(number_cut):
@@ -1053,7 +1054,7 @@ class DeltaModifier(object):
                 deltas = self.iterate_healpix_creation(ramax,ramin,decmax,decmin,number_cut,random_density_parameter,number_repeat,iterative_selection_parameters)
         return(deltas)
 
-        
+
     def create_healpix(self,ramax,ramin,decmax,decmin,number_cut,random=None,return_len_ra=False):
         namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits"))
         deltas ={}
@@ -1110,7 +1111,7 @@ class DeltaModifier(object):
         return(deltas)
 
 
-        
+
     def iterate_healpix_creation(self,ramax,ramin,decmax,decmin,number_cut,random_density_parameter,number_repeat,iterative_selection_parameters,property_file_name):
         """ To optimize & test"""
         density_names = iterative_selection_parameters["density_names"]
@@ -1161,16 +1162,3 @@ class DeltaModifier(object):
             os.remove("delta_" + str(cut) + "_to_test.pickle")
         utils.Logger.add("End of the random iteration selection")
         return(delta_to_keep)
-
-
-
-
-
-
-
-
-
-
-        
-        
-        

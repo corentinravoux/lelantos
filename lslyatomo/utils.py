@@ -54,11 +54,27 @@ def get_cosmo_function(Omega_m,Omega_k=0.):
     return(rcomov,distang,inv_rcomov,inv_distang)
 
 
+def return_suplementary_parameters(mode,property=None,zmin=None,zmax=None):
+    if(mode == "middle"):
+        if(property is not None):
+            zmin = property.boundary_sky_coord[0][2]
+            zmax = property.boundary_sky_coord[0][1]
+            suplementary_parameters = [(zmin + zmax)/2]
+        elif((zmin is not None)&(zmin is not None)):
+            suplementary_parameters = [(zmin + zmax)/2]
+    else:
+        suplementary_parameters = None
+    return(suplementary_parameters)
+
+
+
 
 def convert_cartesian_to_sky(X,Y,Z,method,inv_rcomov=None,inv_distang=None,distang=None,suplementary_parameters=None):
     """Mpc.h-1 to radians"""
     if(method == "full_angle"):
         (RA,DEC,z)= convert_cartesian_to_sky_full_angle(X,Y,Z,inv_rcomov)
+    if(method == "full_angle"):
+        (RA,DEC,z)= convert_cartesian_to_sky_full(X,Y,Z,inv_rcomov)
     elif(method == "middle"):
         (RA,DEC,z)= convert_cartesian_to_sky_middle(X,Y,Z,inv_rcomov,distang,suplementary_parameters[0])
     return(RA,DEC,z)
@@ -67,6 +83,8 @@ def convert_sky_to_cartesian(RA,DEC,z,method,rcomov=None,distang=None,suplementa
     """Radians to Mpc.h-1"""
     if(method == "full_angle"):
         (X,Y,Z)= convert_sky_to_cartesian_full_angle(RA,DEC,z,rcomov)
+    elif(method == "full"):
+        (X,Y,Z)= convert_sky_to_cartesian_full(RA,DEC,z,rcomov)
     elif(method == "middle"):
         (X,Y,Z)= convert_sky_to_cartesian_middle(RA,DEC,z,rcomov,distang,suplementary_parameters[0])
     return(X,Y,Z)
@@ -81,6 +99,18 @@ def convert_sky_to_cartesian_full_angle(RA,DEC,z,rcomov):
     X = rcomov(z)*np.sin(RA)*np.cos(DEC)
     Y = rcomov(z)*np.sin(DEC)
     Z = rcomov(z)*np.cos(RA)*np.cos(DEC)
+    return(X,Y,Z)
+
+def convert_cartesian_to_sky_full(X,Y,Z,inv_rcomov):
+    z = inv_rcomov(np.sqrt(X**2 + Y**2 + Z**2))
+    RA = X/Z
+    DEC = Y/Z
+    return(RA,DEC,z)
+
+def convert_sky_to_cartesian_full(RA,DEC,z,rcomov):
+    X = rcomov(z)*RA
+    Y = rcomov(z)*DEC
+    Z = rcomov(z)
     return(X,Y,Z)
 
 
@@ -167,31 +197,31 @@ def bin_ndarray(ndarray, new_shape, operation='mean'):
 
 
 class gaussian_fitter_2d(object):
-    
+
     def __init__(self,inpdata):
-        
+
         self.inpdata = inpdata
 
     def moments2D(self):
         """ Returns the (amplitude, xcenter, ycenter, xsigma, ysigma, rot, bkg, e) estimated from moments in the 2d input array Data """
-    
+
         bkg=np.median(np.hstack((self.inpdata[0,:],self.inpdata[-1,:],self.inpdata[:,0],self.inpdata[:,-1])))  #Taking median of the 4 edges points as background
         Data=np.ma.masked_less(self.inpdata-bkg,0)   #Removing the background for calculating moments of pure 2D gaussian
         #We also masked any negative values before measuring moments
-    
+
         amplitude=Data.max()
-    
+
         total= float(Data.sum())
         Xcoords,Ycoords= np.indices(Data.shape)
-    
+
         xcenter= (Xcoords*Data).sum()/total
         ycenter= (Ycoords*Data).sum()/total
-    
+
         RowCut= Data[int(xcenter),:]  # Cut along the row of data near center of gaussian
         ColumnCut= Data[:,int(ycenter)]  # Cut along the column of data near center of gaussian
-        xsigma= np.sqrt(np.ma.sum(ColumnCut* (np.arange(len(ColumnCut))-xcenter)**2)/ColumnCut.sum())    
+        xsigma= np.sqrt(np.ma.sum(ColumnCut* (np.arange(len(ColumnCut))-xcenter)**2)/ColumnCut.sum())
         ysigma= np.sqrt(np.ma.sum(RowCut* (np.arange(len(RowCut))-ycenter)**2)/RowCut.sum())
-    
+
         #Ellipcity and position angle calculation
         Mxx= np.ma.sum((Xcoords-xcenter)*(Xcoords-xcenter) * Data) /total
         Myy= np.ma.sum((Ycoords-ycenter)*(Ycoords-ycenter) * Data) /total
@@ -199,9 +229,9 @@ class gaussian_fitter_2d(object):
         e= np.sqrt((Mxx - Myy)**2 + (2*Mxy)**2) / (Mxx + Myy)
         pa= 0.5 * np.arctan(2*Mxy / (Mxx - Myy))
         rot= np.rad2deg(pa)
-    
+
         return amplitude,xcenter,ycenter,xsigma,ysigma, rot,bkg, e
-    
+
     def Gaussian2D(self,amplitude, xcenter, ycenter, xsigma, ysigma, rot,bkg):
         """ Returns a 2D Gaussian function with input parameters. rotation input rot should be in degress """
         rot=np.deg2rad(rot)  #Converting to radians
@@ -213,12 +243,12 @@ class gaussian_fitter_2d(object):
             xr=x * np.cos(rot) - y * np.sin(rot)  #X position in rotated coordinates
             yr=x * np.sin(rot) + y * np.cos(rot)
             return amplitude*np.exp(-(((xr-Xc)/xsigma)**2 +((yr-Yc)/ysigma)**2)/2) +bkg
-    
+
         return Gauss2D
-    
+
     def FitGauss2D(self,ip=None):
         """ Fits 2D gaussian to Data with optional Initial conditions ip=(amplitude, xcenter, ycenter, xsigma, ysigma, rot, bkg)
-        Example: 
+        Example:
         >>> X,Y=np.indices((40,40),dtype=np.float)
         >>> Data=np.exp(-(((X-25)/5)**2 +((Y-15)/10)**2)/2) + 1
         >>> FitGauss2D(Data)
@@ -226,17 +256,17 @@ class gaussian_fitter_2d(object):
          """
         if ip is None:   #Estimate the initial parameters form moments and also set rot angle to be 0
             ip=self.moments2D()[:-1]   #Remove ellipticity from the end in parameter list
-    
-        Xcoords,Ycoords= np.indices(self.inpdata.shape)    
+
+        Xcoords,Ycoords= np.indices(self.inpdata.shape)
         def errfun(ip):
             dXcoords= Xcoords-ip[1]
             dYcoords= Ycoords-ip[2]
             Weights=np.sqrt(np.square(dXcoords)+np.square(dYcoords)) # Taking radius as the weights for least square fitting
             return np.ravel((self.Gaussian2D(*ip)(*np.indices(self.inpdata.shape)) - self.inpdata)/np.sqrt(Weights))  #Taking a sqrt(weight) here so that while scipy takes square of this array it will become 1/r weight.
-    
+
         p, success = scipy.optimize.leastsq(errfun, ip)
-    
-        return p,success    
+
+        return p,success
 
 
 
@@ -253,7 +283,7 @@ def create_report_log(name="Python_Report",log_level="info"):
 _logging_handler = None
 
 class Logger(object):
-    
+
     def __init__(self,name="Python_Report",log_level="info"):
         self.name = name
         self.log_level = log_level
@@ -268,31 +298,31 @@ class Logger(object):
     	log_level : 'info', 'debug', 'warning'
     		the logging level to set; logging below this level is ignored
     	"""
-    
+
     	# This gives:
     	#
     	# [ 000000.43 ]   0: 06-28 14:49  measurestats	INFO	 Nproc = [2, 1, 1]
     	# [ 000000.43 ]   0: 06-28 14:49  measurestats	INFO	 Rmax = 120
-    
+
     	levels = {"info" : logging.INFO,"debug" : logging.DEBUG,"warning" : logging.WARNING}
-    
+
     	logger = logging.getLogger();
     	t0 = time.time()
-    
-    
+
+
     	class Formatter(logging.Formatter):
     		def format(self, record):
     			s1 = ('[ %09.2f ]: ' % (time.time() - t0))
     			return s1 + logging.Formatter.format(self, record)
-    
+
     	fmt = Formatter(fmt='%(asctime)s %(name)-15s %(levelname)-8s %(message)s',
     					datefmt='%m-%d %H:%M ')
-    
+
     	global _logging_handler
     	if _logging_handler is None:
     		_logging_handler = logging.StreamHandler()
     		logger.addHandler(_logging_handler)
-    
+
     	_logging_handler.setFormatter(fmt)
     	logger.setLevel(levels[self.log_level])
 
@@ -324,11 +354,11 @@ class Logger(object):
 
 def latex_float(float_input,decimals_input="{0:.2g}"):
     """
-    example use: 
+    example use:
     import matplotlib.pyplot as plt
     plt.figure(),plt.clf()
     plt.plot(np.array([1,2.]),'ko-',label="$P_0="+latex_float(7.63e-5)+'$'),
-    plt.legend() 
+    plt.legend()
     """
     float_str = decimals_input.format(float_input)
     if "e" in float_str:
@@ -340,6 +370,3 @@ def latex_float(float_input,decimals_input="{0:.2g}"):
 
 def return_key(dictionary,string,default_value):
     return(dictionary[string] if string in dictionary.keys() else default_value)
-
-
-
