@@ -26,7 +26,7 @@ packages = ['lslyatomo','lslyatomo.saclaymocks','lslyatomo.picca','lslyatomo.exe
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    # 'fitsio', 'numpy', 'scipy','matplotlib','subprocess','pickle','multiprocessing','iminuit'
+     'fitsio', 'numpy', 'scipy','matplotlib','subprocess','pickle','multiprocessing'
 ]
 
 # What packages are optional?
