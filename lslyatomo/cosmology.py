@@ -222,7 +222,7 @@ class DeltaConverter():
 
 
     def transform_delta_to_pixel_file(self,rebin=None,shuffle=None,sigma_min=None,sigma_max=None,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None):
-        namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits"))
+        namefile = glob.glob(os.path.join(self.delta_path,"delta-*"))
         properties_map_pixels = {}
         (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(self.Omega_m)
         if(self.repeat):
@@ -257,7 +257,7 @@ class DeltaConverter():
         sky_deltas = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j]] for i in range(len(ra)) for j in range(len(z[i]))])
         sky_deltas = sky_deltas[utils.cut_sky_catalog(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],ramin=ra_cut_min,ramax=ra_cut_max,decmin=dec_cut_min,decmax=dec_cut_max,zmin=z_cut_min,zmax=z_cut_max)]
 
-        suplementary_parameters = utils.return_suplementary_parameters(self.coordinate_transform,zmin=np.min(z),zmax=np.max(z))
+        suplementary_parameters = utils.return_suplementary_parameters(self.coordinate_transform,zmin=np.min(sky_deltas[:,2]),zmax=np.max(sky_deltas[:,2]))
         cartesian_deltas = np.zeros(sky_deltas.shape)
         cartesian_deltas[:,0],cartesian_deltas[:,1],cartesian_deltas[:,2] = utils.convert_sky_to_cartesian(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],self.coordinate_transform,rcomov=rcomov,distang=distang,suplementary_parameters=suplementary_parameters)
         cartesian_deltas[:,3],cartesian_deltas[:,4] = sky_deltas[:,3],sky_deltas[:,4]

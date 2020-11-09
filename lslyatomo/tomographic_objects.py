@@ -786,12 +786,11 @@ class Pixel(object):
 
     def repack_by_los(self):
         coord = self.pixel_array
-        x = np.array([coord[:,0][index] for index in sorted(np.unique(coord[:,0], return_index=True)[1])])
-        y = np.array([coord[:,1][index] for index in sorted(np.unique(coord[:,1], return_index=True)[1])])
+        unique_coord = np.unique(coord[:,0:2],axis=0)
         z = []
-        for i in range(len(x)):
-            z.append(coord[:,2][(coord[:,0]==x[i])&(coord[:,1]==y[i])])
-        return(x,y,np.asarray(z))
+        for i in range(unique_coord.shape[0]):
+            z.append(coord[:,2][(coord[:,0]==unique_coord[i,0])&(coord[:,1]==unique_coord[i,1])])
+        return(unique_coord[:,0],unique_coord[:,1],np.asarray(z))
 
     def compute_mean_separation(self):
         coord_pixels = self.pixel_array[:,0:3]
