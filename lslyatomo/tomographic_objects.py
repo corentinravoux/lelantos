@@ -829,22 +829,28 @@ class Pixel(object):
         mini_los = np.array([np.min(z[i]) for i in range(len(z))])
         maxi_los = np.array([np.max(z[i]) for i in range(len(z))])
         dperpz,densityz = [],[]
-        for i in range(len(zpar)):
+        for i in range(1,len(zpar)):
             dmin,N_los = Pixel.compute_mean_distance_density_at_z(zpar[i],np.array(x),np.array(y),mini_los,maxi_los)
             dperpz.append(dmin)
             densityz.append(N_los/((maxra-minra)*(maxdec-mindec)*((180/np.pi)**2)))
-        return(zpar,dperpz,densityz)
+        return(zpar[1:],dperpz,densityz)
 
 
-    # CR - to debug
     def compute_mean_distance_density(self):
+        if(self.coordinate_transform != "middle"):
+            raise KeyError("Mean density and separation only implemented for middle coodinate transformation")
         if((self.z_array is None)|(self.dperp_array is None)|(self.density_array is None)):
             x,y,z = self.repack_by_los()
             minra,mindec = self.boundary_sky_coord[0][0:2]
             maxra,maxdec = self.boundary_sky_coord[1][0:2]
-            minz = 0.0 #self.boundary_cartesian_coord[0][2]
-            maxz = 0.0 #self.boundary_cartesian_coord[1][2]
-            self.z_array,self.dperp_array,self.density_array = Pixel.return_mean_distance_density(x,y,z,minra,maxra,mindec,maxdec,minz,maxz)
+            minz = 0.0
+            maxz = self.boundary_cartesian_coord[1][2] - self.boundary_cartesian_coord[0][2]
+            z_array,self.dperp_array,self.density_array = Pixel.return_mean_distance_density(x,y,z,minra,maxra,mindec,maxdec,minz,maxz)
+            (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(self.Omega_m)
+            middle_z = (self.boundary_sky_coord[0][2] + self.boundary_sky_coord[1][2])/2
+            z_array = z_array + self.boundary_cartesian_coord[0][2]
+            redshifts = utils.convert_z_cartesian_to_sky_middle(z_array,inv_rcomov,middle_z)
+            self.z_array = redshifts
         return(self.z_array,self.dperp_array,self.density_array)
 
 
