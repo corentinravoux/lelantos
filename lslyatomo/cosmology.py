@@ -415,7 +415,7 @@ class DeltaConverter():
 
 
 
-    def cut_in_chunks(self,cartesian_deltas,number_chunks,overlaping):
+    def cut_in_chunks(self,cartesian_deltas,number_chunks,overlaping,shape_sub_map):
         if (overlaping is None) :
             overlaping = 0.0
         minx,maxx,miny,maxy= np.min(cartesian_deltas[:,0]),np.max(cartesian_deltas[:,0]),np.min(cartesian_deltas[:,1]),np.max(cartesian_deltas[:,1])
@@ -424,6 +424,9 @@ class DeltaConverter():
         subIntervalx = intervalx/number_chunks[0]
         subIntervaly = intervaly/number_chunks[1]
         Chunks = {}
+        shape_x =  number_chunks[0]*shape_sub_map[0]
+        shape_y =  number_chunks[1]*shape_sub_map[1]
+        remove_shape_x,remove_shape_y = 0,0
         for i in range(number_chunks[0]):
             for j in range(number_chunks[1]):
                 filename = f'{i:03d}' + f'{j:03d}'
@@ -455,15 +458,31 @@ class DeltaConverter():
                 chunks_deltas = np.transpose(np.stack(chunks_deltas))
                 Chunks[filename]["coord"] = chunks_deltas
                 Chunks[filename]["limits"] = [intervalxChunk[0],intervalxChunk[1],intervalyChunk[0],intervalyChunk[1],np.min(cartesian_deltas[:,2]),np.max(cartesian_deltas[:,2])]
+                nbPixelperMpcx = shape_sub_map[0]/(intervalxChunk[1] - intervalxChunk[0])
+                nbPixelperMpcy = shape_sub_map[1]/(intervalyChunk[1] - intervalyChunk[0])
+                nbpixelToremovex = int(round(nbPixelperMpcx * overlaping,0))
+                nbpixelToremovey = int(round(nbPixelperMpcy * overlaping,0))
+                if(number_chunks[0] !=1):
+                    if ((i==0)|(i == number_chunks[0] - 1)):
+                        remove_shape_x = remove_shape_x + nbpixelToremovex
+                    else:
+                        remove_shape_x = remove_shape_x + 2*nbpixelToremovex
+                if(number_chunks[1] !=1):
+                    if ((j==0)|(j == number_chunks[1] - 1)):
+                        remove_shape_y = remove_shape_y + nbpixelToremovey
+                    else:
+                        remove_shape_y = remove_shape_y + 2*nbpixelToremovey
+        shape_x = shape_x - remove_shape_x//number_chunks[1]
+        shape_y = shape_y - remove_shape_y//number_chunks[0]
         Chunks["overlaping"]=overlaping
-        return(Chunks)
+        return(Chunks,(shape_x,shape_y))
 
 
 
     def create_parallel_input(self,nameout,properties,cartesian_deltas,sky_deltas,number_chunks,overlaping,shape_sub_map,property_file_name,properties_map_pixels):
         self.create_input_files(cartesian_deltas,properties,properties["name_pixel"],sky_deltas,create_launcher=nameout)
-        self.create_dachshund_map_pixel_property_file(property_file_name,cartesian_deltas,sky_deltas,None,properties_map_pixels)
-        chunks = self.cut_in_chunks(cartesian_deltas,number_chunks,overlaping)
+        chunks ,shape= self.cut_in_chunks(cartesian_deltas,number_chunks,overlaping,shape_sub_map)
+        self.create_dachshund_map_pixel_property_file(property_file_name,cartesian_deltas,sky_deltas,(shape[0],shape[1],shape_sub_map[2]),properties_map_pixels)
         filename = []
         Dachshundparams = []
         for i in range(len(list(chunks.keys()))):
@@ -492,7 +511,6 @@ class DeltaConverter():
                 Dachshundparams[i]["namemap"]="map_{}_{}".format(properties["name_pixel"],key)
                 Dachshundparams[i]["nameinput"]= "input_{}.cfg".format(key)
         pickle.dump([filename,Dachshundparams,number_chunks,overlaping],open("data_launch_dachshund.pickle","wb"))
-
 
 
     ### Modification : dissociate map properties and launcher properties
