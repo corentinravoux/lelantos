@@ -20,7 +20,7 @@ Tested on cori (NERSC)
 
 
 
-import fitsio
+import fitsio,os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm,Normalize
@@ -51,6 +51,8 @@ class BoxExtractor():
         self.box_dir = box_dir
         self.master_file = master_file
         self.interpolation_method = interpolation_method
+        self.log = utils.create_report_log(name=os.path.join(self.pwd,"Python_Report"))
+
 
 
 
@@ -81,27 +83,27 @@ class BoxExtractor():
 
 
     def construct_DM_map(self,ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,get_prop=None):
-        self.add_Report("Creation of (RA,DEC,R) data matrix")
+        self.log.add("Creation of (RA,DEC,R) data matrix")
         coords_ra_dec =np.moveaxis(np.array(np.meshgrid(ra_array,dec_array,h * R_of_z(z_array),indexing='ij')),0,-1)
-        self.add_Report("Conversion to (X,Y,Z) coordinates in the Saclay box")
+        self.log.add("Conversion to (X,Y,Z) coordinates in the Saclay box")
         coords_box_saclay = np.zeros(coords_ra_dec.shape)
         coords_box_saclay[:,:,:,0],coords_box_saclay[:,:,:,1],coords_box_saclay[:,:,:,2] = utils.saclay_mock_sky_to_cartesian(coords_ra_dec[:,:,:,0],coords_ra_dec[:,:,:,1],coords_ra_dec[:,:,:,2],ra0_box,dec0_box)
         del coords_ra_dec
-        self.add_Report("Searching for the nearest pixels of the Saclay box")
+        self.log.add("Searching for the nearest pixels of the Saclay box")
         coords_pixels_box_saclay = np.zeros(coords_box_saclay.shape)
         coords_pixels_box_saclay[:,:,:,0],coords_pixels_box_saclay[:,:,:,1],coords_pixels_box_saclay[:,:,:,2] = utils.saclay_mock_coord_dm_map(coords_box_saclay[:,:,:,0],coords_box_saclay[:,:,:,1],coords_box_saclay[:,:,:,2],Rmin,self.size_cell,self.box_shape,self.interpolation_method)
         del coords_box_saclay
-        self.add_Report("Loading of the Saclay map")
+        self.log.add("Loading of the Saclay map")
         DM_mocks_map = utils.saclay_mock_get_box(self.box_dir,self.box_shape)
-        self.add_Report("Creation of the DM map")
+        self.log.add("Creation of the DM map")
         DM_map = self.interpolate_dm_map(DM_mocks_map,coords_pixels_box_saclay)
         del DM_mocks_map
         if(get_prop is not None):
             Props_map = []
             for i in range(len(get_prop)):
-                self.add_Report("Loading of the Saclay {} map".format(get_prop[i]))
+                self.log.add("Loading of the Saclay {} map".format(get_prop[i]))
                 prop_mocks_map = utils.saclay_mock_get_box(self.box_dir,self.box_shape,name_box=get_prop[i])
-                self.add_Report("Creation of the {} map".format(get_prop[i]))
+                self.log.add("Creation of the {} map".format(get_prop[i]))
                 prop_map = self.interpolate_dm_map(prop_mocks_map,coords_pixels_box_saclay)
                 Props_map.append(prop_map)
                 del prop_mocks_map
@@ -109,7 +111,7 @@ class BoxExtractor():
         else:
             Props_map = None
         del coords_pixels_box_saclay
-        self.add_Report("Multiplying by growth factor at redshift of the LOS")
+        self.log.add("Multiplying by growth factor at redshift of the LOS")
         return(DM_map,Props_map)
 
 
@@ -130,7 +132,7 @@ class BoxExtractor():
 
 
     def fill_DM_map(self,ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,DM_map,i_box,get_prop=None,Props_map=None):
-        self.add_Report("Creation of (RA,DEC,R) data matrix")
+        self.log.add("Creation of (RA,DEC,R) data matrix")
         coords_ra_dec =np.moveaxis(np.array(np.meshgrid(ra_array,dec_array,h * R_of_z(z_array),indexing='ij')),0,-1)
         mask1 = (DM_map[:,:,:] == None)
         mask2 = (coords_ra_dec[:,:,:,0]>=self.box_bound[i_box][0])
@@ -138,28 +140,28 @@ class BoxExtractor():
         mask2 &=(coords_ra_dec[:,:,:,1]>=self.box_bound[i_box][2])
         mask2 &=(coords_ra_dec[:,:,:,1]<self.box_bound[i_box][3])
         if((len(mask1[mask1==True]) == 0)|(len(mask2[mask2==True])==0)):
-            self.add_Report("No need of the Saclay box {}".format(i_box))
+            self.log.add("No need of the Saclay box {}".format(i_box))
             return(DM_map,Props_map)
         mask = mask1&mask2
         del mask1,mask2
-        self.add_Report("Conversion to (X,Y,Z) coordinates in the Saclay box {}".format(i_box))
+        self.log.add("Conversion to (X,Y,Z) coordinates in the Saclay box {}".format(i_box))
         coords_box_saclay = np.zeros(coords_ra_dec.shape)
         coords_box_saclay[:,:,:,0],coords_box_saclay[:,:,:,1],coords_box_saclay[:,:,:,2] = utils.saclay_mock_sky_to_cartesian(coords_ra_dec[:,:,:,0],coords_ra_dec[:,:,:,1],coords_ra_dec[:,:,:,2],ra0_box,dec0_box)
         del coords_ra_dec
-        self.add_Report("Searching for the nearest pixels of the Saclay box {}".format(i_box))
+        self.log.add("Searching for the nearest pixels of the Saclay box {}".format(i_box))
         coords_pixels_box_saclay = np.zeros(coords_box_saclay.shape)
         coords_pixels_box_saclay[:,:,:,0],coords_pixels_box_saclay[:,:,:,1],coords_pixels_box_saclay[:,:,:,2] = utils.saclay_mock_coord_dm_map(coords_box_saclay[:,:,:,0],coords_box_saclay[:,:,:,1],coords_box_saclay[:,:,:,2],Rmin,self.size_cell,self.box_shape[i_box],self.interpolation_method)
         del coords_box_saclay
-        self.add_Report("Loading of the Saclay map {}".format(i_box))
+        self.log.add("Loading of the Saclay map {}".format(i_box))
         DM_mocks_map = utils.saclay_mock_get_box(self.box_dir[i_box],self.box_shape[i_box])
-        self.add_Report("Creation of the DM map with box {}".format(i_box))
+        self.log.add("Creation of the DM map with box {}".format(i_box))
         self.interpolate_fill_dm_map(DM_map,DM_mocks_map,coords_pixels_box_saclay,mask)
         del DM_mocks_map
         if(get_prop is not None):
             for i in range(len(get_prop)):
-                self.add_Report("Loading of the Saclay {} map {}".format(get_prop[i],i_box))
+                self.log.add("Loading of the Saclay {} map {}".format(get_prop[i],i_box))
                 prop_mocks_map = utils.saclay_mock_get_box(self.box_dir[i_box],self.box_shape[i_box],name_box=get_prop[i])
-                self.add_Report("Creation of the {} map with box {}".format(get_prop[i],i_box))
+                self.log.add("Creation of the {} map with box {}".format(get_prop[i],i_box))
                 self.interpolate_fill_dm_map(Props_map[i],prop_mocks_map,coords_pixels_box_saclay,mask)
                 del prop_mocks_map
         del coords_pixels_box_saclay,mask
@@ -186,8 +188,8 @@ class BoxExtractor():
             ra0_box, dec0_box = utils.saclay_mock_center_of_the_box(self.box_bound[i_box])
             DM_map,Props_map = self.fill_DM_map(ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,DM_map,i_box,get_prop=get_prop,Props_map=Props_map)
         if(len(DM_map[DM_map==None]!=0)):
-            self.add_Report("WARNING : Not enough boxes to fill the Dark Matter map")
-        self.add_Report("Multiplying by growth factor at redshift of the LOS")
+            self.log.add("WARNING : Not enough boxes to fill the Dark Matter map")
+        self.log.add("Multiplying by growth factor at redshift of the LOS")
         return(DM_map,Props_map,get_prop)
 
 
@@ -229,25 +231,25 @@ class BoxExtractor():
 
 
     def construct_DM_LOS(self,ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,Rmin,h):
-        self.add_Report("Creation of (RA,DEC,R) data matrix")
+        self.log.add("Creation of (RA,DEC,R) data matrix")
         R_array = h * R_of_z(z_array)
-        self.add_Report("Conversion to (X,Y,Z) coordinates in the Saclay box")
+        self.log.add("Conversion to (X,Y,Z) coordinates in the Saclay box")
         X,Y,Z = np.zeros(len(R_array)),np.zeros(len(R_array)),np.zeros(len(R_array))
         X,Y,Z = utils.saclay_mock_sky_to_cartesian(ra_array,dec_array,R_array,ra0_box,dec0_box)
-        self.add_Report("Searching for the nearest pixels of the Saclay box")
+        self.log.add("Searching for the nearest pixels of the Saclay box")
         i,j,k = np.zeros(len(R_array)).astype(int),np.zeros(len(R_array)).astype(int),np.zeros(len(R_array)).astype(int)
         i,j,k = utils.saclay_mock_coord_dm_map(X,Y,Z,Rmin,self.size_cell,self.box_shape,self.interpolation_method)
         del X,Y,Z
-        self.add_Report("Loading of the Saclay map")
+        self.log.add("Loading of the Saclay map")
         DM_mocks_map = utils.saclay_mock_get_box(self.box_dir,self.box_shape)
-        self.add_Report("Creation of the DM los")
+        self.log.add("Creation of the DM los")
         DM_LOS = np.zeros(len(R_array))
         DM_LOS[:] = DM_mocks_map[i[:],j[:],k[:]]
         del DM_mocks_map,i,j,k
         return(DM_LOS)
 
     def fill_DM_LOS(self,ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,Rmin,h,DM_LOS,i_box):
-        self.add_Report("Creation of (RA,DEC,R) data matrix")
+        self.log.add("Creation of (RA,DEC,R) data matrix")
         R_array = h * R_of_z(z_array)
         mask1 = (DM_LOS[:] == None)
         mask2 = (ra_array[:]>=self.box_bound[i_box][0])
@@ -255,20 +257,20 @@ class BoxExtractor():
         mask2 &=(dec_array[:]>=self.box_bound[i_box][2])
         mask2 &=(dec_array[:]<self.box_bound[i_box][3])
         if((len(mask1[mask1==True]) == 0)|(len(mask2[mask2==True])==0)):
-            self.add_Report("No need of the Saclay box {}".format(i_box))
+            self.log.add("No need of the Saclay box {}".format(i_box))
             return(DM_LOS)
         mask = mask1&mask2
         del mask1,mask2
-        self.add_Report("Conversion to (X,Y,Z) coordinates in the Saclay box {}".format(i_box))
+        self.log.add("Conversion to (X,Y,Z) coordinates in the Saclay box {}".format(i_box))
         X,Y,Z = np.zeros(len(R_array)),np.zeros(len(R_array)),np.zeros(len(R_array))
         X,Y,Z = utils.saclay_mock_sky_to_cartesian(ra_array,dec_array,R_array,ra0_box,dec0_box)
-        self.add_Report("Searching for the nearest pixels of the Saclay box {}".format(i_box))
+        self.log.add("Searching for the nearest pixels of the Saclay box {}".format(i_box))
         i,j,k = np.zeros(len(R_array)).astype(int),np.zeros(len(R_array)).astype(int),np.zeros(len(R_array)).astype(int)
         i,j,k = utils.saclay_mock_coord_dm_map(X,Y,Z,Rmin,self.size_cell,self.box_shape[i_box],self.interpolation_method)
         del X,Y,Z
-        self.add_Report("Loading of the Saclay map {}".format(i_box))
+        self.log.add("Loading of the Saclay map {}".format(i_box))
         DM_mocks_map = utils.saclay_mock_get_box(self.box_dir[i_box],self.box_shape[i_box])
-        self.add_Report("Creation of the DM los with box {}".format(i_box))
+        self.log.add("Creation of the DM los with box {}".format(i_box))
         DM_LOS[:][mask] = DM_mocks_map[i[:][mask],j[:][mask],k[:][mask]]
         del DM_mocks_map,i,j,k
         return(DM_LOS)
@@ -290,7 +292,7 @@ class BoxExtractor():
             ra0_box, dec0_box = utils.saclay_mock_center_of_the_box(self.box_bound[i_box])
             los = self.fill_DM_LOS(ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,Rmin,h,los,i_box)
         if(len(los[los==None]!=0)):
-            self.add_Report("Warning : Not enough boxes to fill the Dark Matter map")
+            self.log.add("Warning : Not enough boxes to fill the Dark Matter map")
         return(los)
 
 
@@ -306,7 +308,7 @@ class BoxExtractor():
             ra0_box, dec0_box = utils.saclay_mock_center_of_the_box(self.box_bound[i_box])
             delta_quasars = self.fill_DM_LOS(ra,dec,z,R0,R_of_z,ra0_box,dec0_box,Rmin,h,delta_quasars,i_box)
         if(len(delta_quasars[delta_quasars==None]!=0)):
-            self.add_Report("Warning : Not enough boxes to fill the Dark Matter map")
+            self.log.add("Warning : Not enough boxes to fill the Dark Matter map")
         return(delta_quasars)
 
 
@@ -360,12 +362,12 @@ class BoxExtractor():
             los = self.extract_los(ra_array,dec_array,z_array)
         else :
             los = self.extract_los_multiple(ra_array,dec_array,z_array)
-        self.add_Report("Multiplying by growth factor at redshift of the LOS")
+        self.log.add("Multiplying by growth factor at redshift of the LOS")
         if(growth_multiplication):
             los = self.multiply_los_by_growth(los,z_array)
         if(matter_field):
             los = self.convert_to_matter_field(los)
-        self.add_Report("Mean delta extracted : {}".format(np.mean(los)))
+        self.log.add("Mean delta extracted : {}".format(np.mean(los)))
         pixel_out = tomographic_objects.Pixel(name=name,pixel_array=los)
         pixel_out.read()
 
@@ -378,12 +380,12 @@ class BoxExtractor():
             delta_quasars = self.create_delta_catalog_several_boxes(ra,dec,z)
         else :
             delta_quasars = self.create_delta_catalog(ra,dec,z)
-        self.add_Report("Multiplying by growth factor at redshift of the LOS")
+        self.log.add("Multiplying by growth factor at redshift of the LOS")
         if(growth_multiplication):
             delta_quasars = self.multiply_los_by_growth(delta_quasars,z)
         if(matter_field):
             delta_quasars = self.convert_to_matter_field(delta_quasars)
-        self.add_Report("Mean delta extracted : {}".format(np.mean(delta_quasars)))
+        self.log.add("Mean delta extracted : {}".format(np.mean(delta_quasars)))
         return(delta_quasars)
 
 

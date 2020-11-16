@@ -20,13 +20,13 @@ Tested on irene and cobalt (CCRT)
 
 
 
-import os,pickle,logging
+import os,pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 from scipy.stats import ks_2samp
 from functools import partial
-from lslyatomo import tomographic_objects
+from lslyatomo import tomographic_objects,utils
 
 
 #############################################################################
@@ -52,16 +52,7 @@ class VoidFinder(object):
 
         self.tomographic_map = tomographic_objects.TomographicMap.init_classic(name=map_name,shape=map_shape,size=map_size,property_file=property_file)
         self.tomographic_map.read()
-        self.create_Report()
-
-    def create_Report(self):
-        currentdir = os.getcwd()
-        os.chdir(self.pwd)
-        logging.basicConfig(filename='Python_Report',level=logging.INFO,format='%(asctime)s :: %(levelname)s :: %(message)s')
-        os.chdir(currentdir)
-
-    def add_Report(self,line):
-        logging.info(line)
+        self.log = utils.create_report_log(name=os.path.join(self.pwd,"Python_Report"))
 
 
     def find_voids(self):
@@ -196,7 +187,7 @@ class VoidFinder(object):
 
 
     def find_voids_watershed(self,tomographic_map):
-        self.add_Report("Beginning of the Watershed finding for the map {}".format(tomographic_map.name))
+        self.log.add("Beginning of the Watershed finding for the map {}".format(tomographic_map.name))
         number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
         global map_3D
         map_3D = self.tomographic_map.map_array
@@ -205,10 +196,10 @@ class VoidFinder(object):
         else :
             mask = map_3D > self.params_void_finder["threshold"]
         index_under_density = np.argwhere(mask)
-        self.add_Report("Number of pixels for the map {} = {}".format(tomographic_map.name,len(index_under_density)))
+        self.log.add("Number of pixels for the map {} = {}".format(tomographic_map.name,len(index_under_density)))
         map_under_density = map_3D[mask]
         cluster_map,clusters = self.create_watershed_clusters(index_under_density)
-        self.add_Report("Pixel clusters created for the map {}".format(tomographic_map.name))
+        self.log.add("Pixel clusters created for the map {}".format(tomographic_map.name))
         centers = np.zeros((len(clusters),3))
         radius_shed = np.zeros(len(clusters))
         delta_max = np.zeros((len(clusters)))
@@ -225,18 +216,18 @@ class VoidFinder(object):
             centers[i] = index_under_density[mask_clust][arg_center]
             volume_shed = len(map_under_density[mask_clust]) * volume_cell
             radius_shed[i] = ((3 * volume_shed)/(4*np.pi))**(1/3)
-        self.add_Report("Computation of radius and center finished for the map {}".format(tomographic_map.name))
+        self.log.add("Computation of radius and center finished for the map {}".format(tomographic_map.name))
         mask_radius = radius_shed > self.params_void_finder["minimal_radius"]
         radius = radius_shed[mask_radius]
         coord = centers[mask_radius]
         delta_max = delta_max[mask_radius]
         delta_mean = delta_mean[mask_radius]
-        self.add_Report("Masking of low radius done for the map {}".format(tomographic_map.name))
+        self.log.add("Masking of low radius done for the map {}".format(tomographic_map.name))
         new_coord, new_radius, new_other_arrays = self.delete_voids(tomographic_map,radius,coord,other_arrays=[delta_max,delta_mean])
         other_array_names =["VALUE","MEAN"]
         new_coord_Mpc = self.convert_to_Mpc(tomographic_map,new_coord,new_radius)
         del map_3D,mask,mask_clust,mask_radius,cluster_map,clusters,map_under_density,centers,index_under_density,radius_shed
-        self.add_Report("End of the Watershed finding for the map {}".format(tomographic_map.name))
+        self.log.add("End of the Watershed finding for the map {}".format(tomographic_map.name))
         return(new_radius, new_coord_Mpc,new_other_arrays,other_array_names)
 
 
@@ -289,7 +280,7 @@ class VoidFinder(object):
 
 
     def find_voids_sphere(self,tomographic_map):
-        self.add_Report("Beginning of the Simple spherical finding for the map {}".format(tomographic_map.name))
+        self.log.add("Beginning of the Simple spherical finding for the map {}".format(tomographic_map.name))
         number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
         number_pixel_maximal_radius = [int(round((self.params_void_finder["maximal_radius"]/number_Mpc_per_pixels)[0],0)),int(round((self.params_void_finder["maximal_radius"]/number_Mpc_per_pixels)[1],0)),int(round((self.params_void_finder["maximal_radius"]/number_Mpc_per_pixels)[2],0))]
         global map_3D
@@ -303,7 +294,7 @@ class VoidFinder(object):
         global indice
         indice = np.transpose(np.indices(map_3D.shape),axes=(1,2,3,0))
         radius = np.full(len(coord),-1)
-        self.add_Report("Number of pixels for the map {} = {}".format(tomographic_map.name,len(coord)))
+        self.log.add("Number of pixels for the map {} = {}".format(tomographic_map.name,len(coord)))
         if(self.restart):
             radius = self.restart_calculation(radius,coord)
         mask = radius < 0
@@ -311,7 +302,7 @@ class VoidFinder(object):
         coord_to_compute = coord[mask]
         mean_value = np.zeros(len(radius_to_compute))
         if(self.number_core > 1):
-            self.add_Report("Start of pool for the map {}".format(tomographic_map.name))
+            self.log.add("Start of pool for the map {}".format(tomographic_map.name))
             if(self.find_cluster):
                 func = partial(self.find_the_sphere_cluster,number_Mpc_per_pixels,number_pixel_maximal_radius)
             else:
@@ -319,7 +310,7 @@ class VoidFinder(object):
             pool = Pool(self.number_core)
             out_pool = np.array(pool.map(func,coord_to_compute))
             radius_to_compute , mean_value = out_pool[:,0], out_pool[:,1]
-            self.add_Report("End of pool for the map {}".format(tomographic_map.name))
+            self.log.add("End of pool for the map {}".format(tomographic_map.name))
         else :
             if(self.find_cluster):
                 for i in range(len(radius_to_compute)):
@@ -339,7 +330,7 @@ class VoidFinder(object):
         new_coord_Mpc = self.convert_to_Mpc(tomographic_map,new_coord,new_radius)
         other_array_names=["MEAN","VALUE"]
         del indice,coord,map_3D,mask,radius
-        self.add_Report("End of the Simple spherical finding for the map {}".format(tomographic_map.name))
+        self.log.add("End of the Simple spherical finding for the map {}".format(tomographic_map.name))
         return(new_radius, new_coord_Mpc,new_other_arrays,other_array_names)
 
 
@@ -551,9 +542,9 @@ class VoidFinder(object):
                 del mask
                 radius[arg]=float(line[10].split(",")[0])
         del line, line_file
-        self.add_Report("restart coordinates")
+        self.log.add("restart coordinates")
         mask = radius >= 0
-        self.add_Report("Sphere found : R = " + str(radius[mask]) + ", Coord = " + str(coord[mask]))
+        self.log.add("Sphere found : R = " + str(radius[mask]) + ", Coord = " + str(coord[mask]))
         return(radius)
 
 
