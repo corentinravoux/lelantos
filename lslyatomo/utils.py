@@ -52,7 +52,10 @@ lambdaLy = 1215.673123130217
 
 
 def get_cosmo_function(Omega_m,Omega_k=0.):
-    Cosmo = constants.cosmo(Omega_m,Ok=Omega_k)
+    try:
+        Cosmo = constants.cosmo(Omega_m,Ok=Omega_k)
+    except:
+        Cosmo = constants.Cosmo(Omega_m,Ok=Omega_k)
     rcomov = Cosmo.r_comoving
     distang = Cosmo.dm
     redshift_array = np.linspace(0,5,10000)
