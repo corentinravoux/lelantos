@@ -75,55 +75,63 @@ class TomographyPlot(object):
 
 
 
-    def add_reshift_axe(self,tomographic_map,position="other",rotate=False):
-        if(tomographic_map.coordinate_transform == "full_angle"):
+    def add_reshift_axe(self,tomographic_map,rotate=False):
+        if(tomographic_map.coordinate_transform != "middle"):
             return()
-        fig = plt.gcf()
-        if(rotate):ax1 = fig.axes[0]
-        else: ax1 = fig.axes[0]
-        ax1.tick_params(labelbottom='on',labeltop='off', labelleft="on", top='off', left='off', right='off')
 
-        ax2 = fig.add_axes(ax1.get_position(), frameon=False)#, sharex=ax1)
-        ax2.tick_params(labelbottom='off',labeltop='on', labelleft="off", labelright='off',bottom='off', left='off', right='off')
-        ax2.set_position(ax1.get_position())
+        fig = plt.gcf()
+        ax1 = fig.axes[0]
+        ax2 = fig.add_axes(ax1.get_position(), frameon=False)
+
 
         if(rotate):
-            ax2.set_ybound(ax1.get_ybound())
-            ax2.set_ylim(ax1.get_ylim())
-            ax2.set_yscale(ax1.get_yscale())
+            bounds = ax1.get_ybound()+ tomographic_map.boundary_cartesian_coord[0][2]
+        else:
+            bounds = ax1.get_xbound()+ tomographic_map.boundary_cartesian_coord[0][2]
+
+        z_array = np.linspace(bounds[0],bounds[1],1000)
+        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(tomographic_map.Omega_m)
+        middle_z = (tomographic_map.boundary_sky_coord[0][2] +  tomographic_map.boundary_sky_coord[1][2])/2
+        redshifts = utils.convert_z_cartesian_to_sky_middle(z_array,inv_rcomov,middle_z)
+        redshift_to_plot = np.unique(np.around(redshifts,decimals=1))
+        tick_position = np.array([np.argmin(np.abs(redshifts - redshift_to_plot[i])) for i in range(len(redshift_to_plot))])/(len(redshifts) - 1)
+
+
+        ax1.tick_params(labelbottom='on',labelleft='on', bottom='on', left='on')
+        if(rotate):
+            ax2.set_yticks(tick_position)
+            ax2.set_yticklabels(redshift_to_plot)
+            ax2.tick_params(labelright='on', right='on',labelbottom=None,labelleft=None, bottom=None, left=None)
             ax2.set_ylabel('Redshift')
         else:
-            ax2.set_xbound(ax1.get_xbound())
-            ax2.set_xlim(ax1.get_xlim())
-            ax2.set_xscale(ax1.get_xscale())
+            ax2.set_xticks(tick_position)
+            ax2.set_xticklabels(redshift_to_plot)
+            ax2.tick_params(labeltop='on', top='on',labelbottom=None,labelleft=None, bottom=None, left=None)
             ax2.set_xlabel('Redshift')
-        if(position == "other"):
+
+
+        position_redshift_axe = utils.return_key(self.kwargs, "position_redshift_axe", "other")
+        outward_redshift_axe = utils.return_key(self.kwargs, "outward_redshift_axe", 50)
+        if(position_redshift_axe == "other"):
             if(rotate):
                 ax2.yaxis.set_label_position('right')
                 ax2.yaxis.set_ticks_position('right')
             else:
                 ax2.xaxis.set_label_position('top')
                 ax2.xaxis.set_ticks_position('top')
-        elif(position == "same"):
+        elif(position_redshift_axe == "same"):
             if(rotate):
                 ax2.yaxis.set_label_position('left')
                 ax2.yaxis.set_ticks_position('left')
-                ax2.spines['left'].set_position(('outward', 50)) # put redshift axis at the bottom
+                ax2.spines['left'].set_position(('outward', outward_redshift_axe)) # put redshift axis at the bottom
             else:
                 ax2.xaxis.set_label_position('bottom')
                 ax2.xaxis.set_ticks_position('bottom')
-                ax2.spines['bottom'].set_position(('outward', 36)) # put redshift axis at the bottom
-        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(tomographic_map.Omega_m)
-        if(rotate):ticks = ax1.get_yticks()[:-1] + tomographic_map.boundary_cartesian_coord[0][2]
-        else: ticks = ax1.get_xticks()[:-1] + tomographic_map.boundary_cartesian_coord[0][2]
-        middle_z = (tomographic_map.boundary_sky_coord[0][2] +  tomographic_map.boundary_sky_coord[1][2])/2
-        redshifts = np.around(utils.convert_z_cartesian_to_sky_middle(ticks,inv_rcomov,middle_z),decimals=1)
-        if(rotate):ax2.set_yticklabels(redshifts)
-        else:ax2.set_xticklabels(redshifts)
+                ax2.spines['bottom'].set_position(('outward', outward_redshift_axe))
 
 
 
-    def load_tomographic_objects(self,qso=None,void=None,galaxy=None,distance_mask=None):
+    def load_tomographic_objects(self,qso=None,void=None,galaxy=None,distance_mask=None,cut_plot=None):
         tomographic_map = tomographic_objects.TomographicMap.init_classic(name=self.map_name,shape=self.map_shape,property_file=self.property_file)
         tomographic_map.read()
 
@@ -144,9 +152,43 @@ class TomographyPlot(object):
             dist_map = tomographic_objects.DistanceMap.init_from_tomographic_map(tomographic_map,name=distance_mask)
             dist_map.read()
 
+        if(cut_plot is not None):
+            self.cut_objects(cut_plot,tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map)
+
         return(tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map)
 
 
+
+
+    def cut_objects(self,cut_plot,tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map):
+
+        size_map = np.array(cut_plot)*tomographic_map.size
+        shape_map = np.round(np.array(cut_plot)*tomographic_map.shape,0).astype(int)
+        tomographic_map.shape = shape_map
+        tomographic_map.size = size_map
+        tomographic_map.map_array = tomographic_map.map_array[0:shape_map[0],0:shape_map[1],0:shape_map[2]]
+
+        if(dist_map is not None):
+            dist_map.shape = shape_map
+            dist_map.size = size_map
+            dist_map.map_array = dist_map.map_array[0:shape_map[0],0:shape_map[1],0:shape_map[2]]
+
+
+        if(pixel is not None):
+            mask = (pixel.pixel_array[:,0] < size_map[0])&(pixel.pixel_array[:,1] < size_map[1])&(pixel.pixel_array[:,2] < size_map[2])
+            pixel.pixel_array = pixel.pixel_array[mask]
+
+        if(quasar_catalog is not None):
+            mask = (quasar_catalog.coord[:,0] < size_map[0])&(quasar_catalog.coord[:,1] < size_map[1])&(quasar_catalog.coord[:,2] < size_map[2])
+            quasar_catalog.apply_mask(mask)
+
+        if(void_catalog is not None):
+            mask = (void_catalog.coord[:,0] < size_map[0])&(void_catalog.coord[:,1] < size_map[1])&(void_catalog.coord[:,2] < size_map[2])
+            void_catalog.apply_mask(mask)
+
+        if(galaxy_catalog is not None):
+            mask = (galaxy_catalog.coord[:,0] < size_map[0])&(galaxy_catalog.coord[:,1] < size_map[1])&(galaxy_catalog.coord[:,2] < size_map[2])
+            galaxy_catalog.apply_mask(mask)
 
     def mask_tomographic_objects(self,void_catalog,dist_map,tomographic_map,criteria_distance_mask = None,minimal_void_crossing = None):
         mask_void = None
@@ -205,7 +247,7 @@ class TomographyPlot(object):
         index_dict = {0:"x",1:"y",2:"z"}
 
 
-        if(rotate):extentmap = [0,size_map[y_index],0,size_map[x_index]]
+        if(rotate):extentmap = [0,size_map[x_index],0,size_map[y_index]]
         else:extentmap = [0,size_map[x_index],size_map[y_index],0]
 
         xlab = f"Relative comoving distance in the {index_dict[x_index]} direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
@@ -223,7 +265,6 @@ class TomographyPlot(object):
         (x_index, y_index, index_direction, extentmap, xlab, ylab) = self.get_direction_informations(direction,rotate,size_map)
 
         center_pix = int(round(center_mpc*pixel_per_mpc[index_direction],0))
-
         if direction == "x":
             map_slice = tomographic_map.map_array[center_pix,:,:]
             if(rotate): map_slice = np.transpose(np.flip(tomographic_map.map_array[center_pix,:,:],axis=1))
@@ -270,15 +311,42 @@ class TomographyPlot(object):
         ax = plt.gca()
         size = fig.get_size_inches()
         fig.set_size_inches(1.75*size)
-        im = plt.imshow(map_slice, interpolation='bilinear',cmap='jet_r',vmin = deltamin, vmax = deltamax,extent = extentmap)
         plt.xlabel(xlab)
         plt.ylabel(ylab)
 
+        im = self.add_elements(map_slice,extentmap,deltamin,deltamax,x_index,y_index,pixel_in=pixel_in,pixel_bis_in=pixel_bis_in,qso_in=qso_in,qso_bis_in=qso_bis_in,void_in=void_in,void_bis_in=void_bis_in,galaxy_in=galaxy_in)
+
+
+        if(rotate):
+            cbar = plt.colorbar(im,ax=ax, orientation='horizontal', fraction=.1)
+        else:
+            cbar = plt.colorbar(im,ax=ax, fraction=.1)
+        cbar.set_label("Flux contrast " + r"$\delta_{Fmap}$")
+
+        if(redshift_axis):
+            self.add_reshift_axe(tomographic_map,rotate=rotate)
+
+        if(xlim is not None):plt.xlim(xlim)
+        if(ylim is not None):plt.ylim(ylim)
+
+        if(hd):plt.savefig(f"{name}.pdf",format="pdf", dpi=200)
+        else:plt.savefig(f"{name}.pdf",format="pdf")
+
+        plt.show()
+        plt.close()
+
+
+
+    def add_elements(self,map_slice,extentmap,deltamin,deltamax,x_index,y_index,pixel_in=None,pixel_bis_in=None,qso_in=None,qso_bis_in=None,void_in=None,void_bis_in=None,galaxy_in=None):
+        im =plt.imshow(map_slice, interpolation='bilinear',cmap='jet_r',vmin = deltamin, vmax = deltamax,extent = extentmap)
         if(pixel_in is not None):
             plt.scatter(pixel_in[:,x_index],pixel_in[:,y_index],linewidth=utils.return_key(self.kwargs,"linewidth_pixel",1),marker=utils.return_key(self.kwargs,"marker_pixel","s"),color="k")
         if(pixel_bis_in is not None):
-            plt.scatter(pixel_bis_in[:,x_index],pixel_bis_in[:,y_index],linewidth=0.5*utils.return_key(self.kwargs,"linewidth_pixel",1),marker=utils.return_key(self.kwargs,"marker_pixel","s"),color="0.5")
-
+            plt.scatter(pixel_bis_in[:,x_index],pixel_bis_in[:,y_index]
+                        ,linewidth=0.5*utils.return_key(self.kwargs,"linewidth_pixel",1)
+                        ,marker=utils.return_key(self.kwargs,"marker_pixel",".")
+                        ,color=utils.return_key(self.kwargs,"grey_pixel","0.5")
+                        ,alpha=utils.return_key(self.kwargs,"transparency_pixel",0.5))
         if(qso_in is not None):
             plt.plot(qso_in[:,x_index],qso_in[:,y_index], "k*",linewidth=1)
         if(qso_bis_in is not None):
@@ -294,39 +362,19 @@ class TomographyPlot(object):
         if(galaxy_in):
             plt.plot(galaxy_in[:,x_index],galaxy_in[:,y_index],"rx")
             plt.errorbar(galaxy_in[:,x_index],galaxy_in[:,y_index],xerr=2*galaxy_in[:,3], capsize = 0.01, ecolor = 'red',fmt = 'none')
-
-        if(redshift_axis):
-            self.add_reshift_axe(tomographic_map,rotate=rotate)
-
-
-        if(rotate):
-            cbar = plt.colorbar(im,ax=ax, orientation='horizontal', fraction=.1)
-        else:
-            cbar = plt.colorbar()
-        cbar.set_label("Flux contrast " + r"$\delta_{Fmap}$")
-
-        if(hd):plt.savefig(f"{name}.pdf",format="pdf", dpi=200)
-        else:plt.savefig(f"{name}.pdf",format="pdf")
-
-        if(xlim is not None):plt.xlim(xlim)
-        if(ylim is not None):plt.ylim(ylim)
-
-
-        plt.show()
-        plt.close()
+        return(im)
 
 
 
-
-    def plot(self,name,direction,space,center_mpc,deltamin,deltamax,qso=None,void=None,galaxy=None,distance_mask = None,criteria_distance_mask = None,rotate = False,hd=False,minimal_void_crossing = None,redshift_axis=False):
-        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(qso=qso,void=void,galaxy=galaxy,distance_mask = distance_mask)
+    def plot(self,name,direction,space,center_mpc,deltamin,deltamax,qso=None,void=None,galaxy=None,distance_mask = None,criteria_distance_mask = None,rotate = False,hd=False,minimal_void_crossing = None,redshift_axis=False,cut_plot=None):
+        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(qso=qso,void=void,galaxy=galaxy,distance_mask = distance_mask,cut_plot=cut_plot)
         mask_void = self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask, minimal_void_crossing = minimal_void_crossing)
         self.print_one_slice(name,tomographic_map,direction,space,center_mpc,deltamin,deltamax,pixel=pixel,quasar_catalog=quasar_catalog,void_catalog=void_catalog,mask_void=mask_void,galaxy_catalog=galaxy_catalog,rotate = rotate,hd=hd,redshift_axis=redshift_axis)
 
 
 
-    def plot_all_slice(self,name,direction,space,deltamin,deltamax,qso=None,void=None,galaxy=None,distance_mask = None,criteria_distance_mask = None,rotate = False,hd=False,minimal_void_crossing = None,redshift_axis=False):
-        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(qso=qso,void=void,galaxy=galaxy,distance_mask = distance_mask)
+    def plot_all_slice(self,name,direction,space,deltamin,deltamax,qso=None,void=None,galaxy=None,distance_mask = None,criteria_distance_mask = None,rotate = False,hd=False,minimal_void_crossing = None,redshift_axis=False,cut_plot=None):
+        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(qso=qso,void=void,galaxy=galaxy,distance_mask = distance_mask,cut_plot=cut_plot)
         mask_void = self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask, minimal_void_crossing = minimal_void_crossing)
         center_mpc = space/2
         index_dict = {"x":0,"y":1,"z":2,"ra":0,"dec":1,"redshift":2}
@@ -336,8 +384,8 @@ class TomographyPlot(object):
             print(center_mpc,tomographic_map.size[index_dict[direction]])
 
 
-    def plot_integrate_image(self,zmin,zmax,name,deltamin,deltamax,rotate=False,hd=False):
-        tomographic_map = self.load_tomographic_objects()[0]
+    def plot_integrate_image(self,zmin,zmax,name,deltamin,deltamax,rotate=False,hd=False,cut_plot=None):
+        tomographic_map = self.load_tomographic_objects(cut_plot=cut_plot)[0]
         (x_index, y_index, index_direction, extentmap, xlab, ylab) = self.get_direction_informations("z",rotate,tomographic_map.size)
         map_data = tomographic_map.map_array
         i_pix_end = int(round((zmax*tomographic_map.pixel_per_mpc[index_direction]),0))
@@ -363,8 +411,8 @@ class TomographyPlot(object):
 
 
 
-    def plot_delta_histogram(self,name,nb_bins,gauss_fit=True,norm=True,distance_mask=None,criteria_distance_mask=None,log_scale=True):
-        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask)
+    def plot_delta_histogram(self,name,nb_bins,gauss_fit=True,norm=True,distance_mask=None,criteria_distance_mask=None,log_scale=True,cut_plot=None):
+        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask,cut_plot=cut_plot)
         self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask)
         listdeltas = tomographic_map.map_array.ravel()
         plt.figure()
@@ -381,14 +429,14 @@ class TomographyPlot(object):
 
 
 
-    def plot_delta_histogram_comparison(self,name,name_second_map,nb_bins,legend,gauss_fit=True,norm=True,distance_mask=None,distance_mask2=None,criteria_distance_mask=None,log_scale=True):
+    def plot_delta_histogram_comparison(self,name,name_second_map,nb_bins,legend,gauss_fit=True,norm=True,distance_mask=None,distance_mask2=None,criteria_distance_mask=None,log_scale=True,cut_plot=None):
 
-        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask)
+        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask,cut_plot=cut_plot)
         self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask)
         listdeltas = tomographic_map.map_array.ravel()
 
         tomo_plot = TomographyPlot(self.pwd,map_name=name_second_map,map_shape=self.map_shape,pixel_name=self.pixel_name,property_file=self.property_file)
-        tomographic_map2,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map2 = tomo_plot.load_tomographic_objects(distance_mask = distance_mask2)
+        tomographic_map2,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map2 = tomo_plot.load_tomographic_objects(distance_mask = distance_mask2,cut_plot=cut_plot)
         tomo_plot.mask_tomographic_objects(void_catalog,dist_map2,tomographic_map2,criteria_distance_mask = criteria_distance_mask)
         listdeltas2 = tomographic_map2.map_array.ravel()
 
@@ -408,17 +456,17 @@ class TomographyPlot(object):
 
 
 
-    def compare_two_map(self,name,name_second_map,distance_mask,distance_second_mask,dist_extremum,bin_dist,legend,shuffle_map=None):
+    def compare_two_map(self,name,name_second_map,distance_mask,distance_second_mask,dist_extremum,bin_dist,legend,shuffle_map=None,cut_plot=None):
 
-        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask)
+        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask,cut_plot=cut_plot)
 
         tomo_plot = TomographyPlot(self.pwd,map_name=name_second_map,map_shape=self.map_shape,pixel_name=self.pixel_name,property_file=self.property_file)
-        tomographic_map2,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map2 = tomo_plot.load_tomographic_objects(distance_mask = distance_second_mask)
+        tomographic_map2,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map2 = tomo_plot.load_tomographic_objects(distance_mask = distance_second_mask,cut_plot=cut_plot)
 
         corr = []
         if(shuffle_map is not None):
             tomo_plot_shuffle = TomographyPlot(self.pwd,map_name=shuffle_map,map_shape=self.map_shape,pixel_name=self.pixel_name,property_file=self.property_file)
-            tomographic_shuffle= tomo_plot_shuffle.load_tomographic_objects()[0]
+            tomographic_shuffle= tomo_plot_shuffle.load_tomographic_objects(cut_plot=cut_plot)[0]
             corr_shuffle = []
 
         dist_range = np.linspace(dist_extremum[0],dist_extremum[1],bin_dist)
@@ -439,8 +487,8 @@ class TomographyPlot(object):
 
 
 
-    def compute_Pk3D(self,size_map,n_k,kmin,kmax,log=False,distance_mask=None,criteria_distance_mask=None):
-        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask)
+    def compute_Pk3D(self,size_map,n_k,kmin,kmax,log=False,distance_mask=None,criteria_distance_mask=None,cut_plot=None):
+        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask,cut_plot=cut_plot)
         self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask)
 
         map_3D = tomographic_map.map_array

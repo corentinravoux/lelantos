@@ -1192,19 +1192,22 @@ class QSOCatalog(Catalog):
         catalog_type = "cartesian"
         return(cls(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type))
 
-
     def cut_catalog_qso(self,coord_min=None,coord_max=None):
         mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=True)
+        self.apply_mask(mask_select)
+
+
+    def apply_mask(self,mask):
         if(self.coord is not None):
-            self.coord = self.coord[mask_select]
+            self.coord = self.coord[mask]
         if(self.primary_key is not None):
-            self.primary_key = self.primary_key[mask_select]
+            self.primary_key = self.primary_key[mask]
         if(self.plate is not None):
-            self.plate = self.plate[mask_select]
+            self.plate = self.plate[mask]
         if(self.modern_julian_date is not None):
-            self.modern_julian_date = self.modern_julian_date[mask_select]
+            self.modern_julian_date = self.modern_julian_date[mask]
         if(self.fiber_id is not None):
-            self.fiber_id = self.fiber_id[mask_select]
+            self.fiber_id = self.fiber_id[mask]
 
 
     def write(self):
@@ -1286,20 +1289,24 @@ class DLACatalog(Catalog):
 
     def cut_catalog_dla(self,coord_min=None,coord_max=None,confidence_min=None,nhi_min=None):
         mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=True) & (self.coord[:,2]!=-1.0)
+        self.apply_mask(mask_select,confidence_min=confidence_min,nhi_min=nhi_min)
+
+
+    def apply_mask(self,mask,confidence_min=None,nhi_min=None):
         if(confidence_min is not None):
-            mask_select &= (self.confidence > confidence_min)
+            mask &= (self.confidence > confidence_min)
         if(nhi_min is not None):
-            mask_select &= (self.nhi > nhi_min)
+            mask &= (self.nhi > nhi_min)
         if(self.coord is not None):
-            self.coord = self.coord[mask_select]
+            self.coord = self.coord[mask]
         if(self.primary_key is not None):
-            self.primary_key = self.primary_key[mask_select]
+            self.primary_key = self.primary_key[mask]
         if(self.confidence is not None):
-            self.confidence = self.confidence[mask_select]
+            self.confidence = self.confidence[mask]
         if(self.nhi is not None):
-            self.nhi = self.nhi[mask_select]
+            self.nhi = self.nhi[mask]
         if(self.z_qso is not None):
-            self.z_qso = self.z_qso[mask_select]
+            self.z_qso = self.z_qso[mask]
 
 
 
@@ -1354,22 +1361,26 @@ class GalaxyCatalog(Catalog):
 
     def cut_catalog_galaxy(self,coord_min=None,coord_max=None,standard_deviation_max=None,confidence_min=None,magnitude_max=None):
         mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=True)
+        self.apply_mask(mask_select,standard_deviation_max=standard_deviation_max,confidence_min=confidence_min,magnitude_max=magnitude_max)
+
+
+    def apply_mask(self,mask,standard_deviation_max=None,confidence_min=None,magnitude_max=None):
         if(standard_deviation_max is not None):
-            mask_select &= self.standard_deviation < standard_deviation_max
+            mask &= self.standard_deviation < standard_deviation_max
         if(magnitude_max is not None):
-            mask_select &= self.magnitude < magnitude_max
+            mask &= self.magnitude < magnitude_max
         if(confidence_min is not None):
-            mask_select &= self.confidence > confidence_min
+            mask &= self.confidence > confidence_min
         if(self.coord is not None):
-            self.coord = self.coord[mask_select]
+            self.coord = self.coord[mask]
         if(self.primary_key is not None):
-            self.primary_key = self.primary_key[mask_select]
+            self.primary_key = self.primary_key[mask]
         if(self.confidence is not None):
-            self.confidence = self.confidence[mask_select]
+            self.confidence = self.confidence[mask]
         if(self.standard_deviation is not None):
-            self.standard_deviation = self.standard_deviation[mask_select]
+            self.standard_deviation = self.standard_deviation[mask]
         if(self.magnitude is not None):
-            self.magnitude = self.magnitude[mask_select]
+            self.magnitude = self.magnitude[mask]
 
 
 
