@@ -847,9 +847,8 @@ class Pixel(object):
             maxz = self.boundary_cartesian_coord[1][2] - self.boundary_cartesian_coord[0][2]
             z_array,self.dperp_array,self.density_array = Pixel.return_mean_distance_density(x,y,z,minra,maxra,mindec,maxdec,minz,maxz)
             (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(self.Omega_m)
-            middle_z = (self.boundary_sky_coord[0][2] + self.boundary_sky_coord[1][2])/2
             z_array = z_array + self.boundary_cartesian_coord[0][2]
-            redshifts = utils.convert_z_cartesian_to_sky_middle(z_array,inv_rcomov,middle_z)
+            redshifts = utils.convert_z_cartesian_to_sky_middle(z_array,inv_rcomov)
             self.z_array = redshifts
         return(self.z_array,self.dperp_array,self.density_array)
 
@@ -931,6 +930,27 @@ class MapPixelProperty(object):
         self.boundary_sky_coord = boundary_sky_coord
         self.coordinate_transform = coordinate_transform
         self.Omega_m = Omega_m
+
+
+    @classmethod
+    def init_false_prop(cls,shape,size,Omega_m,minx,miny,minredshift,coordinate_transform,name="property_file.pickle"):
+        if(coordinate_transform.lower() == "middle"):
+            (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(Omega_m)
+            minz = utils.convert_z_sky_to_cartesian_middle(np.array([minredshift]),rcomov)[0]
+            maxz = minz + size[2]
+            maxredshift = utils.convert_z_cartesian_to_sky_middle(np.array([maxz]),inv_rcomov)[0]
+            maxx = minx + size[0]
+            maxy = miny + size[1]
+            suplementary_parameters = utils.return_suplementary_parameters(coordinate_transform,zmin=minredshift,zmax=maxredshift)
+            RA,DEC,redshift = utils.convert_cartesian_to_sky(np.array([minx,maxx]),np.array([miny,maxy]),np.array([minz,maxz]),coordinate_transform,inv_rcomov=inv_rcomov,inv_distang=inv_distang,distang=distang,suplementary_parameters=suplementary_parameters)
+            minra,maxra = RA[0],RA[1]
+            mindec,maxdec = DEC[0],DEC[1]
+        else:
+            raise NotImplementedError("Only middle coordinate transformation is implemented")
+        boundary_cartesian_coord = ((minx,miny,minz),(maxx,maxy,maxz))
+        boundary_sky_coord = ((minra,mindec,minredshift),(maxra,maxdec,maxredshift))
+        return(cls(name=name,size=size,shape=shape,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,Omega_m=Omega_m))
+
 
 
     def read(self):
