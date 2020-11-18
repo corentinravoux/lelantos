@@ -21,7 +21,7 @@ Tested on irene and cobalt (CCRT)
 
 
 import numpy as np
-import logging, time
+import logging, time, os
 import scipy
 import fitsio
 from scipy.ndimage.filters import gaussian_filter
@@ -140,11 +140,11 @@ def convert_sky_to_cartesian_middle(RA,DEC,z,rcomov,distang,middle_z):
     Z = rcomov(z)
     return(X,Y,Z)
 
-def convert_z_cartesian_to_sky_middle(Z,inv_rcomov,middle_z):
+def convert_z_cartesian_to_sky_middle(Z,inv_rcomov):
     z = inv_rcomov(Z)
     return(z)
 
-def convert_z_sky_to_cartesian_middle(z,rcomov,middle_z):
+def convert_z_sky_to_cartesian_middle(z,rcomov):
     Z = rcomov(z)
     return(Z)
 
@@ -435,7 +435,7 @@ def saclay_mock_coord_dm_map(X,Y,Z,Rmin,size_cell,box_shape,interpolation_method
 
 def saclay_mock_read_box(box_dir,n_x,name_box):
     name = "{}-{}.fits".format(name_box,str(n_x))
-    box = fitsio.FITS(box_dir + "/" + name)[0][:,:,:][0]
+    box = fitsio.FITS(os.path.join(box_dir, name))[0][:,:,:][0]
     return(box)
 
 def saclay_mock_get_box(box_dir,box_shape,name_box="box"):

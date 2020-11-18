@@ -91,8 +91,7 @@ class TomographyPlot(object):
 
         z_array = np.linspace(bounds[0],bounds[1],1000)
         (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(tomographic_map.Omega_m)
-        middle_z = (tomographic_map.boundary_sky_coord[0][2] +  tomographic_map.boundary_sky_coord[1][2])/2
-        redshifts = utils.convert_z_cartesian_to_sky_middle(z_array,inv_rcomov,middle_z)
+        redshifts = utils.convert_z_cartesian_to_sky_middle(z_array,inv_rcomov)
         redshift_to_plot = np.unique(np.around(redshifts,decimals=1))
         tick_position = np.array([np.argmin(np.abs(redshifts - redshift_to_plot[i])) for i in range(len(redshift_to_plot))])/(len(redshifts) - 1)
 

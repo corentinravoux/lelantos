@@ -121,11 +121,9 @@ class BoxExtractor():
             coords_pixels_box_saclay = coords_pixels_box_saclay.astype(int)
             DM_map[:,:,:][mask] = DM_mocks_map[coords_pixels_box_saclay[:,:,:,0][mask],coords_pixels_box_saclay[:,:,:,1][mask],coords_pixels_box_saclay[:,:,:,2][mask]]
         elif(self.interpolation_method.upper() == "LINEAR"):
-            points =  coords_pixels_box_saclay[mask]
-            DM_map[:,:,:][mask] = map_coordinates(DM_mocks_map, np.transpose(points), order=1)
+            DM_map[:,:,:][mask] = map_coordinates(DM_mocks_map, np.transpose(coords_pixels_box_saclay[mask]), order=1)
         elif(self.interpolation_method.upper() == "SPLINE"):
-            points =  coords_pixels_box_saclay[mask]
-            DM_map[:,:,:][mask] = map_coordinates(DM_mocks_map, np.transpose(points), order=2)
+            DM_map[:,:,:][mask] = map_coordinates(DM_mocks_map, np.transpose(coords_pixels_box_saclay[mask]), order=2)
         else :
             raise ValueError("Please select NEAREST, LINEAR or SPLINE as interpolation_method")
 
