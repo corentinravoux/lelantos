@@ -1,6 +1,6 @@
 import scipy as sp
 import lsstomo.picca.constants as constants
-import iminuit
+#import iminuit
 import lsstomo.picca.dla as dla
 import fitsio
 import scipy.interpolate as interpolate
@@ -615,7 +615,3 @@ class delta(qso):
             res = self.de
 
         self.de -= mde + res
-
-
-
-
