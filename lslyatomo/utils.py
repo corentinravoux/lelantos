@@ -26,15 +26,6 @@ import scipy
 import fitsio
 from scipy.ndimage.filters import gaussian_filter
 from scipy import interpolate
-try :
-    from SaclayMocks import box as saclay_mock_box
-    from SaclayMocks import constant as saclay_mock_constant
-except :
-    from lslyatomo.saclaymocks import box as saclay_mock_box
-    from lslyatomo.saclaymocks import constant as saclay_mock_constant
-    raise Warning("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
-
-
 
 
 
@@ -397,6 +388,11 @@ saclay_mock_lines_per_box = {"box" : 5,"vx" : 5,"vy" : 5,"vz" : 5,"eta_xx":1,"et
 
 def saclay_mock_box_cosmo_parameters(box_shape,size_cell):
     import cosmolopy.distance as dist
+    try :
+        from SaclayMocks import constant as saclay_mock_constant
+    except :
+        from lslyatomo.saclaymocks import constant as saclay_mock_constant
+        raise Warning("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
     NZ = box_shape[2]
     DZ = size_cell
     LZ = NZ*DZ
@@ -456,5 +452,10 @@ def saclay_mock_sky_to_cartesian(ra,dec,R,ra0,dec0):
     x,y,z = box.ComputeXYZ(ra[0],dec[0],R,ra0,dec0)
     print x-X,y-Y,z-R0-Z        prints ~1E-13  for random inputs
     '''
+    try :
+        from SaclayMocks import box as saclay_mock_box
+    except :
+        from lslyatomo.saclaymocks import box as saclay_mock_box
+        raise Warning("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
     X,Y,Z = saclay_mock_box.ComputeXYZ2(ra*(np.pi/180),dec*(np.pi/180),R,ra0*(np.pi/180),dec0*(np.pi/180))
     return(X,Y,Z)
