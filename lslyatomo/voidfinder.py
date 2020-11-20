@@ -205,6 +205,7 @@ class VoidFinder(object):
         delta_max = np.zeros((len(clusters)))
         delta_mean = np.zeros((len(clusters)))
         volume_cell = number_Mpc_per_pixels[0]*number_Mpc_per_pixels[1]*number_Mpc_per_pixels[2]
+        mask_clust = None
         for i in range(len(clusters)):
             mask_clust = cluster_map == clusters[i]
             if(self.find_cluster):
@@ -347,7 +348,7 @@ class VoidFinder(object):
             boolean = mean_value > self.params_void_finder["average"]
         del distance_map,map_local,boolean
         if((rayon>=self.params_void_finder["maximal_radius"])|(rayon<=self.params_void_finder["minimal_radius"])):
-            return(0)
+            return(0,0)
         else:
             return(rayon,mean_value)
 
@@ -365,7 +366,7 @@ class VoidFinder(object):
             boolean = mean_value < self.params_void_finder["average"]
         del distance_map,map_local,boolean
         if((rayon>=self.params_void_finder["maximal_radius"])|(rayon<=self.params_void_finder["minimal_radius"])):
-            return(0)
+            return(0,0)
         else:
             return(rayon,mean_value)
 
@@ -389,6 +390,7 @@ class VoidFinder(object):
 
 
     def iterate_overlap_deletion(self,tomographic_map,radius,coord,other_arrays=None,mpc=False):
+        # CR - Weird, to optimize
         if other_arrays is not None:
             others_arrays_copies =[]
             for i in range(len(other_arrays)):
@@ -398,6 +400,7 @@ class VoidFinder(object):
         radius_copy = radius.copy()
         coord_copy = coord.copy()
         nb_voids_delete = len(coord)
+        new_coord,new_radius,new_others_arrays = coord,radius,other_arrays
         while(nb_voids_delete>0):
             new_coord,new_radius,nb_voids_delete,new_others_arrays = self.delete_overlapers(tomographic_map,radius_copy,coord_copy,other_arrays=others_arrays_copies,mpc=mpc)
             coord_copy = new_coord
@@ -551,7 +554,7 @@ class VoidFinder(object):
 
     def convert_to_Mpc(self,tomographic_map,new_coord,new_radius):
         number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
-        if(new_coord.shape != 0):
+        if(new_coord.shape[0] != 0):
             coord_Mpc = np.zeros(new_coord.shape)
             coord_Mpc = new_coord * np.array(number_Mpc_per_pixels)
         else:

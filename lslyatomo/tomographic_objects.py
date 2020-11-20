@@ -22,12 +22,6 @@ import numpy as np
 import fitsio
 import pickle
 import os
-try:
-    from picca import data
-except:
-    import lslyatomo.picca.data as data
-    raise Warning("Picca might be updated, we suggest to install picca independently")
-
 from lslyatomo import utils
 from scipy.ndimage.filters import gaussian_filter
 import multiprocessing as mp
@@ -1001,6 +995,11 @@ class Delta(object):
             self.delta_file = fitsio.FITS(self.name)
 
     def read_line(self,number_line):
+        try:
+            from picca import data
+        except:
+            import lslyatomo.picca.data as data
+            raise Warning("Picca might be updated, we suggest to install picca independently")
         if(self.delta_file is None):
             self.read_from_fits()
         delta = data.delta.from_fitsio(self.delta_file[number_line],Pk1D_type=self.pk1d_type)
@@ -1057,8 +1056,6 @@ class Delta(object):
 
 
 # CR - for the cutting routines, add a routine which automaticaly cut additive arrays
-
-
 
 
 
@@ -1491,9 +1488,9 @@ class VoidCatalog(Catalog):
 
     def create_sky_void_dictionary(self,qso_like=False):
         h = {}
-        h['RA'] = self.coord[:,0].astype("f8")
-        h['DEC'] = self.coord[:,1].astype("f8")
-        h['Z'] = self.coord[:,2].astype("f8")
+        h['RA'] = self.coord[:,0].astype("f8") if self.coord.shape[0] != 0 else np.array([])
+        h['DEC'] = self.coord[:,1].astype("f8") if self.coord.shape[0] != 0 else np.array([])
+        h['Z'] = self.coord[:,2].astype("f8") if self.coord.shape[0] != 0 else np.array([])
         if(qso_like):
             h['PLATE'] = np.asarray(['1' + '{0:09d}'.format(i) for i in range(len(self.radius))]).astype("i8")
             h['MJD'] = np.asarray(['1' + '{0:09d}'.format(i) for i in range(len(self.radius))]).astype("i8")
@@ -1501,9 +1498,9 @@ class VoidCatalog(Catalog):
 
     def create_cartesian_void_dictionary(self):
         h = {}
-        h['X'] = self.coord[:,0].astype("f8")
-        h['Y'] = self.coord[:,1].astype("f8")
-        h['Z'] = self.coord[:,2].astype("f8")
+        h['X'] = self.coord[:,0].astype("f8") if self.coord.shape[0] != 0 else np.array([])
+        h['Y'] = self.coord[:,1].astype("f8") if self.coord.shape[0] != 0 else np.array([])
+        h['Z'] = self.coord[:,2].astype("f8") if self.coord.shape[0] != 0 else np.array([])
         return(h)
 
 
