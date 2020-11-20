@@ -35,11 +35,7 @@ except :
     raise Warning("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
 
 
-try:
-    from picca import constants
-except:
-    import lsstomo.picca.constants as constants
-    raise Warning("Picca might be updated, we suggest to install picca independently")
+
 
 
 #############################################################################
@@ -52,6 +48,11 @@ lambdaLy = 1215.673123130217
 
 
 def get_cosmo_function(Omega_m,Omega_k=0.):
+    try:
+        from picca import constants
+    except:
+        import lsstomo.picca.constants as constants
+        raise Warning("Picca might be updated, we suggest to install picca independently")
     try:
         Cosmo = constants.cosmo(Omega_m,Ok=Omega_k)
         rcomov = Cosmo.r_comoving
