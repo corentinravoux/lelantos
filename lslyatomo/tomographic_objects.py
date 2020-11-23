@@ -441,35 +441,32 @@ class DistanceMap(TomographicMap):
 
 class StackMap(TomographicMap):
 
-    def __init__(self,tomo_map=None,catalog=None,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None):
+    def __init__(self,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None,tomographic_map=None,catalog=None):
         super(StackMap,self).__init__(map_array=map_array,name=name,shape=shape,size=size,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,property_file=property_file,Omega_m=Omega_m)
 
-        self.tomo_map = tomo_map
+        self.tomographic_map = tomographic_map
         self.catalog = catalog
 
     @classmethod
-    def init_by_tomographic_map(cls,catalog_name,type_catalog,tomographic_map_name,property_file_map,size_stack,name=None):
-        tomographic_map = TomographicMap.init_from_property_files(property_file_map,name=tomographic_map_name)
-        tomographic_map.read()
-        catalog = Catalog.init_catalog_from_fits(catalog_name, type_catalog)
+    def init_by_tomographic_map(cls,tomographic_map,catalog,size_stack,name=None):
         shape_stack = (np.round(size_stack/tomographic_map.mpc_per_pixel,0)).astype(int)
         index_catalog = (np.round(catalog.coord/tomographic_map.mpc_per_pixel,0)).astype(int)
 
-        mask = (index_catalog[:,0] < shape_stack[0])|(index_catalog[:,0] >= tomographic_map.shape[0] - shape_stack[0])
-        mask |=(index_catalog[:,1] < shape_stack[1])|(index_catalog[:,1] >= tomographic_map.shape[1] - shape_stack[1])
-        mask |=(index_catalog[:,2] < shape_stack[2])|(index_catalog[:,2] >= tomographic_map.shape[2] - shape_stack[2])
+        mask = (index_catalog[:,0] < shape_stack[0])
+        mask |=(index_catalog[:,0] >= tomographic_map.shape[0] - shape_stack[0])
+        mask |=(index_catalog[:,1] < shape_stack[1])
+        mask |=(index_catalog[:,1] >= tomographic_map.shape[1] - shape_stack[1])
+        mask |=(index_catalog[:,2] < shape_stack[2])
+        mask |=(index_catalog[:,2] >= tomographic_map.shape[2] - shape_stack[2])
 
         index_catalog_clean = index_catalog[~mask]
         local_maps = np.zeros((len(index_catalog_clean),2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1))
         for i in range(len(index_catalog_clean)):
             local_maps[i] = tomographic_map.map_array[index_catalog_clean[i][0]-shape_stack[0]:index_catalog_clean[i][0]+shape_stack[0]+1,index_catalog_clean[i][1]-shape_stack[1]:index_catalog_clean[i][1]+shape_stack[1]+1,index_catalog_clean[i][2]-shape_stack[2]:index_catalog_clean[i][2]+shape_stack[2]+1]
         stack = np.mean(local_maps,axis=0)
-
-
         boundary_cartesian_coord = None
         boundary_sky_coord = None
-
-        return(cls(tomo_map=tomographic_map,catalog=catalog,map_array=stack,name=name,shape=shape_stack,size=size_stack,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=tomographic_map.coordinate_transform,property_file=None))
+        return(cls(tomographic_map=tomographic_map,catalog=catalog,map_array=stack,name=name,shape=shape_stack,size=size_stack,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=tomographic_map.coordinate_transform,property_file=None))
 
 
     @classmethod

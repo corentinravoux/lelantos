@@ -75,61 +75,6 @@ class TomographyPlot(object):
 
 
 
-    def add_reshift_axe(self,tomographic_map,rotate=False):
-        if(tomographic_map.coordinate_transform != "middle"):
-            return()
-
-        fig = plt.gcf()
-        ax1 = fig.axes[0]
-        ax2 = fig.add_axes(ax1.get_position(), frameon=False)
-
-
-        if(rotate):
-            bounds = ax1.get_ybound()+ tomographic_map.boundary_cartesian_coord[0][2]
-        else:
-            bounds = ax1.get_xbound()+ tomographic_map.boundary_cartesian_coord[0][2]
-
-        z_array = np.linspace(bounds[0],bounds[1],1000)
-        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(tomographic_map.Omega_m)
-        redshifts = utils.convert_z_cartesian_to_sky_middle(z_array,inv_rcomov)
-        redshift_to_plot = np.unique(np.around(redshifts,decimals=1))
-        tick_position = np.array([np.argmin(np.abs(redshifts - redshift_to_plot[i])) for i in range(len(redshift_to_plot))])/(len(redshifts) - 1)
-
-
-        ax1.tick_params(labelbottom='on',labelleft='on', bottom='on', left='on')
-        if(rotate):
-            ax2.set_yticks(tick_position)
-            ax2.set_yticklabels(redshift_to_plot)
-            ax2.tick_params(labelright='on', right='on',labelbottom=None,labelleft=None, bottom=None, left=None)
-            ax2.set_ylabel('Redshift')
-        else:
-            ax2.set_xticks(tick_position)
-            ax2.set_xticklabels(redshift_to_plot)
-            ax2.tick_params(labeltop='on', top='on',labelbottom=None,labelleft=None, bottom=None, left=None)
-            ax2.set_xlabel('Redshift')
-
-
-        position_redshift_axe = utils.return_key(self.kwargs, "position_redshift_axe", "other")
-        outward_redshift_axe = utils.return_key(self.kwargs, "outward_redshift_axe", 50)
-        if(position_redshift_axe == "other"):
-            if(rotate):
-                ax2.yaxis.set_label_position('right')
-                ax2.yaxis.set_ticks_position('right')
-            else:
-                ax2.xaxis.set_label_position('top')
-                ax2.xaxis.set_ticks_position('top')
-        elif(position_redshift_axe == "same"):
-            if(rotate):
-                ax2.yaxis.set_label_position('left')
-                ax2.yaxis.set_ticks_position('left')
-                ax2.spines['left'].set_position(('outward', outward_redshift_axe)) # put redshift axis at the bottom
-            else:
-                ax2.xaxis.set_label_position('bottom')
-                ax2.xaxis.set_ticks_position('bottom')
-                ax2.spines['bottom'].set_position(('outward', outward_redshift_axe))
-
-
-
     def load_tomographic_objects(self,qso=None,void=None,galaxy=None,distance_mask=None,cut_plot=None):
         tomographic_map = tomographic_objects.TomographicMap.init_classic(name=self.map_name,shape=self.map_shape,property_file=self.property_file)
         tomographic_map.read()
@@ -234,8 +179,8 @@ class TomographyPlot(object):
         mask &= galaxy.coord[:,index_direction] >= center_mpc - space_mpc/2
         return(mask)
 
-
-    def get_direction_informations(self,direction,rotate,size_map):
+    @staticmethod
+    def get_direction_informations(direction,rotate,size_map):
         if (direction.lower() == "x")|(direction.lower() == "ra"):
             x_index, y_index, index_direction = 2, 1, 0
         elif (direction.lower() == "y")|(direction.lower() == "dec"):
@@ -261,7 +206,7 @@ class TomographyPlot(object):
         size_map = tomographic_map.size
         pixel_per_mpc = tomographic_map.pixel_per_mpc
 
-        (x_index, y_index, index_direction, extentmap, xlab, ylab) = self.get_direction_informations(direction,rotate,size_map)
+        (x_index, y_index, index_direction, extentmap, xlab, ylab) = TomographyPlot.get_direction_informations(direction,rotate,size_map)
 
         center_pix = int(round(center_mpc*pixel_per_mpc[index_direction],0))
         if direction == "x":
@@ -300,11 +245,12 @@ class TomographyPlot(object):
             galaxy_in = np.transpose(np.vstack([galaxy_catalog.coord[:,0],galaxy_catalog.coord[:,1],galaxy_catalog.coord[:,2],galaxy_catalog.error_z]))[mask_galaxy_in]
 
         name_plot = f"{name}_direction_{direction}_mpc_{center_mpc}"
-        self.plot_slice(map_slice,extentmap,xlab,ylab,name_plot,deltamin,deltamax,x_index,y_index,pixel_in=pixel_in,pixel_bis_in=pixel_bis_in,qso_in=qso_in,qso_bis_in=qso_bis_in,void_in=void_in,void_bis_in=void_bis_in,galaxy_in=galaxy_in,redshift_axis=redshift_axis,tomographic_map=tomographic_map,rotate=rotate,hd=hd,xlim=xlim,ylim=ylim)
+        TomographyPlot.plot_slice(map_slice,extentmap,xlab,ylab,name_plot,deltamin,deltamax,x_index,y_index,pixel_in=pixel_in,pixel_bis_in=pixel_bis_in,qso_in=qso_in,qso_bis_in=qso_bis_in,void_in=void_in,void_bis_in=void_bis_in,galaxy_in=galaxy_in,redshift_axis=redshift_axis,tomographic_map=tomographic_map,rotate=rotate,hd=hd,xlim=xlim,ylim=ylim,**self.kwargs)
 
 
 
-    def plot_slice(self,map_slice,extentmap,xlab,ylab,name,deltamin,deltamax,x_index,y_index,pixel_in=None,pixel_bis_in=None,qso_in=None,qso_bis_in=None,void_in=None,void_bis_in=None,galaxy_in=None,redshift_axis=False,tomographic_map=None,rotate=False,hd=False,xlim=None,ylim=None):
+    @staticmethod
+    def plot_slice(map_slice,extentmap,xlab,ylab,name,deltamin,deltamax,x_index,y_index,pixel_in=None,pixel_bis_in=None,qso_in=None,qso_bis_in=None,void_in=None,void_bis_in=None,galaxy_in=None,redshift_axis=False,tomographic_map=None,rotate=False,hd=False,xlim=None,ylim=None,**kwargs):
         plt.figure()
         fig = plt.gcf()
         ax = plt.gca()
@@ -313,8 +259,7 @@ class TomographyPlot(object):
         plt.xlabel(xlab)
         plt.ylabel(ylab)
 
-        im = self.add_elements(map_slice,extentmap,deltamin,deltamax,x_index,y_index,pixel_in=pixel_in,pixel_bis_in=pixel_bis_in,qso_in=qso_in,qso_bis_in=qso_bis_in,void_in=void_in,void_bis_in=void_bis_in,galaxy_in=galaxy_in)
-
+        im = TomographyPlot.add_elements(map_slice,extentmap,deltamin,deltamax,x_index,y_index,pixel_in=pixel_in,pixel_bis_in=pixel_bis_in,qso_in=qso_in,qso_bis_in=qso_bis_in,void_in=void_in,void_bis_in=void_bis_in,galaxy_in=galaxy_in,**kwargs)
 
         if(rotate):
             cbar = plt.colorbar(im,ax=ax, orientation='horizontal', fraction=.1)
@@ -323,7 +268,7 @@ class TomographyPlot(object):
         cbar.set_label("Flux contrast " + r"$\delta_{Fmap}$")
 
         if(redshift_axis):
-            self.add_reshift_axe(tomographic_map,rotate=rotate)
+            TomographyPlot.add_reshift_axe(tomographic_map,rotate=rotate,**kwargs)
 
         if(xlim is not None):plt.xlim(xlim)
         if(ylim is not None):plt.ylim(ylim)
@@ -335,33 +280,90 @@ class TomographyPlot(object):
         plt.close()
 
 
-
-    def add_elements(self,map_slice,extentmap,deltamin,deltamax,x_index,y_index,pixel_in=None,pixel_bis_in=None,qso_in=None,qso_bis_in=None,void_in=None,void_bis_in=None,galaxy_in=None):
+    @staticmethod
+    def add_elements(map_slice,extentmap,deltamin,deltamax,x_index,y_index,pixel_in=None,pixel_bis_in=None,qso_in=None,qso_bis_in=None,void_in=None,void_bis_in=None,galaxy_in=None,**kwargs):
         im =plt.imshow(map_slice, interpolation='bilinear',cmap='jet_r',vmin = deltamin, vmax = deltamax,extent = extentmap)
         if(pixel_in is not None):
-            plt.scatter(pixel_in[:,x_index],pixel_in[:,y_index],linewidth=utils.return_key(self.kwargs,"linewidth_pixel",1),marker=utils.return_key(self.kwargs,"marker_pixel","s"),color="k")
+            plt.scatter(pixel_in[:,x_index],pixel_in[:,y_index],linewidth=utils.return_key(kwargs,"linewidth_pixel",1),marker=utils.return_key(kwargs,"marker_pixel","s"),color="k")
         if(pixel_bis_in is not None):
             plt.scatter(pixel_bis_in[:,x_index],pixel_bis_in[:,y_index]
-                        ,linewidth=0.5*utils.return_key(self.kwargs,"linewidth_pixel",1)
-                        ,marker=utils.return_key(self.kwargs,"marker_pixel",".")
-                        ,color=utils.return_key(self.kwargs,"grey_pixel","0.5")
-                        ,alpha=utils.return_key(self.kwargs,"transparency_pixel",0.5))
+                        ,linewidth=0.5*utils.return_key(kwargs,"linewidth_pixel",1)
+                        ,marker=utils.return_key(kwargs,"marker_pixel",".")
+                        ,color=utils.return_key(kwargs,"grey_pixel","0.5")
+                        ,alpha=utils.return_key(kwargs,"transparency_pixel",0.5))
         if(qso_in is not None):
             plt.plot(qso_in[:,x_index],qso_in[:,y_index], "k*",linewidth=1)
         if(qso_bis_in is not None):
             plt.plot(qso_bis_in[:,x_index],qso_bis_in[:,y_index], "k*",linewidth=1,fillstyle='none')
         if(void_in is not None):
             for i in range(len(void_in)):
-                circle = plt.Circle((void_in[i,x_index],void_in[i,y_index]),void_in[i,3],fill=False,color=utils.return_key(self.kwargs,"color_voids","r"))
+                circle = plt.Circle((void_in[i,x_index],void_in[i,y_index]),void_in[i,3],fill=False,color=utils.return_key(kwargs,"color_voids","r"))
                 plt.gcf().gca().add_artist(circle)
         if(void_bis_in is not None):
             for i in range(len(void_bis_in)):
-                circle = plt.Circle((void_bis_in[i,x_index],void_bis_in[i,y_index]),void_bis_in[i,3],fill=False,color=utils.return_key(self.kwargs,"color_voids_outside","k"))
+                circle = plt.Circle((void_bis_in[i,x_index],void_bis_in[i,y_index]),void_bis_in[i,3],fill=False,color=utils.return_key(kwargs,"color_voids_outside","k"))
                 plt.gcf().gca().add_artist(circle)
         if(galaxy_in):
             plt.plot(galaxy_in[:,x_index],galaxy_in[:,y_index],"rx")
             plt.errorbar(galaxy_in[:,x_index],galaxy_in[:,y_index],xerr=2*galaxy_in[:,3], capsize = 0.01, ecolor = 'red',fmt = 'none')
         return(im)
+
+
+    @staticmethod
+    def add_reshift_axe(tomographic_map,rotate=False,**kwargs):
+        if(tomographic_map.coordinate_transform != "middle"):
+            return()
+
+        fig = plt.gcf()
+        ax1 = fig.axes[0]
+        ax2 = fig.add_axes(ax1.get_position(), frameon=False)
+
+
+        if(rotate):
+            bounds = ax1.get_ybound()+ tomographic_map.boundary_cartesian_coord[0][2]
+        else:
+            bounds = ax1.get_xbound()+ tomographic_map.boundary_cartesian_coord[0][2]
+
+        z_array = np.linspace(bounds[0],bounds[1],1000)
+        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(tomographic_map.Omega_m)
+        redshifts = utils.convert_z_cartesian_to_sky_middle(z_array,inv_rcomov)
+        redshift_to_plot = np.unique(np.around(redshifts,decimals=1))
+        tick_position = np.array([np.argmin(np.abs(redshifts - redshift_to_plot[i])) for i in range(len(redshift_to_plot))])/(len(redshifts) - 1)
+
+
+        ax1.tick_params(labelbottom='on',labelleft='on', bottom='on', left='on')
+        if(rotate):
+            ax2.set_yticks(tick_position)
+            ax2.set_yticklabels(redshift_to_plot)
+            ax2.tick_params(labelright='on', right='on',labelbottom=None,labelleft=None, bottom=None, left=None)
+            ax2.set_ylabel('Redshift')
+        else:
+            ax2.set_xticks(tick_position)
+            ax2.set_xticklabels(redshift_to_plot)
+            ax2.tick_params(labeltop='on', top='on',labelbottom=None,labelleft=None, bottom=None, left=None)
+            ax2.set_xlabel('Redshift')
+
+
+        position_redshift_axe = utils.return_key(kwargs, "position_redshift_axe", "other")
+        outward_redshift_axe = utils.return_key(kwargs, "outward_redshift_axe", 50)
+        if(position_redshift_axe == "other"):
+            if(rotate):
+                ax2.yaxis.set_label_position('right')
+                ax2.yaxis.set_ticks_position('right')
+            else:
+                ax2.xaxis.set_label_position('top')
+                ax2.xaxis.set_ticks_position('top')
+        elif(position_redshift_axe == "same"):
+            if(rotate):
+                ax2.yaxis.set_label_position('left')
+                ax2.yaxis.set_ticks_position('left')
+                ax2.spines['left'].set_position(('outward', outward_redshift_axe)) # put redshift axis at the bottom
+            else:
+                ax2.xaxis.set_label_position('bottom')
+                ax2.xaxis.set_ticks_position('bottom')
+                ax2.spines['bottom'].set_position(('outward', outward_redshift_axe))
+
+
 
 
 
@@ -385,12 +387,12 @@ class TomographyPlot(object):
 
     def plot_integrate_image(self,zmin,zmax,name,deltamin,deltamax,rotate=False,hd=False,cut_plot=None):
         tomographic_map = self.load_tomographic_objects(cut_plot=cut_plot)[0]
-        (x_index, y_index, index_direction, extentmap, xlab, ylab) = self.get_direction_informations("z",rotate,tomographic_map.size)
+        (x_index, y_index, index_direction, extentmap, xlab, ylab) = TomographyPlot.get_direction_informations("z",rotate,tomographic_map.size)
         map_data = tomographic_map.map_array
         i_pix_end = int(round((zmax*tomographic_map.pixel_per_mpc[index_direction]),0))
         integrated_map = np.mean(map_data[:,:,0:i_pix_end],axis=2)
         name = f"{name}_integrated_map"
-        self.plot_slice(integrated_map,extentmap,xlab,ylab,name,deltamin,deltamax,x_index,y_index,rotate=rotate,hd=hd)
+        TomographyPlot.plot_slice(integrated_map,extentmap,xlab,ylab,name,deltamin,deltamax,x_index,y_index,rotate=rotate,hd=hd,**self.kwargs)
         return(integrated_map)
 
 
@@ -400,7 +402,7 @@ class TomographyPlot(object):
         if qso is not None: qso = load[2]
         arg = np.array(void_catalog.radius).argsort()[-nb_plot:][::-1]
         coords = np.array(void_catalog.coord)[arg]
-        (x_index, y_index, index_direction, extentmap, xlab, ylab) = self.get_direction_informations(direction,rotate,tomographic_map.size)
+        (x_index, y_index, index_direction, extentmap, xlab, ylab) = TomographyPlot.get_direction_informations(direction,rotate,tomographic_map.size)
         for i in range(len(coords)):
             xlim = [coords[i][x_index]-radius_centered,coords[i][x_index]+radius_centered]
             ylim = [coords[i][y_index]-radius_centered,coords[i][y_index]+radius_centered]
@@ -485,7 +487,7 @@ class TomographyPlot(object):
 
 
 
-
+    # CR - move to tomographic_objects ?
     def compute_Pk3D(self,size_map,n_k,kmin,kmax,log=False,distance_mask=None,criteria_distance_mask=None,cut_plot=None):
         tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask,cut_plot=cut_plot)
         self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask)
@@ -534,67 +536,92 @@ class TomographyPlot(object):
 
 class TomographyStack(object):
 
-    def __init__(self,pwd,map_name=None,map_shape=None,map_size=None,property_file=None,catalog_name=None,type_catalog=None,name_stack=None,size_stack=None,PixelName=""):
+    def __init__(self,pwd,map_name,catalog_name,type_catalog,property_file_stack,size_stack,name_stack,map_shape=None,map_size=None,property_file=None):
         self.pwd = pwd
-        self.MapName = MapName
-        self.shapeMap = shapeMap
-        self.PixelName = PixelName
+        self.size_stack = size_stack
+        self.name_stack = name_stack
+        self.property_file_stack = property_file_stack
+
+        self.tomographic_map = tomographic_objects.TomographicMap.init_classic(name=map_name,shape=map_shape,size=map_size,property_file=property_file)
+        self.tomographic_map.read()
+        self.catalog = tomographic_objects.Catalog.init_catalog_from_fits(catalog_name, type_catalog)
 
 
-    def stack_map(name,catalog_name,type_catalog,tomographic_map_name,property_file_map,property_file_stack,size_stack):
-        tomographic_objects.TomographicMap.init_classic(name=map_name,shape=map_shape,size=map_size,property_file=property_file)
-        stack = tomographic_objects.StackMap.init_by_tomographic_map(catalog_name,type_catalog,tomographic_map_name,property_file_map,size_stack,name=name)
-        stack.write_property_file(property_file_stack)
+    def stack(self):
+        stack = tomographic_objects.StackMap.init_by_tomographic_map(self.tomographic_map,self.catalog,self.size_stack,name=self.name_stack)
+        stack.write_property_file(self.property_file_stack)
         stack.write()
+        self.stack = stack
 
-
-    def compute_mean_distance_to_los():
-
-        pixels = self.readClamatoPixelFile()
-        coordpixels = self.getcoord(pixels)
-        coordxy = np.asarray([[coordpixels[i][0][0],coordpixels[i][0][1]] for i in range(len(coordpixels))])
-        diffz=np.zeros(len(qso))
-        for i in range(len(qso)):
-            arg_array  = np.argwhere((qso[i][0] == coordxy[:,0])&(qso[i][1] == coordxy[:,1]))
+    # CR - to test
+    def compute_mean_distance_to_los(self,pixel_name):
+        pixel = tomographic_objects.Pixel.init_from_property_files(self.tomographic_map.property_file,name=pixel_name)
+        pixel.read()
+        x,y,z = pixel.repack_by_los()
+        diffz=np.zeros(len(self.catalog.coord.shape[0]))
+        for i in range(len(diffz)):
+            arg_array  = np.argwhere((self.catalog.coord[i,0] == x[:])&(self.catalog.coord[i,0] == y[:]))
             if(len(arg_array)!=0):
-                arg = np.argwhere((qso[i][0] == coordxy[:,0])&(qso[i][1] == coordxy[:,1]))[0][0]
-                diffz[i] = qso[i][2] - coordpixels[arg][1][-1]
+                arg = arg_array[0][0]
+                diffz[i] = self.catalog.coord[i,2] - z[arg][-1]
         return(np.mean(diffz))
 
 
 
 
-    def plot_stack(self,stack_name,name,deltamin,deltamax,los_quasar=None):
-        stack = init_stack_by_property_file(property_file_name,name=stack_name,tomographic_map_name=None,property_file_map=None,catalog_name=None,type_catalog=None)
-        for direction_normale in ["x","y","z"]:
-            plt.figure()
-            if(direction_normale == "x"):
-                Slice = stack[stack.shape[0]//2,:,:]
-                xlab = "Comoving distance in the z direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-                ylab = "Comoving distance in the y direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-            elif(direction_normale == "y"):
-                Slice = stack[:,stack.shape[1]//2,:]
-                xlab = "Comoving distance in the z direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-                ylab = "Comoving distance in the x direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-            elif(direction_normale == "z"):
-                Slice = stack[:,:,stack.shape[2]//2]
-                xlab = "Comoving distance in the y direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-                ylab = "Comoving distance in the x direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-            extentmap = [-size_stack,+size_stack,-size_stack,+size_stack]
-            plt.imshow(Slice, interpolation='bilinear',cmap='jet_r',vmin = deltamin, vmax = deltamax,extent = extentmap)
-            plt.plot([0],[0],'k*')
-            plt.xlabel(xlab)
-            plt.ylabel(ylab)
-            plt.colorbar()
-            if(los_quasar is not None):
-                if (los_quasar < size_stack):
-                    if((direction_normale=="x")|(direction_normale=="y")):
-                        plt.plot([-size_stack,-los_quasar],[0,0],"r-")
-            plt.savefig("stack_"+ name +"{}.pdf".format(direction_normale),format="pdf")
+    #
+    # @staticmethod
+    # def plot_stack(self,stack,name,deltamin,deltamax,los_quasar=None):
+    #
+    #     for direction_normale in ["x","y","z"]:
+    #         plot_stack(self,stack,name,deltamin,deltamax,direction,los_quasar=None)
+    #
+
+
+    @staticmethod
+    def plot_stack(stack,name_plot,deltamin,deltamax,direction,los_quasar=None,rotate=False,**kwargs):
+        size_map = stack.size
+        (x_index, y_index, index_direction, extentmap, xlab, ylab) = TomographyPlot.get_direction_informations(direction,rotate,(size_map,size_map,size_map))
+        if direction == "x":
+            stack_slice = stack.map_array[stack.shape[0]//2,:,:]
+            if(rotate): stack_slice = np.transpose(np.flip(stack_slice,axis=1))
+        elif direction == "y" :
+            stack_slice = stack.map_array[:,stack.shape[1]//2,:]
+            if(rotate): stack_slice = np.transpose(np.flip(stack_slice,axis=1))
+        elif direction == "z" :
+            stack_slice = stack.map_array[:,:,stack.shape[2]//2]
+            if(rotate): stack_slice = np.transpose(np.flip(stack_slice,axis=1))
+        # TomographyPlot.plot_slice(stack_slice,extentmap,xlab,ylab,name_plot,deltamin,deltamax,x_index,y_index,**kwargs)
+        plt.imshow(stack_slice, interpolation='bilinear',cmap='jet_r',vmin = deltamin, vmax = deltamax,extent = extentmap)
+
+        # plt.figure()
+        # if(direction == "x"):
+        #     Slice = stack[stack.shape[0]//2,:,:]
+        #     xlab = "Comoving distance in the z direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
+        #     ylab = "Comoving distance in the y direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
+        # elif(direction == "y"):
+        #     Slice = stack[:,stack.shape[1]//2,:]
+        #     xlab = "Comoving distance in the z direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
+        #     ylab = "Comoving distance in the x direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
+        # elif(direction == "z"):
+        #     Slice = stack[:,:,stack.shape[2]//2]
+        #     xlab = "Comoving distance in the y direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
+        #     ylab = "Comoving distance in the x direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
+        # extentmap = [-stack.size,+stack.size,-stack.size,+stack.size]
+        # plt.imshow(Slice, interpolation='bilinear',cmap='jet_r',vmin = deltamin, vmax = deltamax,extent = extentmap)
+        # plt.plot([0],[0],'k*')
+        # plt.xlabel(xlab)
+        # plt.ylabel(ylab)
+        # plt.colorbar()
 
 
 
 
+        # if(los_quasar is not None):
+        #     if (los_quasar < stack.size):
+        #         if((direction_normale=="x")|(direction_normale=="y")):
+        #             plt.plot([-stack.size,-los_quasar],[0,0],"r-")
+        # plt.savefig("stack_"+ name +"{}.pdf".format(direction_normale),format="pdf")
 
 
     ##### ELLIPTICITY ####
