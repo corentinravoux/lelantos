@@ -968,6 +968,14 @@ class MapPixelProperty(object):
             pickle.dump(dict_prop,open(self.name,'wb'))
 
 
+    def print_prop(self):
+        if(self.name is not None): print(f"Arguments of the property file {self.name}\n")
+        if(self.size is not None): print(f"Shape of the associated map: {self.shape}\n")
+        if(self.shape is not None): print(f"Size of the associated map: {self.size}\n")
+        if(self.boundary_sky_coord is not None): print(f"Sky boundaries of the associated map [radians]: {self.boundary_sky_coord}\n")
+        if(self.boundary_cartesian_coord is not None): print(f"Cartesian boundaries of the associated map [Mpc.h-1]: {self.boundary_cartesian_coord}\n")
+        if(self.coordinate_transform is not None): print(f"Coordinate transformation of the associated map: {self.coordinate_transform}\n")
+        if(self.Omega_m is not None): print(f"Value of Omega_m used: {self.Omega_m}\n")
 
 
 #############################################################################
