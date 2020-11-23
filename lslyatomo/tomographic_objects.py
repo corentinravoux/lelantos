@@ -1178,6 +1178,7 @@ class Catalog(object):
         if(self.primary_key is not None):
             log.add(f"An example of primary key: {self.primary_key[0]}")
         if(self.coord is not None):
+            log.add(f"Number of objects in the catalog: {self.coord.shape[0]}")
             log.add_array_statistics(self.coord[:,0],"coord over the first direction")
             log.add_array_statistics(self.coord[:,1],"coord over the second direction")
             log.add_array_statistics(self.coord[:,2],"coord over the third direction")
@@ -1548,7 +1549,7 @@ class VoidCatalog(Catalog):
 
 
     def print_void_statistics(self):
-        log = self.print_statistics()
+        log = self.print_statistics(close=False)
         if(self.radius is not None):
             log.add_array_statistics(self.radius,"void radius")
         if(self.crossing_param is not None):
