@@ -969,14 +969,15 @@ class MapPixelProperty(object):
 
 
     def print_prop(self):
-        if(self.name is not None): print(f"Arguments of the property file {self.name}\n")
-        if(self.size is not None): print(f"Shape of the associated map: {self.shape}\n")
-        if(self.shape is not None): print(f"Size of the associated map: {self.size}\n")
-        if(self.boundary_sky_coord is not None): print(f"Sky boundaries of the associated map [radians]: {self.boundary_sky_coord}\n")
-        if(self.boundary_cartesian_coord is not None): print(f"Cartesian boundaries of the associated map [Mpc.h-1]: {self.boundary_cartesian_coord}\n")
-        if(self.coordinate_transform is not None): print(f"Coordinate transformation of the associated map: {self.coordinate_transform}\n")
-        if(self.Omega_m is not None): print(f"Value of Omega_m used: {self.Omega_m}\n")
-
+        log = utils.create_log()
+        if(self.name is not None): log.add(f"Arguments of the property file {self.name}")
+        if(self.size is not None): log.add(f"Shape of the associated map: {self.shape}")
+        if(self.shape is not None): log.add(f"Size of the associated map: {self.size}")
+        if(self.boundary_sky_coord is not None): log.add(f"Sky boundaries of the associated map [radians]: {self.boundary_sky_coord}")
+        if(self.boundary_cartesian_coord is not None): log.add(f"Cartesian boundaries of the associated map [Mpc.h-1]: {self.boundary_cartesian_coord}")
+        if(self.coordinate_transform is not None): log.add(f"Coordinate transformation of the associated map: {self.coordinate_transform}")
+        if(self.Omega_m is not None): log.add(f"Value of Omega_m used: {self.Omega_m}")
+        log.close()
 
 #############################################################################
 #############################################################################
@@ -1168,6 +1169,22 @@ class Catalog(object):
             mask_select &= (x<coord_max[0])  & (y<coord_max[1]) & (z<coord_max[2])
         return(mask_select)
 
+
+
+    def print_statistics(self,close=True):
+        log = utils.create_log()
+        if(self.name is not None): log.add(f"Arguments of the catalog {self.name}")
+        if(self.catalog_type is not None): log.add(f"Type of catalog: {self.catalog_type}")
+        if(self.primary_key is not None):
+            log.add(f"An example of primary key: {self.primary_key[0]}")
+        if(self.coord is not None):
+            log.add_array_statistics(self.coord[:,0],"coord over the first direction")
+            log.add_array_statistics(self.coord[:,1],"coord over the second direction")
+            log.add_array_statistics(self.coord[:,2],"coord over the third direction")
+        if(close):
+            log.close()
+        else:
+            return(log)
 
 
 
@@ -1526,6 +1543,22 @@ class VoidCatalog(Catalog):
             h["MEAN"] = np.array(self.mean_value).astype("f8")
         if(self.filling_factor is not None):
             head["FILLING_FACTOR"] = self.filling_factor
+
+
+
+
+    def print_void_statistics(self):
+        log = self.print_statistics()
+        if(self.radius is not None):
+            log.add_array_statistics(self.radius,"void radius")
+        if(self.crossing_param is not None):
+            log.add_array_statistics(self.crossing_param,"void pixel crossing parameter")
+        if(self.central_value is not None):
+            log.add_array_statistics(self.central_value,"void central value")
+        if(self.mean_value is not None):
+            log.add_array_statistics(self.central_value,"void average value")
+        if(self.filling_factor is not None):
+            log.add(f"Filling factor of the void catalog: {self.filling_factor}")
 
 
 
