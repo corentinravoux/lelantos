@@ -1011,7 +1011,7 @@ class Delta(object):
         try:
             delta = data.delta.from_fitsio(self.delta_file[number_line],Pk1D_type=self.pk1d_type)
         except:
-            delta = data.Delta.from_fitsio(self.delta_file[number_line],Pk1D_type=self.pk1d_type)
+            delta = data.Delta.from_fitsio(self.delta_file[number_line],pk1d_type=self.pk1d_type)
         return(delta)
 
 

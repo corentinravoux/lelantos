@@ -41,7 +41,7 @@ from lslyatomo import tomographic_objects
 
 
 
-
+# CR - to move to tomographic_objects + deal with normaliization of picca
 def get_deltas(namefile,center_ra=True):
     """ Extract delta properties """
     ra, dec, z, deltas, sigmas,zqsos,ids = [],[],[],[],[],[],[]
