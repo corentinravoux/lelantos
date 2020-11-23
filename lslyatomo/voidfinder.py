@@ -190,7 +190,7 @@ class VoidFinder(object):
         self.log.add("Beginning of the Watershed finding for the map {}".format(tomographic_map.name))
         number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
         global map_3D
-        map_3D = self.tomographic_map.map_array
+        map_3D = tomographic_map.map_array
         if(self.find_cluster):
             mask = map_3D < self.params_void_finder["threshold"]
         else :
@@ -539,7 +539,9 @@ class VoidFinder(object):
             line = line_file[i].strip().split()
             coord_line = line_file[i].split('[')[-1].split(']')[0]
             if((line[5]=="Sphere")&(line[6]=="found")):
-                index = np.array([int(coord_line.split()[0]),int(coord_line.split()[1]),int(coord_line.split()[2])])
+                index = np.array([int(coord_line.split()[0]),
+                                  int(coord_line.split()[1]),
+                                  int(coord_line.split()[2])])
                 mask = coord == index
                 arg = np.argwhere(mask)
                 del mask
@@ -572,9 +574,9 @@ class VoidFinder(object):
         else:
             name_out= "Voids"
         if(self.params_void_finder["method"]=="SPHERICAL"):
-            name = "Dictionary_{}_{}_{}threshold_{}average_{}rmin_{}_deletion".format(name_out,self.params_void_finder["method"],self.params_void_finder["threshold"],self.params_void_finder["average"],self.params_void_finder["minimal_radius"],self.delete_option)
+            name = f"""Catalog_{name_out}_{self.params_void_finder["method"]}_{self.params_void_finder["threshold"]}threshold_{self.params_void_finder["average"]}average_{self.params_void_finder["minimal_radius"]}rmin_{self.delete_option}_deletion"""
         elif(self.params_void_finder["method"]=="WATERSHED"):
-            name = "Dictionary_{}_{}_{}threshold_{}dist_clusters_{}rmin_{}_deletion".format(name_out,self.params_void_finder["method"],self.params_void_finder["threshold"],self.params_void_finder["dist_clusters"],self.params_void_finder["minimal_radius"],self.delete_option)
+            name = f"""Catalog_{name_out}_{self.params_void_finder["method"]}_{self.params_void_finder["threshold"]}threshold_{self.params_void_finder["dist_clusters"]}dist_clusters_{self.params_void_finder["minimal_radius"]}rmin_{self.delete_option}_deletion"""
         else :
             raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
         void = tomographic_objects.VoidCatalog.init_from_dictionary(f"{name}.fits",radius,coord,"cartesian",other_arrays=other_arrays,other_array_names = other_array_names)
