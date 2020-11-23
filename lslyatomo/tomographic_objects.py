@@ -1008,7 +1008,10 @@ class Delta(object):
             raise Warning("Picca might be updated, we suggest to install picca independently")
         if(self.delta_file is None):
             self.read_from_fits()
-        delta = data.delta.from_fitsio(self.delta_file[number_line],Pk1D_type=self.pk1d_type)
+        try:
+            delta = data.delta.from_fitsio(self.delta_file[number_line],Pk1D_type=self.pk1d_type)
+        except:
+            delta = data.Delta.from_fitsio(self.delta_file[number_line],Pk1D_type=self.pk1d_type)
         return(delta)
 
 
