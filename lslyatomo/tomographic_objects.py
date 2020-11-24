@@ -414,6 +414,9 @@ class DistanceMap(TomographicMap):
     def mp_array_to_numpyarray(mp_arr):
         return np.frombuffer(mp_arr.get_obj())
 
+    def get_mask_distance(self,distance):
+        return(self.map_array > distance)
+
         ### TO DO
     def give_redshift_cut(self,mask_los_distance,compute_redshift_out_LOS,sizeMap,redshift_axis=None):
         i,percent = 0,0.
@@ -433,8 +436,7 @@ class DistanceMap(TomographicMap):
 
 
 
-    def get_mask_distance(self,distance):
-        return(self.map_array > distance)
+
 
 
 
@@ -446,27 +448,6 @@ class StackMap(TomographicMap):
 
         self.tomographic_map = tomographic_map
         self.catalog = catalog
-
-    @classmethod
-    def init_by_tomographic_map(cls,tomographic_map,catalog,size_stack,name=None):
-        shape_stack = (np.round(size_stack/tomographic_map.mpc_per_pixel,0)).astype(int)
-        index_catalog = (np.round(catalog.coord/tomographic_map.mpc_per_pixel,0)).astype(int)
-
-        mask = (index_catalog[:,0] < shape_stack[0])
-        mask |=(index_catalog[:,0] >= tomographic_map.shape[0] - shape_stack[0])
-        mask |=(index_catalog[:,1] < shape_stack[1])
-        mask |=(index_catalog[:,1] >= tomographic_map.shape[1] - shape_stack[1])
-        mask |=(index_catalog[:,2] < shape_stack[2])
-        mask |=(index_catalog[:,2] >= tomographic_map.shape[2] - shape_stack[2])
-
-        index_catalog_clean = index_catalog[~mask]
-        local_maps = np.zeros((len(index_catalog_clean),2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1))
-        for i in range(len(index_catalog_clean)):
-            local_maps[i] = tomographic_map.map_array[index_catalog_clean[i][0]-shape_stack[0]:index_catalog_clean[i][0]+shape_stack[0]+1,index_catalog_clean[i][1]-shape_stack[1]:index_catalog_clean[i][1]+shape_stack[1]+1,index_catalog_clean[i][2]-shape_stack[2]:index_catalog_clean[i][2]+shape_stack[2]+1]
-        stack = np.mean(local_maps,axis=0)
-        boundary_cartesian_coord = None
-        boundary_sky_coord = None
-        return(cls(tomographic_map=tomographic_map,catalog=catalog,map_array=stack,name=name,shape=shape_stack,size=size_stack,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=tomographic_map.coordinate_transform,property_file=None))
 
 
     @classmethod
@@ -483,232 +464,153 @@ class StackMap(TomographicMap):
         return(stack)
 
 
+    @classmethod
+    def init_by_tomographic_map_simple(cls,tomographic_map,catalog,size_stack,name=None):
+        shape_stack = (np.round(size_stack/tomographic_map.mpc_per_pixel,0)).astype(int)
+        index_catalog = (np.round(catalog.coord/tomographic_map.mpc_per_pixel,0)).astype(int)
 
-    def stack_voids(self,map_3D,size_map,coord,radius,size_stack,normalized=None,shape="CUBIC",number=None):
-        if(normalized is None):
-            voids = coord
-# shape/size
-            number_Mpc_per_pixels = np.array(size_map)/(np.array(self.shapeMap)-1)
-            number_Mpc_per_pixels = np.array(size_map)/(np.array(self.shapeMap))
-            shape_stack = (np.round(size_stack/number_Mpc_per_pixels,0)).astype(int)
-            index_voids = np.zeros(len(voids))
-            index_voids = (np.round(voids/number_Mpc_per_pixels,0)).astype(int)
-            mask = (index_voids[:,0] < shape_stack[0])|(index_voids[:,0] >= self.shapeMap[0] - shape_stack[0])
-            mask |=(index_voids[:,1] < shape_stack[1])|(index_voids[:,1] >= self.shapeMap[1] - shape_stack[1])
-            mask |=(index_voids[:,2] < shape_stack[2])|(index_voids[:,2] >= self.shapeMap[2] - shape_stack[2])
-            clean_voids = index_voids[~mask]
-            if(number is not None):
-                if(number<len(clean_voids)):
-                    nb_void = number
-                else :
-                    nb_void = len(clean_voids)
-            else :
-                nb_void = len(clean_voids)
-            local_maps = np.zeros((nb_void,2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1))
-            for i in range(nb_void):
-                local_maps[i] = map_3D[clean_voids[i][0]-shape_stack[0]:clean_voids[i][0]+shape_stack[0]+1,clean_voids[i][1]-shape_stack[1]:clean_voids[i][1]+shape_stack[1]+1,clean_voids[i][2]-shape_stack[2]:clean_voids[i][2]+shape_stack[2]+1]
-            stack = np.mean(local_maps,axis=0)
-            return(stack)
-        else :
-            voids = coord
-            radius = radius
-            mask_radius = radius >= normalized
-            voids = voids[mask_radius]
-            radius = radius[mask_radius]
-            minimal_radius = np.min(radius)
-            size = (size_stack/minimal_radius) * radius
-# shape/size
-            number_Mpc_per_pixels = np.array(size_map)/(np.array(self.shapeMap)-1)
-            number_Mpc_per_pixels = np.array(size_map)/(np.array(self.shapeMap))
-            mask = ((np.round((voids[:,0]-size[:])/number_Mpc_per_pixels[0],0)).astype(int) < 0)|((np.round((voids[:,0] + size[:])/number_Mpc_per_pixels[0],0)).astype(int) >= self.shapeMap[0])
-            mask |=((np.round((voids[:,1]-size[:])/number_Mpc_per_pixels[1],0)).astype(int) < 0)|((np.round((voids[:,1] + size[:])/number_Mpc_per_pixels[1],0)).astype(int) >= self.shapeMap[1])
-            mask |=((np.round((voids[:,2]-size[:])/number_Mpc_per_pixels[2],0)).astype(int) < 0)|((np.round((voids[:,2] + size[:])/number_Mpc_per_pixels[2],0)).astype(int) >= self.shapeMap[2])
-            clean_voids = voids[~mask]
-            size = size[~mask]
-            shape_stack_min = (np.round(size_stack/number_Mpc_per_pixels,0)).astype(int)
-            if(number is not None):
-                if(number<len(clean_voids)):
-                    nb_void = number
-                else :
-                    nb_void = len(clean_voids)
-            else :
-                nb_void = len(clean_voids)
-            local_maps = np.zeros((nb_void,2*shape_stack_min[0]+1,2*shape_stack_min[1]+1,2*shape_stack_min[2]+1))
-            for i in range(nb_void):
-                r_overrmin = (size[i] /size_stack)
-                for j in range(2*shape_stack_min[0]+1):
-                    for k in range(2*shape_stack_min[1]+1):
-                        for l in range(2*shape_stack_min[2]+1):
-                            local_maps[i,j,k,l] = map_3D[int(round(clean_voids[i][0]/number_Mpc_per_pixels[0] + r_overrmin * (j-shape_stack_min[0]),0)),int(round(clean_voids[i][1]/number_Mpc_per_pixels[1] + r_overrmin * (k-shape_stack_min[1]),0)),int(round(clean_voids[i][2]/number_Mpc_per_pixels[2] + r_overrmin * (l-shape_stack_min[2]),0))]
-            stack = np.mean(local_maps,axis=0)
-            return(stack)
+        mask = (index_catalog[:,0] < shape_stack[0])
+        mask |=(index_catalog[:,0] >= tomographic_map.shape[0] - shape_stack[0])
+        mask |=(index_catalog[:,1] < shape_stack[1])
+        mask |=(index_catalog[:,1] >= tomographic_map.shape[1] - shape_stack[1])
+        mask |=(index_catalog[:,2] < shape_stack[2])
+        mask |=(index_catalog[:,2] >= tomographic_map.shape[2] - shape_stack[2])
+
+        index_catalog_clean = index_catalog[~mask]
+        local_maps = np.zeros((len(index_catalog_clean),2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1))
+        for i in range(len(index_catalog_clean)):
+            local_maps[i] = tomographic_map.map_array[index_catalog_clean[i][0]-shape_stack[0]:index_catalog_clean[i][0]+shape_stack[0]+1,
+                                                      index_catalog_clean[i][1]-shape_stack[1]:index_catalog_clean[i][1]+shape_stack[1]+1,
+                                                      index_catalog_clean[i][2]-shape_stack[2]:index_catalog_clean[i][2]+shape_stack[2]+1]
+        stack = np.mean(local_maps,axis=0)
+        boundary_cartesian_coord = None
+        boundary_sky_coord = None
+        return(cls(tomographic_map=tomographic_map,catalog=catalog,map_array=stack,name=name,shape=shape_stack,size=size_stack,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=tomographic_map.coordinate_transform,property_file=None))
 
 
-
-
-    def stack_voids_correction_xyztildestack(self,map_3D,size_map,coord,size_stack,shape="CUBIC"):
-        voids = np.array(coord) + np.array([self.minx,self.miny,self.minz])
-# shape/size
-        number_Mpc_per_pixels = np.array(size_map)/(np.array(self.shapeMap)-1)
-        number_Mpc_per_pixels = np.array(size_map)/(np.array(self.shapeMap))
-        shape_stack = (np.round(size_stack/number_Mpc_per_pixels,0)).astype(int)
-        x_tilde_array_normalized = np.linspace(-size_stack,size_stack,2*shape_stack[0]+1)
-        y_tilde_array_normalized = np.linspace(-size_stack,size_stack,2*shape_stack[1]+1)
-        z_tilde_array_normalized = np.linspace(-size_stack,size_stack,2*shape_stack[2]+1)
-        coords_tilde_normalized =np.moveaxis(np.array(np.meshgrid(x_tilde_array_normalized,y_tilde_array_normalized,z_tilde_array_normalized,indexing='ij')),0,-1)
-        del x_tilde_array_normalized, y_tilde_array_normalized
-        clean_voids, local_maps = [],[]
-        for i in range(len(voids)):
-            center_tilde = list(self.xyz_to_xyztilde(voids[i][0],voids[i][1],voids[i][2]))
-            coords_tilde = coords_tilde_normalized + center_tilde
-            z_tilde_array = z_tilde_array_normalized + center_tilde[2]
-            redshift_array = self.z_to_redshift(z_tilde_array)
-            del z_tilde_array
-            redshift_3Darray = np.zeros(coords_tilde.shape[0:-1])
-            for j in range(len(redshift_3Darray)):
-                for k in range(len(redshift_3Darray[j])):
-                    redshift_3Darray[j,k,:] = redshift_array
-            del redshift_array
-            coords = np.zeros(coords_tilde.shape)
-            coords[:,:,:,0],coords[:,:,:,1],coords[:,:,:,2] = self.xyztilde_to_xyz(coords_tilde[:,:,:,0],coords_tilde[:,:,:,1],coords_tilde[:,:,:,2],redshift=redshift_3Darray)
-            del coords_tilde
-            coords_box = coords - np.array([self.minx,self.miny,self.minz])
-            del coords
-            coords_pixels  = np.round(coords_box/number_Mpc_per_pixels,0).astype(int)
-            del coords_box
-            boolean = ((np.max(coords_pixels[:,:,:,0])>=self.shapeMap[0])|(np.min(coords_pixels[:,:,:,0])<0))
-            boolean |=((np.max(coords_pixels[:,:,:,1])>=self.shapeMap[1])|(np.min(coords_pixels[:,:,:,1])<0))
-            boolean |=((np.max(coords_pixels[:,:,:,2])>=self.shapeMap[2])|(np.min(coords_pixels[:,:,:,2])<0))
+    @classmethod
+    def init_by_tomographic_map(cls,tomographic_map,catalog,size_stack,shape_stack,interpolation_method="NEAREST",name=None,normalized=None,coordinate_convert=None):
+        (coord,radius,min_radius) = cls.initiate_stack(coordinate_convert,normalized,tomographic_map,catalog)
+        coord_stack = cls.create_init_stack_coordinates(shape_stack,size_stack)
+        voids_list,local_maps = [],[]
+        for i in range(len(coord)):
+            if(normalized):
+                coord_stack_local = coord_stack * (radius[i] / min_radius)
+            else:
+                coord_stack_local = coord_stack
+            if(coordinate_convert is not None):
+                property = MapPixelProperty(name=tomographic_map.property_file)
+                property.read()
+                coord_stack_local = coord_stack_local + cls.inv_convert_center(coord[i],tomographic_map.coordinate_transform,coordinate_convert,property)
+                coord_stack_local = cls.convert_coord(coord_stack_local,tomographic_map.coordinate_transform,coordinate_convert,property)
+            else:
+                coord_stack_local = coord_stack_local + coord[i]
+            index_stack_local = coord_stack_local/tomographic_map.mpc_per_pixel
+            boolean = (np.max(coord_stack_local[:,:,:,0])>=tomographic_map.size[0])
+            boolean |=(np.min(coord_stack_local[:,:,:,0])<0)
+            boolean |=(np.max(coord_stack_local[:,:,:,1])>=tomographic_map.size[1])
+            boolean |=(np.min(coord_stack_local[:,:,:,1])<0)
+            boolean |=(np.max(coord_stack_local[:,:,:,2])>=tomographic_map.size[2])
+            boolean |=(np.min(coord_stack_local[:,:,:,2])<0)
             if(not(boolean)):
-                clean_voids.append(voids[i])
-                local_maps.append(map_3D[coords_pixels[:,:,:,0],coords_pixels[:,:,:,1],coords_pixels[:,:,:,2]])
-            del coords_pixels
-        del coords_tilde_normalized
+                voids_list.append(coord[i])
+                local_maps.append(utils.interpolate_map(interpolation_method,
+                                                        tomographic_map.map_array,
+                                                        index_stack_local))
+        del coord_stack,coord_stack_local,index_stack_local
         local_maps = np.array(local_maps)
         stack = np.mean(local_maps,axis=0)
         del local_maps
-        return(stack)
-
-
-    def stack_voids_correction_xyzstack(self,map_3D,size_map,coord,size_stack,shape="CUBIC"):
-        voids = np.array(coord) + np.array([self.minx,self.miny,self.minz])
-# shape/size
-        number_Mpc_per_pixels = np.array(size_map)/(np.array(self.shapeMap)-1)
-        number_Mpc_per_pixels = np.array(size_map)/(np.array(self.shapeMap))
-        shape_stack = (np.round(size_stack/number_Mpc_per_pixels,0)).astype(int)
-        index_voids = np.zeros(len(voids))
-        index_voids = (np.round(voids/number_Mpc_per_pixels,0)).astype(int)
-        mask = (index_voids[:,0] < shape_stack[0])|(index_voids[:,0] >= self.shapeMap[0] - shape_stack[0])
-        mask |=(index_voids[:,1] < shape_stack[1])|(index_voids[:,1] >= self.shapeMap[1] - shape_stack[1])
-        mask |=(index_voids[:,2] < shape_stack[2])|(index_voids[:,2] >= self.shapeMap[2] - shape_stack[2])
-        clean_voids = index_voids[~mask]
-        nb_void = len(clean_voids)
-        x_array_normalized = np.linspace(-size_stack,size_stack,2*shape_stack[0]+1)
-        y_array_normalized = np.linspace(-size_stack,size_stack,2*shape_stack[1]+1)
-        z_array_normalized = np.linspace(-size_stack,size_stack,2*shape_stack[2]+1)
-        coords_normalized =np.moveaxis(np.array(np.meshgrid(x_array_normalized,y_array_normalized,z_array_normalized,indexing='ij')),0,-1)
-        clean_voids, local_maps = [],[]
-        for i in range(len(voids)):
-            center_tilde = np.array(self.xyz_to_xyztilde(voids[i][0],voids[i][1],voids[i][2]))
-            coords = coords_normalized + voids[i]
-            z_array = z_array_normalized + voids[i][2]
-            redshift_array = self.z_to_redshift(z_array)
-            del z_array
-            redshift_3Darray = np.zeros(coords.shape[0:-1])
-            for j in range(len(redshift_3Darray)):
-                for k in range(len(redshift_3Darray[j])):
-                    redshift_3Darray[j,k,:] = redshift_array
-            del redshift_array
-            coords_tilde = np.zeros(coords.shape)
-            coords_tilde[:,:,:,0],coords_tilde[:,:,:,1],coords_tilde[:,:,:,2] = self.xyz_to_xyztilde(coords[:,:,:,0],coords[:,:,:,1],coords[:,:,:,2],redshift=redshift_3Darray)
-            coords_box_tilde = coords_tilde - np.array([self.minx,self.miny,self.minz]) + ( voids[i] - center_tilde)
-            coords_pixels_tilde  = np.round(coords_box_tilde/number_Mpc_per_pixels,0).astype(int)
-            boolean = ((np.max(coords_pixels_tilde[:,:,:,0])>=self.shapeMap[0])|(np.min(coords_pixels_tilde[:,:,:,0])<0))
-            boolean |=((np.max(coords_pixels_tilde[:,:,:,1])>=self.shapeMap[1])|(np.min(coords_pixels_tilde[:,:,:,1])<0))
-            boolean |=((np.max(coords_pixels_tilde[:,:,:,2])>=self.shapeMap[2])|(np.min(coords_pixels_tilde[:,:,:,2])<0))
-            if(not(boolean)):
-                clean_voids.append(voids[i])
-                local_maps.append(map_3D[coords_pixels_tilde[:,:,:,0],coords_pixels_tilde[:,:,:,1],coords_pixels_tilde[:,:,:,2]])
-        for i in range(nb_void):
-            local_maps[i] = map_3D[clean_voids[i][0]-shape_stack[0]:clean_voids[i][0]+shape_stack[0]+1,clean_voids[i][1]-shape_stack[1]:clean_voids[i][1]+shape_stack[1]+1,clean_voids[i][2]-shape_stack[2]:clean_voids[i][2]+shape_stack[2]+1]
-        stack = np.mean(local_maps,axis=0)
-        return(stack)
-
-
-    def initialize_coordinates_conversion(self,Om,maxlist_name):
-        Cosmo = constants.cosmo(Om)
-        maxlist = pickle.load(open(maxlist_name,'rb'))
-        (minx,maxx,miny,maxy,minz,maxz,minredshift,maxredshift,minra,maxra,mindec,maxdec) = maxlist
-        self.minx = minx
-        self.maxx = maxx
-        self.miny = miny
-        self.maxy = maxy
-        self.minz = minz
-        self.maxz = maxz
-        self.minra = minra
-        self.maxra = maxra
-        self.mindec = mindec
-        self.maxdec = maxdec
-        self.minredshift = minredshift
-        self.meanredshift = (minredshift + maxredshift)/2
-        self.rcomoving = Cosmo.r_comoving
-        self.redshift_to_dm = Cosmo.dm
+        boundary_cartesian_coord = None
+        boundary_sky_coord = None
+        if(normalized):
+            size_stack = size_stack / float(min_radius)
+        return(cls(tomographic_map=tomographic_map,
+                   catalog=catalog,
+                   map_array=stack,
+                   name=name,
+                   shape=shape_stack,size=(size_stack,size_stack,size_stack),
+                   boundary_cartesian_coord=boundary_cartesian_coord,
+                   boundary_sky_coord=boundary_sky_coord,
+                   coordinate_transform=tomographic_map.coordinate_transform,
+                   property_file=None))
 
 
 
-    def xyz_to_xyztilde(self,x,y,z,redshift=None):
-        z_tilde = z
-        if(redshift is None):Z = self.z_to_redshift(z)
-        else: Z = redshift
-        x_tilde = (self.redshift_to_dm(Z)/self.redshift_to_dm(self.meanredshift)) * (x)
-        y_tilde = (self.redshift_to_dm(Z)/self.redshift_to_dm(self.meanredshift)) * (y)
-        return(x_tilde,y_tilde,z_tilde)
-
-    def xyztilde_to_xyz(self,x_tilde,y_tilde,z_tilde,redshift=None):
-        z = z_tilde
-        if(redshift is None):Z = self.z_to_redshift(z)
-        else: Z = redshift
-        x = (self.redshift_to_dm(self.meanredshift)/self.redshift_to_dm(Z)) * x_tilde
-        y = (self.redshift_to_dm(self.meanredshift)/self.redshift_to_dm(Z)) * y_tilde
-        return(x,y,z)
-
-
-    def rcomoving_inverse(self,redshift,z):
-        return(self.rcomoving(redshift) - (z))
-
-
-    def z_to_redshift_scalar(self,z):
-        redshift = fsolve(self.rcomoving_inverse,self.minredshift,args=(z))[0]
-        return(redshift)
-
-    def z_to_redshift_array3D(self,z):
-        redshift = np.zeros(z.shape)
-        for i in range(len(redshift)):
-            for j in range(len(redshift[i])):
-                for k in range(len(redshift[i][j])):
-                    redshift[i][j][k] = self.z_to_redshift_scalar(z[i][j][k])
-        return(redshift)
-
-    def z_to_redshift_array1D(self,z):
-        redshift = np.zeros(z.shape)
-        for i in range(len(redshift)):
-            redshift[i] = self.z_to_redshift_scalar(z[i])
-        return(redshift)
-
-    def z_to_redshift(self,z):
-        if((type(z)==np.ndarray)&(z.ndim==3)):
-            redshift = self.z_to_redshift_array3D(z)
-        elif((type(z)==np.ndarray)&(z.ndim==1)):
-            redshift = self.z_to_redshift_array1D(z)
+    @classmethod
+    def initiate_stack(cls,coordinate_convert,normalized,tomographic_map,catalog):
+        if(coordinate_convert is not None):
+            if(coordinate_convert.lower() == tomographic_map.coordinate_transform):
+                    raise ValueError("Please choose a coordinate transformation different than the map one")
+        if(normalized):
+            if(catalog.object_type.lower() != "void"):
+                raise KeyError("It is not possible to normalize this catalog")
+            else:
+                coord = catalog.coord[catalog.radius >= normalized]
+                radius = catalog.radius[catalog.radius >= normalized]
+                min_radius = np.min(radius)
         else:
-            redshift = self.z_to_redshift_scalar(z)
-        return(redshift)
+            coord = catalog.coord
+            radius,min_radius = None,None
+        return(coord,radius,min_radius)
 
 
+    @classmethod
+    def create_init_stack_coordinates(cls,shape_stack,size_stack):
+        x_array = np.linspace(-size_stack,size_stack,2*shape_stack[0]+1)
+        y_array = np.linspace(-size_stack,size_stack,2*shape_stack[1]+1)
+        z_array = np.linspace(-size_stack,size_stack,2*shape_stack[2]+1)
+        return(np.moveaxis(np.array(np.meshgrid(x_array,y_array,z_array,indexing='ij')),0,-1))
 
-    def read_stacks(self,name,shape_stack):
-        stack = np.fromfile(name)
-        return(stack.reshape(shape_stack))
+
+    @classmethod
+    def convert_coord(cls,coord_stack_local,coordinate_transform,coordinate_convert,property):
+        coord_converted = np.zeros(coord_stack_local.shape)
+        suplementary_parameters = utils.return_suplementary_parameters(coordinate_convert,property=property)
+        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(property.Omega_m)
+        coord_converted[:,:,:,0],
+        coord_converted[:,:,:,1],
+        coord_converted[:,:,:,2] = utils.convert_cartesian_to_sky(coord_stack_local[:,:,:,0],
+                                                                  coord_stack_local[:,:,:,1],
+                                                                  coord_stack_local[:,:,:,2],
+                                                                  coordinate_convert,
+                                                                  inv_rcomov=inv_rcomov,
+                                                                  inv_distang=inv_distang,
+                                                                  distang=distang,
+                                                                  suplementary_parameters=suplementary_parameters)
+        suplementary_parameters = utils.return_suplementary_parameters(coordinate_transform,property=property)
+        coord_converted[:,:,:,0],
+        coord_converted[:,:,:,1],
+        coord_converted[:,:,:,2] = utils.convert_sky_to_cartesian(coord_converted[:,:,:,0],
+                                                                  coord_converted[:,:,:,1],
+                                                                  coord_converted[:,:,:,2],
+                                                                  coordinate_transform,
+                                                                  rcomov=rcomov,
+                                                                  distang=distang,
+                                                                  suplementary_parameters=suplementary_parameters)
+        return(coord_converted)
+
+    @classmethod
+    def inv_convert_center(cls,coord,coordinate_transform,coordinate_convert,property):
+        suplementary_parameters = utils.return_suplementary_parameters(coordinate_transform,property=property)
+        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(property.Omega_m)
+        X,Y,Z = utils.convert_cartesian_to_sky(coord[0],
+                                               coord[1],
+                                               coord[2],
+                                               coordinate_transform,
+                                               inv_rcomov=inv_rcomov,
+                                               inv_distang=inv_distang,
+                                               distang=distang,
+                                               suplementary_parameters=suplementary_parameters)
+        suplementary_parameters = utils.return_suplementary_parameters(coordinate_convert,property=property)
+        X,Y,Z = utils.convert_sky_to_cartesian(X,Y,Z,
+                                               coordinate_convert,
+                                               rcomov=rcomov,
+                                               distang=distang,
+                                               suplementary_parameters=suplementary_parameters)
+        return(np.array([X,Y,Z]))
+
+
 
     def merge_stacks(self,list_stacks,shape_stack,name):
         stacks = []
@@ -1327,6 +1229,7 @@ class QSOCatalog(Catalog):
         self.plate = plate
         self.modern_julian_date = modern_julian_date
         self.fiber_id = fiber_id
+        self.object_type = "qso"
 
 
     @classmethod
@@ -1421,6 +1324,7 @@ class DLACatalog(Catalog):
         self.z_qso=z_qso
         self.confidence=confidence
         self.nhi=nhi
+        self.object_type = "dla"
 
 
 
@@ -1512,6 +1416,7 @@ class GalaxyCatalog(Catalog):
         self.confidence = confidence
         self.standard_deviation = standard_deviation
         self.magnitude = magnitude
+        self.object_type = "galaxy"
 
 
     @classmethod
@@ -1569,6 +1474,7 @@ class VoidCatalog(Catalog):
         self.filling_factor = filling_factor
         self.weights = weights
         self.mean_value = mean_value
+        self.object_type = "void"
 
 
 

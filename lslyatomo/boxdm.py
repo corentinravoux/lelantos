@@ -25,7 +25,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm,Normalize
 from scipy import interpolate
-from scipy.ndimage import map_coordinates
 from lslyatomo import utils
 from lslyatomo import tomographic_objects
 
@@ -66,20 +65,6 @@ class BoxExtractor():
         return(X_tomo_array,Y_tomo_array,Z_tomo_array)
 
 
-    def interpolate_dm_map(self,DM_mocks_map,coords_pixels_box_saclay):
-        if(self.interpolation_method.upper() == "NEAREST"):
-            coords_pixels_box_saclay = coords_pixels_box_saclay.astype(int)
-            DM_map = DM_mocks_map[coords_pixels_box_saclay[:,:,:,0],coords_pixels_box_saclay[:,:,:,1],coords_pixels_box_saclay[:,:,:,2]]
-        elif(self.interpolation_method.upper() == "LINEAR"):
-            points =  coords_pixels_box_saclay.reshape(coords_pixels_box_saclay.shape[0]*coords_pixels_box_saclay.shape[1]*coords_pixels_box_saclay.shape[2],3)
-            DM_map = map_coordinates(DM_mocks_map, np.transpose(points), order=1).reshape((coords_pixels_box_saclay.shape[0],coords_pixels_box_saclay.shape[1],coords_pixels_box_saclay.shape[2]))
-        elif(self.interpolation_method.upper() == "SPLINE"):
-            points =  coords_pixels_box_saclay.reshape(coords_pixels_box_saclay.shape[0]*coords_pixels_box_saclay.shape[1]*coords_pixels_box_saclay.shape[2],3)
-            DM_map = map_coordinates(DM_mocks_map, np.transpose(points), order=2).reshape((coords_pixels_box_saclay.shape[0],coords_pixels_box_saclay.shape[1],coords_pixels_box_saclay.shape[2]))
-        else :
-            raise ValueError("Please select NEAREST, LINEAR or SPLINE as interpolation_method")
-        return(DM_map)
-
 
 
     def construct_DM_map(self,ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,get_prop=None):
@@ -96,7 +81,7 @@ class BoxExtractor():
         self.log.add("Loading of the Saclay map")
         DM_mocks_map = utils.saclay_mock_get_box(self.box_dir,self.box_shape)
         self.log.add("Creation of the DM map")
-        DM_map = self.interpolate_dm_map(DM_mocks_map,coords_pixels_box_saclay)
+        DM_map = utils.interpolate_map(self.interpolation_method,DM_mocks_map,coords_pixels_box_saclay)
         del DM_mocks_map
         if(get_prop is not None):
             Props_map = []
@@ -104,7 +89,7 @@ class BoxExtractor():
                 self.log.add("Loading of the Saclay {} map".format(get_prop[i]))
                 prop_mocks_map = utils.saclay_mock_get_box(self.box_dir,self.box_shape,name_box=get_prop[i])
                 self.log.add("Creation of the {} map".format(get_prop[i]))
-                prop_map = self.interpolate_dm_map(prop_mocks_map,coords_pixels_box_saclay)
+                prop_map = utils.interpolate_map(self.interpolation_method,prop_mocks_map,coords_pixels_box_saclay)
                 Props_map.append(prop_map)
                 del prop_mocks_map
             Props_map = np.array(Props_map)
@@ -114,18 +99,6 @@ class BoxExtractor():
         self.log.add("Multiplying by growth factor at redshift of the LOS")
         return(DM_map,Props_map)
 
-
-
-    def interpolate_fill_dm_map(self,DM_map,DM_mocks_map,coords_pixels_box_saclay,mask):
-        if(self.interpolation_method.upper() == "NEAREST"):
-            coords_pixels_box_saclay = coords_pixels_box_saclay.astype(int)
-            DM_map[:,:,:][mask] = DM_mocks_map[coords_pixels_box_saclay[:,:,:,0][mask],coords_pixels_box_saclay[:,:,:,1][mask],coords_pixels_box_saclay[:,:,:,2][mask]]
-        elif(self.interpolation_method.upper() == "LINEAR"):
-            DM_map[:,:,:][mask] = map_coordinates(DM_mocks_map, np.transpose(coords_pixels_box_saclay[mask]), order=1)
-        elif(self.interpolation_method.upper() == "SPLINE"):
-            DM_map[:,:,:][mask] = map_coordinates(DM_mocks_map, np.transpose(coords_pixels_box_saclay[mask]), order=2)
-        else :
-            raise ValueError("Please select NEAREST, LINEAR or SPLINE as interpolation_method")
 
 
 
@@ -153,14 +126,14 @@ class BoxExtractor():
         self.log.add("Loading of the Saclay map {}".format(i_box))
         DM_mocks_map = utils.saclay_mock_get_box(self.box_dir[i_box],self.box_shape[i_box])
         self.log.add("Creation of the DM map with box {}".format(i_box))
-        self.interpolate_fill_dm_map(DM_map,DM_mocks_map,coords_pixels_box_saclay,mask)
+        utils.interpolate_and_fill_map(self.interpolation_method,DM_map,DM_mocks_map,coords_pixels_box_saclay,mask)
         del DM_mocks_map
         if(get_prop is not None):
             for i in range(len(get_prop)):
                 self.log.add("Loading of the Saclay {} map {}".format(get_prop[i],i_box))
                 prop_mocks_map = utils.saclay_mock_get_box(self.box_dir[i_box],self.box_shape[i_box],name_box=get_prop[i])
                 self.log.add("Creation of the {} map with box {}".format(get_prop[i],i_box))
-                self.interpolate_fill_dm_map(Props_map[i],prop_mocks_map,coords_pixels_box_saclay,mask)
+                utils.interpolate_and_fill_map(self.interpolation_method,Props_map[i],prop_mocks_map,coords_pixels_box_saclay,mask)
                 del prop_mocks_map
         del coords_pixels_box_saclay,mask
         return(DM_map,Props_map)

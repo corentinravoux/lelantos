@@ -536,22 +536,32 @@ class TomographyPlot(object):
 
 class TomographyStack(object):
 
-    def __init__(self,pwd,map_name,catalog_name,type_catalog,property_file_stack,size_stack,name_stack,map_shape=None,map_size=None,property_file=None):
+    def __init__(self,pwd,map_name,catalog_name,type_catalog,property_file_stack,size_stack,name_stack,shape_stack=None,map_shape=None,map_size=None,property_file=None,coordinate_convert=None,interpolation_method="NEAREST",normalized=None):
         self.pwd = pwd
         self.size_stack = size_stack
         self.name_stack = name_stack
         self.property_file_stack = property_file_stack
+        self.coordinate_convert = coordinate_convert
+        self.interpolation_method =interpolation_method
+        self.normalized = normalized
+
 
         self.tomographic_map = tomographic_objects.TomographicMap.init_classic(name=map_name,shape=map_shape,size=map_size,property_file=property_file)
         self.tomographic_map.read()
         self.catalog = tomographic_objects.Catalog.init_catalog_from_fits(catalog_name, type_catalog)
 
+        if(shape_stack is None):
+            self.shape_stack = tuple(np.around(size_stack / self.tomographic_map.mpc_per_pixel,decimals=0).astype(int))
+        else:
+            self.shape_stack = shape_stack
 
     def stack(self):
-        stack = tomographic_objects.StackMap.init_by_tomographic_map(self.tomographic_map,self.catalog,self.size_stack,name=self.name_stack)
+        stack = tomographic_objects.StackMap.init_by_tomographic_map(self.tomographic_map,self.catalog,self.size_stack,self.shape_stack,interpolation_method=self.interpolation_method,name=self.name_stack,normalized=self.normalized,coordinate_convert=self.coordinate_convert)
         stack.write_property_file(self.property_file_stack)
         stack.write()
         self.stack = stack
+
+
 
     # CR - to test
     def compute_mean_distance_to_los(self,pixel_name):
@@ -569,19 +579,16 @@ class TomographyStack(object):
 
 
 
-    #
-    # @staticmethod
-    # def plot_stack(self,stack,name,deltamin,deltamax,los_quasar=None):
-    #
-    #     for direction_normale in ["x","y","z"]:
-    #         plot_stack(self,stack,name,deltamin,deltamax,direction,los_quasar=None)
-    #
+    @staticmethod
+    def plot_stack_3d(stack,name_plot,deltamin,deltamax,los_quasar=None,rotate=False,**kwargs):
+        for direction in ["x","y","z"]:
+            TomographyStack.plot_stack(stack,name_plot,deltamin,deltamax,direction,los_quasar=los_quasar,rotate=rotate,**kwargs)
+
 
 
     @staticmethod
     def plot_stack(stack,name_plot,deltamin,deltamax,direction,los_quasar=None,rotate=False,**kwargs):
-        size_map = stack.size
-        (x_index, y_index, index_direction, extentmap, xlab, ylab) = TomographyPlot.get_direction_informations(direction,rotate,(size_map,size_map,size_map))
+        (x_index, y_index, index_direction, extentmap, xlab, ylab) = TomographyPlot.get_direction_informations(direction,rotate,stack.size)
         if direction == "x":
             stack_slice = stack.map_array[stack.shape[0]//2,:,:]
             if(rotate): stack_slice = np.transpose(np.flip(stack_slice,axis=1))
@@ -591,31 +598,9 @@ class TomographyStack(object):
         elif direction == "z" :
             stack_slice = stack.map_array[:,:,stack.shape[2]//2]
             if(rotate): stack_slice = np.transpose(np.flip(stack_slice,axis=1))
-        # TomographyPlot.plot_slice(stack_slice,extentmap,xlab,ylab,name_plot,deltamin,deltamax,x_index,y_index,**kwargs)
-        plt.imshow(stack_slice, interpolation='bilinear',cmap='jet_r',vmin = deltamin, vmax = deltamax,extent = extentmap)
 
-        # plt.figure()
-        # if(direction == "x"):
-        #     Slice = stack[stack.shape[0]//2,:,:]
-        #     xlab = "Comoving distance in the z direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-        #     ylab = "Comoving distance in the y direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-        # elif(direction == "y"):
-        #     Slice = stack[:,stack.shape[1]//2,:]
-        #     xlab = "Comoving distance in the z direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-        #     ylab = "Comoving distance in the x direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-        # elif(direction == "z"):
-        #     Slice = stack[:,:,stack.shape[2]//2]
-        #     xlab = "Comoving distance in the y direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-        #     ylab = "Comoving distance in the x direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-        # extentmap = [-stack.size,+stack.size,-stack.size,+stack.size]
-        # plt.imshow(Slice, interpolation='bilinear',cmap='jet_r',vmin = deltamin, vmax = deltamax,extent = extentmap)
-        # plt.plot([0],[0],'k*')
-        # plt.xlabel(xlab)
-        # plt.ylabel(ylab)
-        # plt.colorbar()
-
-
-
+        extentmap = [-stack.size[0],+stack.size[0],-stack.size[0],+stack.size[0]]
+        TomographyPlot.plot_slice(stack_slice,extentmap,xlab,ylab,name_plot,deltamin,deltamax,x_index,y_index,**kwargs)
 
         # if(los_quasar is not None):
         #     if (los_quasar < stack.size):
@@ -624,8 +609,16 @@ class TomographyStack(object):
         # plt.savefig("stack_"+ name +"{}.pdf".format(direction_normale),format="pdf")
 
 
-    ##### ELLIPTICITY ####
 
+
+
+    ##### ELLIPTICITY ####
+    def merge_and_compute_ellipticity(self,list_stacks,sizemap,name_stack_merged,deltamin,deltamax,size_stack,shape_stack,signe = 1, ncont = 4,ticks=True,length_between_los_and_quasar=None):
+        Mpcperpixels = np.array(sizemap)/(np.array(self.shapeMap)-1)
+        stack = self.merge_stacks(list_stacks,shape_stack,name_stack_merged)
+        nameout = name_stack_merged.split(".bin")[0]
+        (elipticity,p) = self.compute_stack_ellipticity(stack,Mpcperpixels,deltamin,deltamax,nameout,size_stack,shape_stack,signe=signe,ncont=ncont,ticks=ticks,length_between_los_and_quasar=length_between_los_and_quasar)
+        return(elipticity)
 
 
     def compute_stack_ellipticity(self,stack,Mpcperpixels,deltamin,deltamax,name,size_stack,shape_stack,signe=1,ncont=4,ticks=True,length_between_los_and_quasar=None):
@@ -741,36 +734,6 @@ class TomographyStack(object):
         print("shape of stack {}".format(stack.shape))
 
 
-    def create_and_plot_stack_quasars(self,mapsize,zqso_file,size_stack,deltamin,deltamax,nameout,coordinate_correction=None):
-        qso = np.transpose(np.asarray(pickle.load(open(zqso_file,"rb"))))
-        map_3d = self.readClamatoMapFile()
-        if(coordinate_correction is not None):
-            Om,maxlist_name = coordinate_correction
-            self.initialize_coordinates_conversion(Om,maxlist_name)
-            stack = self.stack_voids_correction_xyztildestack(map_3d,mapsize,qso,size_stack)
-            diffz = None
-        else :
-            stack,diffz = self.stack_quasars(map_3d,mapsize,qso,size_stack)
-        self.plot_stack(stack,nameout,deltamin,deltamax,size_stack,los_quasar=diffz)
-        self.save_a_stack(stack,"stack_{}.bin".format(nameout),los_z = diffz)
-        return(stack)
-
-    def create_and_plot_stack_galaxy(self,mapsize,galaxy_name_file,galaxy_type_file,galaxy_zmin,galaxy_zmax,galaxy_confidence,galaxy_std,galaxy_omega_m,galaxy_mag_max,size_stack,deltamin,deltamax,nameout):
-        import Picca
-        map_3d = self.readClamatoMapFile()
-        galaxy = Picca.Treat_HSC(self.pwd,galaxy_name_file,galaxy_type_file,galaxy_zmin,galaxy_zmax,galaxy_confidence,galaxy_std,galaxy_omega_m)
-        dict_galaxy = galaxy.get_galaxy(maxlist="list_of_maximums_of_data_cube.pickle",mag_max=galaxy_mag_max)
-        stack = self.stack_galaxy(map_3d,mapsize,dict_galaxy,size_stack)
-        self.plot_stack(stack,nameout,deltamin,deltamax,size_stack)
-        self.save_a_stack(stack,"stack_{}.bin".format(nameout))
-
-
-    def merge_and_compute_ellipticity(self,list_stacks,sizemap,name_stack_merged,deltamin,deltamax,size_stack,shape_stack,signe = 1, ncont = 4,ticks=True,length_between_los_and_quasar=None):
-        Mpcperpixels = np.array(sizemap)/(np.array(self.shapeMap)-1)
-        stack = self.merge_stacks(list_stacks,shape_stack,name_stack_merged)
-        nameout = name_stack_merged.split(".bin")[0]
-        (elipticity,p) = self.compute_stack_ellipticity(stack,Mpcperpixels,deltamin,deltamax,nameout,size_stack,shape_stack,signe=signe,ncont=ncont,ticks=ticks,length_between_los_and_quasar=length_between_los_and_quasar)
-        return(elipticity)
 
 
     def compute_jack_knife_ellipticity(self,snap,list_stacks,list_stacks_snap,sizemap,name_stack_merged,name_mean_stack_snap,deltamin,deltamax,size_stack,shape_stack,signe = 1, ncont = 4,ticks=True,length_between_los_and_quasar=None):

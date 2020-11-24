@@ -26,6 +26,7 @@ import scipy
 import fitsio
 from scipy.ndimage.filters import gaussian_filter
 from scipy import interpolate
+from scipy.ndimage import map_coordinates
 
 
 
@@ -79,7 +80,7 @@ def convert_cartesian_to_sky(X,Y,Z,method,inv_rcomov=None,inv_distang=None,dista
     """Mpc.h-1 to radians"""
     if(method == "full_angle"):
         (RA,DEC,z)= convert_cartesian_to_sky_full_angle(X,Y,Z,inv_rcomov)
-    if(method == "full_angle"):
+    if(method == "full"):
         (RA,DEC,z)= convert_cartesian_to_sky_full(X,Y,Z,inv_rcomov)
     elif(method == "middle"):
         (RA,DEC,z)= convert_cartesian_to_sky_middle(X,Y,Z,inv_rcomov,distang,suplementary_parameters[0])
@@ -277,6 +278,34 @@ def bin_ndarray(ndarray, new_shape, operation='mean'):
                 newndarray[j] = np.average(ndarray[j],axis=0,weights=gaussian_weights)
             ndarray =newndarray
     return ndarray
+
+
+def interpolate_map(interpolation_method,map_array,coord):
+    if(interpolation_method.upper() == "NEAREST"):
+        coord = np.around(coord,decimals=0).astype(int)
+        DM_map = map_array[coord[:,:,:,0],coord[:,:,:,1],coord[:,:,:,2]]
+    elif(interpolation_method.upper() == "LINEAR"):
+        points =  coord.reshape(coord.shape[0]*coord.shape[1]*coord.shape[2],3)
+        DM_map = map_coordinates(map_array, np.transpose(points), order=1).reshape((coord.shape[0],coord.shape[1],coord.shape[2]))
+    elif(interpolation_method.upper() == "SPLINE"):
+        points =  coord.reshape(coord.shape[0]*coord.shape[1]*coord.shape[2],3)
+        DM_map = map_coordinates(map_array, np.transpose(points), order=2).reshape((coord.shape[0],coord.shape[1],coord.shape[2]))
+    else :
+        raise ValueError("Please select NEAREST, LINEAR or SPLINE as interpolation_method")
+    return(DM_map)
+
+
+def interpolate_and_fill_map(interpolation_method,map_to_fill,map_array,coord,mask):
+    if(interpolation_method.upper() == "NEAREST"):
+        coord = np.around(coord,decimals=0).astype(int)
+        map_to_fill[:,:,:][mask] = map_array[coord[:,:,:,0][mask],coord[:,:,:,1][mask],coord[:,:,:,2][mask]]
+    elif(interpolation_method.upper() == "LINEAR"):
+        map_to_fill[:,:,:][mask] = map_coordinates(map_array, np.transpose(coord[mask]), order=1)
+    elif(interpolation_method.upper() == "SPLINE"):
+        map_to_fill[:,:,:][mask] = map_coordinates(map_array, np.transpose(coord[mask]), order=2)
+    else :
+        raise ValueError("Please select NEAREST, LINEAR or SPLINE as interpolation_method")
+
 
 
 def gaussian_smoothing(mapdata,sigma):
