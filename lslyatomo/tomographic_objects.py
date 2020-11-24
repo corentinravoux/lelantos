@@ -1016,32 +1016,62 @@ class Delta(object):
 
 
     def create_fi(self,delta):
-        nrows = len(delta.de)
+        nrows = len(Delta.delta(delta))
         head = {}
         if  self.pk1d_type :
             h = np.zeros(nrows, dtype=[('LOGLAM','f8'),('DELTA','f8'),('IVAR','f8'),('DIFF','f8')])
-            h['DELTA'] =delta.de
-            h['LOGLAM'] = delta.ll
-            h['IVAR'] = delta.iv
-            h['DIFF'] = delta.diff
-            head['MEANSNR'] = delta.mean_SNR
-            head['MEANRESO'] = delta.mean_reso
-            head['MEANZ'] = delta.mean_z
-            head['DLL'] = delta.dll
+            h['DELTA'] =Delta.delta(delta)
+            h['LOGLAM'] = Delta.log_lambda(delta)
+            h['IVAR'] = Delta.ivar(delta)
+            h['DIFF'] = Delta.exposures_diff(delta)
+            head['MEANSNR'] = Delta.mean_snr(delta)
+            head['MEANRESO'] = Delta.mean_reso(delta)
+            head['MEANZ'] = Delta.mean_z(delta)
+            head['DLL'] = Delta.delta_log_lambda(delta)
         else :
             h = np.zeros(nrows, dtype=[('LOGLAM','f8'),('DELTA','f8'),('WEIGHT','f8'),('CONT','f8')])
-            h['DELTA'] =delta.de
-            h['LOGLAM'] = delta.ll
-            h['WEIGHT'] = delta.we
-            h['CONT'] = delta.co
-        head['THING_ID'] = delta.thid
-        head['RA'] = delta.ra
-        head['DEC'] = delta.dec
-        head['Z']  = delta.zqso
-        head['PLATE'] = delta.plate
-        head['MJD'] = delta.mjd
-        head['FIBERID'] = delta.fid
+            h['DELTA'] =Delta.delta(delta)
+            h['LOGLAM'] = Delta.log_lambda(delta)
+            h['WEIGHT'] = Delta.weights(delta)
+            h['CONT'] = Delta.cont(delta)
+        head['THING_ID'] = Delta.thingid(delta)
+        head['RA'] = Delta.ra(delta)
+        head['DEC'] = Delta.dec(delta)
+        head['Z']  = Delta.z_qso(delta)
+        head['PLATE'] = Delta.plate(delta)
+        head['MJD'] = Delta.mjd(delta)
+        head['FIBERID'] = Delta.fiberid(delta)
         return(h,head)
+
+    def return_params(self,center_ra=True):
+        ra, dec, z, delta, sigma,zqso,id = [],[],[],[],[],[],[]
+        for j in range(1,len(self.delta_file)):
+            delta_line = self.read_line(j)
+            zqso.append(Delta.z_qso(delta_line))
+            if((Delta.ra(delta_line) > np.pi)&(center_ra)):ra.append(Delta.ra(delta_line)-2*np.pi)
+            else : ra.append(Delta.ra(delta_line))
+            dec.append(Delta.dec(delta_line))
+            if(Delta.ivar(delta_line) is not None): sigma.append(1/np.sqrt(np.asarray(Delta.ivar(delta_line))))
+            else : sigma.append(np.array([0.0 for i in range(len(Delta.delta(delta_line)))]))
+            delta.append(Delta.delta(delta_line))
+            id.append(Delta.thingid(delta_line))
+            z.append(((10**Delta.log_lambda(delta_line) / utils.lambdaLy)-1))
+        return(np.array(ra),
+               np.array(dec),
+               np.asarray(z),
+               np.array(zqso),
+               np.array(id),
+               np.asarray(sigma),
+               np.asarray(delta))
+
+    def return_id(self):
+        id = []
+        for i in range(1,len(self.delta_file)):
+            delta = self.read_line(i)
+            id.append(Delta.thingid(delta))
+        return(id)
+
+
 
 
     def write_from_delta_list(self):
@@ -1056,6 +1086,106 @@ class Delta(object):
 
 
 
+    @staticmethod
+    def ra(delta):
+        return(delta.ra)
+
+    @staticmethod
+    def dec(delta):
+        return(delta.dec)
+
+    @staticmethod
+    def thingid(delta):
+        try:
+            return(delta.thid)
+        except:
+            return(delta.thingid)
+
+    @staticmethod
+    def z_qso(delta):
+        try:
+            return(delta.zqso)
+        except:
+            return(delta.z_qso)
+
+    @staticmethod
+    def ivar(delta):
+        try:
+            return(delta.iv)
+        except:
+            return(delta.ivar)
+
+    @staticmethod
+    def delta(delta):
+        try:
+            return(delta.de)
+        except:
+            return(delta.delta)
+
+    @staticmethod
+    def log_lambda(delta):
+        try:
+            return(delta.ll)
+        except:
+            return(delta.log_lambda)
+
+    @staticmethod
+    def exposures_diff(delta):
+        try:
+            return(delta.diff)
+        except:
+            return(delta.exposures_diff)
+
+    @staticmethod
+    def mean_snr(delta):
+        try:
+            return(delta.mean_SNR)
+        except:
+            return(delta.mean_snr)
+
+    @staticmethod
+    def mean_reso(delta):
+        return(delta.mean_reso)
+
+    @staticmethod
+    def mean_z(delta):
+        return(delta.mean_z)
+
+    @staticmethod
+    def delta_log_lambda(delta):
+        try:
+            return(delta.dll)
+        except:
+            return(delta.delta_log_lambda)
+
+    @staticmethod
+    def plate(delta):
+        return(delta.plate)
+
+    @staticmethod
+    def mjd(delta):
+        return(delta.mjd)
+
+    @staticmethod
+    def fiberid(delta):
+        try:
+            return(delta.fid)
+        except:
+            return(delta.fiberid)
+
+    @staticmethod
+    def cont(delta):
+        try:
+            return(delta.co)
+        except:
+            return(delta.cont)
+
+    @staticmethod
+    def weights(delta):
+        try:
+            return(delta.we)
+        except:
+            return(delta.weights)
 
 #############################################################################
 #############################################################################

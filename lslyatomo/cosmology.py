@@ -40,64 +40,51 @@ from lslyatomo import tomographic_objects
 
 
 
-
-# CR - to move to tomographic_objects + deal with normaliization of picca
 def get_deltas(namefile,center_ra=True):
     """ Extract delta properties """
-    ra, dec, z, deltas, sigmas,zqsos,ids = [],[],[],[],[],[],[]
+    ras, decs, redshifts,redshift_qsos,ids, sigmas, deltas = [],[],[],[],[],[],[]
     for i in range(len(namefile)):
         delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
         delta_tomo.read()
-        for j in range(1,len(delta_tomo.delta_file)):
-            delta = delta_tomo.read_line(j)
-            zqsos.append(delta.zqso)
-            if((delta.ra > np.pi)&(center_ra)):ra.append(delta.ra-2*np.pi)
-            else : ra.append(delta.ra)
-            dec.append(delta.dec)
-            if(delta.iv is not None): sigmas.append(1/np.sqrt(np.asarray(delta.iv)))
-            else : sigmas.append(np.array([0.0 for i in range(len(delta.de))]))
-            deltas.append(delta.de)
-            ids.append(delta.thid)
-            z.append(((10**delta.ll / utils.lambdaLy)-1))
+        ra,dec,redshift,redshift_qso,id,sigma,delta = delta_tomo.return_params(center_ra=center_ra)
+        ras.append(ra)
+        decs.append(dec)
+        redshifts.append(redshift)
+        redshift_qsos.append(redshift_qso)
+        ids.append(id)
+        sigmas.append(sigma)
+        deltas.append(delta)
         delta_tomo.close()
-    return(np.array(ra),np.array(dec),np.asarray(z),np.array(zqsos),np.array(ids),np.asarray(sigmas),np.asarray(deltas))
+    return(np.concatenate(ras),
+           np.concatenate(decs),
+           np.concatenate(redshifts),
+           np.concatenate(redshift_qsos),
+           np.concatenate(ids),
+           np.concatenate(sigmas),
+           np.concatenate(deltas))
+
+
+
 
 
 def get_merged_multiple_exposure_deltas(namefile):
     """ Merge deltas with repeated observation"""
     # Pack LOS by Id in the dict Deltas
-    ra, dec, z, deltas, sigmas,zqso,Idlist = [],[],[],[],[],[],[],[]
-    for i in range(len(namefile)):
-        delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
-        delta_tomo.read()
-        for j in range(1,len(delta_tomo.delta_file)):
-            Delta = delta_tomo.read_line(j)
-            Idlist.append(Delta.thid)
-        delta_tomo.close()
-    Idlist = list(set(Idlist))
-    Deltas = {}
-    for i in range(len(Idlist)):
-        Deltas[Idlist[i]] = []
-        for j in range(len(namefile)):
-            delta_tomo = tomographic_objects.Delta(name=namefile[j],pk1d_type=True)
-            delta_tomo.read()
-            for k in range(1,len(delta_tomo.delta_file)):
-                Delta = delta_tomo.read_line(k)
-                if(Delta.thid == Idlist[i]):
-                    Deltas[Idlist[i]].append(Delta)
-            delta_tomo.close()
+    ra, dec, z, deltas, sigmas,zqso = [],[],[],[],[],[],[]
+    (Deltas,ids) = get_id_list(namefile)
+
     # For each pack of LOS
-    for i in range(len(Idlist)):
+    for i in range(len(ids)):
 
         # Get the data
-        zqso.append(Deltas[Idlist[i]][0].zqso)
-        ra.append(Deltas[Idlist[i]][0].ra)
-        dec.append(Deltas[Idlist[i]][0].dec)
+        zqso.append(tomographic_objects.Delta.z_qso(Deltas[ids[i]][0]))
+        ra.append(tomographic_objects.Delta.ra(Deltas[ids[i]][0]))
+        dec.append(tomographic_objects.Delta.dec(Deltas[ids[i]][0]))
         listsigmas,listz,listdelta = [],[],[]
-        for j in range(len(Deltas[Idlist[i]])):
-            listsigmas.append(1/np.sqrt(np.asarray(Deltas[Idlist[i]][j].iv)))
-            listdelta.append(Deltas[Idlist[i]][j].de)
-            listz.append(((10**np.asarray(Deltas[Idlist[i]][j].ll) / utils.lambdaLy)-1))
+        for j in range(len(Deltas[ids[i]])):
+            listsigmas.append(1/np.sqrt(np.asarray(tomographic_objects.Delta.ivar(Deltas[ids[i]][j]))))
+            listdelta.append(tomographic_objects.Delta.delta(Deltas[ids[i]][j]))
+            listz.append(((10**np.asarray(tomographic_objects.Delta.log_lambda(Deltas[ids[i]][j])) / utils.lambdaLy)-1))
 
         # Get the list of common elements in the pack to have minimum and maximum redshifts
         zmin,zmax = 0, 10**10
@@ -178,12 +165,34 @@ def get_merged_multiple_exposure_deltas(namefile):
         deltas.append(deltamerged)
         z.append(zmerged)
         sigmas.append(sigmamerged)
-    return(np.array(ra),np.array(dec),np.asarray(z),np.array(zqso),np.array(Idlist),np.asarray(sigmas),np.asarray(deltas))
+    return(np.array(ra),np.array(dec),np.asarray(z),np.array(zqso),np.array(ids),np.asarray(sigmas),np.asarray(deltas))
 
 
 
 
 
+def get_id_list(namefile):
+    ids = []
+    for i in range(len(namefile)):
+        delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
+        delta_tomo.read()
+        id = delta_tomo.return_id()
+        ids.append(id)
+        delta_tomo.close()
+    ids = np.concatenate(ids)
+    ids = list(set(ids))
+    Deltas = {}
+    for i in range(len(ids)):
+        Deltas[ids[i]] = []
+        for j in range(len(namefile)):
+            delta_tomo = tomographic_objects.Delta(name=namefile[j],pk1d_type=True)
+            delta_tomo.read()
+            for k in range(1,len(delta_tomo.delta_file)):
+                delta = delta_tomo.read_line(k)
+                if(tomographic_objects.Delta.thingid(delta) == ids[i]):
+                    Deltas[ids[i]].append(delta)
+            delta_tomo.close()
+    return(Deltas,ids)
 
 
 
