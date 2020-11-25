@@ -556,10 +556,37 @@ class TomographyStack(object):
             self.shape_stack = shape_stack
 
     def stack(self):
+        # stack = tomographic_objects.StackMap.init_by_tomographic_map_simple(self.tomographic_map,self.catalog,self.size_stack,name=self.name_stack)
         stack = tomographic_objects.StackMap.init_by_tomographic_map(self.tomographic_map,self.catalog,self.size_stack,self.shape_stack,interpolation_method=self.interpolation_method,name=self.name_stack,normalized=self.normalized,coordinate_convert=self.coordinate_convert)
         stack.write_property_file(self.property_file_stack)
         stack.write()
         self.stack = stack
+
+
+
+    # def stack_voids(self):
+    #     size_map = self.tomographic_map.size
+    #     shapeMap = self.tomographic_map.shape
+    #     map_3D = self.tomographic_map.map_array
+    #     size_stack = self.size_stack
+    #     coord = self.catalog.coord
+    #     voids = coord
+    #     number_Mpc_per_pixels = np.array(size_map)/(np.array(shapeMap)-1)
+    #     number_Mpc_per_pixels = np.array(size_map)/(np.array(shapeMap))
+    #     shape_stack = (np.round(size_stack/number_Mpc_per_pixels,0)).astype(int)
+    #     index_voids = np.zeros(len(voids))
+    #     index_voids = (np.round(voids/number_Mpc_per_pixels,0)).astype(int)
+    #     mask = (index_voids[:,0] < shape_stack[0])|(index_voids[:,0] >= shapeMap[0] - shape_stack[0])
+    #     mask |=(index_voids[:,1] < shape_stack[1])|(index_voids[:,1] >= shapeMap[1] - shape_stack[1])
+    #     mask |=(index_voids[:,2] < shape_stack[2])|(index_voids[:,2] >= shapeMap[2] - shape_stack[2])
+    #     clean_voids = index_voids[~mask]
+    #     nb_void = len(clean_voids)
+    #     local_maps = np.zeros((nb_void,2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1))
+    #     for i in range(nb_void):
+    #         local_maps[i] = map_3D[clean_voids[i][0]-shape_stack[0]:clean_voids[i][0]+shape_stack[0]+1,clean_voids[i][1]-shape_stack[1]:clean_voids[i][1]+shape_stack[1]+1,clean_voids[i][2]-shape_stack[2]:clean_voids[i][2]+shape_stack[2]+1]
+    #     stack = np.mean(local_maps,axis=0)
+    #     print(shape_stack)
+    #     stack.tofile(self.name_stack)
 
 
 

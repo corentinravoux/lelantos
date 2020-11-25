@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from lslyatomo import tomographic_objects
 import argparse
 

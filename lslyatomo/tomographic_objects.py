@@ -485,7 +485,8 @@ class StackMap(TomographicMap):
         stack = np.mean(local_maps,axis=0)
         boundary_cartesian_coord = None
         boundary_sky_coord = None
-        return(cls(tomographic_map=tomographic_map,catalog=catalog,map_array=stack,name=name,shape=shape_stack,size=size_stack,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=tomographic_map.coordinate_transform,property_file=None))
+        shape = (2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1)
+        return(cls(tomographic_map=tomographic_map,catalog=catalog,map_array=stack,name=name,shape=shape,size=(size_stack,size_stack,size_stack),boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=tomographic_map.coordinate_transform,property_file=None))
 
 
     @classmethod
@@ -525,11 +526,12 @@ class StackMap(TomographicMap):
         boundary_sky_coord = None
         if(normalized):
             size_stack = size_stack / float(min_radius)
+        shape = (2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1)
         return(cls(tomographic_map=tomographic_map,
                    catalog=catalog,
                    map_array=stack,
                    name=name,
-                   shape=shape_stack,size=(size_stack,size_stack,size_stack),
+                   shape=shape,size=(size_stack,size_stack,size_stack),
                    boundary_cartesian_coord=boundary_cartesian_coord,
                    boundary_sky_coord=boundary_sky_coord,
                    coordinate_transform=tomographic_map.coordinate_transform,
@@ -1150,8 +1152,8 @@ class Catalog(object):
         if("XMAX" in catalog[1].read_header()):
             xmax = catalog[1].read_header()["XMAX"]
             xmin = catalog[1].read_header()["XMIN"]
-            ymin = catalog[1].read_header()["YMAX"]
-            ymax = catalog[1].read_header()["YMIN"]
+            ymax = catalog[1].read_header()["YMAX"]
+            ymin = catalog[1].read_header()["YMIN"]
             zmax = catalog[1].read_header()["ZMAX"]
             zmin = catalog[1].read_header()["ZMIN"]
             boundary_cartesian_coord = ((xmin,ymin,zmin),(xmax,ymax,zmax))
@@ -1713,7 +1715,7 @@ class VoidCatalog(Catalog):
         if(self.central_value is not None):
             log.add_array_statistics(self.central_value,"void central value")
         if(self.mean_value is not None):
-            log.add_array_statistics(self.central_value,"void average value")
+            log.add_array_statistics(self.mean_value,"void average value")
         if(self.filling_factor is not None):
             log.add(f"Filling factor of the void catalog: {self.filling_factor}")
         if(self.coordinate_transform is not None):
@@ -1841,10 +1843,10 @@ class VoidCatalog(Catalog):
 
     def compute_cross_corr_parameters(self):
         self.convert_to_sky()
-        redshift = self.coord[:,2]
+        redshift = self.coord[:,2].copy()
         self.convert_to_cartesian()
         self.convert_to_absolute_coordinates()
-        X,Y,Z = self.coord[:,0],self.coord[:,1],self.coord[:,2]
+        X,Y,Z = self.coord[:,0].copy(),self.coord[:,1].copy(),self.coord[:,2].copy()
         self.convert_to_normalized_coordinates()
         void_coords = np.transpose(np.stack([X,Y,Z,self.weights,redshift]))
         return(void_coords)
