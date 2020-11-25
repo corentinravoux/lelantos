@@ -1839,9 +1839,15 @@ class VoidCatalog(Catalog):
         return(mask_cut)
 
 
-    def compute_cross_corr_parameters(self,):
-        x = 3
-        return()
+    def compute_cross_corr_parameters(self):
+        self.convert_to_sky()
+        redshift = self.coord[:,2]
+        self.convert_to_cartesian()
+        self.convert_to_absolute_coordinates()
+        X,Y,Z = self.coord[:,0],self.coord[:,1],self.coord[:,2]
+        self.convert_to_normalized_coordinates()
+        void_coords = np.transpose(np.stack([X,Y,Z,self.weights,redshift]))
+        return(void_coords)
 
     def get_delta_void(self,rmin,rmax,nr,nameout,name_map,map_property_file):
         if(os.path.isfile("{}_rmin{}_rmax{}_nr{}.fits".format(nameout,rmin,rmax,nr))):
