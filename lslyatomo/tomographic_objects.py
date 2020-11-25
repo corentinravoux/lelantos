@@ -1104,11 +1104,15 @@ class Delta(object):
 class Catalog(object):
 
 
-    def __init__(self,name=None,coord=None,primary_key=None,catalog_type="sky"):
+    def __init__(self,name=None,coord=None,primary_key=None,catalog_type="sky",coordinate_transform=None,Omega_m=None,boundary_cartesian_coord=None,boundary_sky_coord=None):
         self.name = name
         self.coord = coord
         self.primary_key = primary_key
         self.catalog_type = catalog_type
+        self.coordinate_transform = coordinate_transform
+        self.Omega_m = Omega_m
+        self.boundary_cartesian_coord=boundary_cartesian_coord
+        self.boundary_sky_coord=boundary_sky_coord
 
     @classmethod
     def init_catalog_from_fits(cls,name,type_catalog):
@@ -1122,6 +1126,7 @@ class Catalog(object):
             return(DLACatalog.init_from_fits(name))
 
 
+
     @staticmethod
     def load_from_fits(name):
         if(name == None):
@@ -1130,57 +1135,139 @@ class Catalog(object):
             return(fitsio.FITS(name))
 
     @staticmethod
+    def load_header(catalog):
+        coordinate_transform,boundary_cartesian_coord,boundary_sky_coord, Omega_m = None, None, None, None
+        if("COORD_TRANSFORM" in catalog[1].read_header()): coordinate_transform = catalog[1].read_header()["COORD_TRANSFORM"]
+        if("OMEGA_M" in catalog[1].read_header()): Omega_m = catalog[1].read_header()["OMEGA_M"]
+        if("RAMAX" in catalog[1].read_header()):
+            ramax = catalog[1].read_header()["RAMAX"]
+            ramin = catalog[1].read_header()["RAMIN"]
+            decmax = catalog[1].read_header()["DECMAX"]
+            decmin = catalog[1].read_header()["DECMIN"]
+            redshiftmax = catalog[1].read_header()["REDMAX"]
+            redshiftmin = catalog[1].read_header()["REDMIN"]
+            boundary_sky_coord = ((ramin,decmin,redshiftmin),(ramax,decmax,redshiftmax))
+        if("XMAX" in catalog[1].read_header()):
+            xmax = catalog[1].read_header()["XMAX"]
+            xmin = catalog[1].read_header()["XMIN"]
+            ymin = catalog[1].read_header()["YMAX"]
+            ymax = catalog[1].read_header()["YMIN"]
+            zmax = catalog[1].read_header()["ZMAX"]
+            zmin = catalog[1].read_header()["ZMIN"]
+            boundary_cartesian_coord = ((xmin,ymin,zmin),(xmax,ymax,zmax))
+        return(coordinate_transform,boundary_cartesian_coord,boundary_sky_coord, Omega_m)
+
+
+    @staticmethod
     def close(catalog):
         catalog.close()
 
 
-    def convert_to_absolute_coordinates(self,map_property_file):
-        prop = MapPixelProperty(name=map_property_file)
-        prop.read()
+    def return_header(self):
+        head = {}
+        if(self.coordinate_transform is not None):
+            head["COORD_TRANSFORM"] = self.coordinate_transform
+        if(self.Omega_m is not None):
+            head["OMEGA_M"] = self.Omega_m
+        if(self.boundary_cartesian_coord is not None):
+            head["XMAX"] = self.boundary_cartesian_coord[1][0]
+            head["XMIN"] = self.boundary_cartesian_coord[0][0]
+            head["YMAX"] = self.boundary_cartesian_coord[1][1]
+            head["YMIN"] = self.boundary_cartesian_coord[0][1]
+            head["ZMAX"] = self.boundary_cartesian_coord[1][2]
+            head["ZMIN"] = self.boundary_cartesian_coord[0][2]
+        if(self.boundary_sky_coord is not None):
+            head["RAMAX"] = self.boundary_sky_coord[1][0]
+            head["RAMIN"] = self.boundary_sky_coord[0][0]
+            head["DECMAX"] = self.boundary_sky_coord[1][1]
+            head["DECMIN"] = self.boundary_sky_coord[0][1]
+            head["REDMAX"] = self.boundary_sky_coord[1][2]
+            head["REDMIN"] = self.boundary_sky_coord[0][2]
+        return(head)
+
+
+
+    def convert_to_absolute_coordinates(self,property_file=None):
+        if(property_file is not None):
+            raise Warning("A property file is used instead of the parameters of the catalog")
+            prop = MapPixelProperty(name=property_file)
+            prop.read()
+            boundary_cartesian_coord = prop.boundary_cartesian_coord
+            boundary_sky_coord = prop.boundary_sky_coord
+        else:
+            boundary_cartesian_coord = self.boundary_cartesian_coord
+            boundary_sky_coord = self.boundary_sky_coord
         if(self.catalog_type=="cartesian"):
-            boundary = prop.boundary_cartesian_coord
+            boundary = boundary_cartesian_coord
         if(self.catalog_type=="sky"):
-            boundary = prop.boundary_sky_coord
+            boundary = boundary_sky_coord
         self.coord[:,0] = self.coord[:,0]  + boundary[0][0]
         self.coord[:,1] = self.coord[:,1]  + boundary[0][1]
         self.coord[:,2] = self.coord[:,2]  + boundary[0][2]
 
-    def convert_to_normalized_coordinates(self,map_property_file):
-        prop = MapPixelProperty(name=map_property_file)
-        prop.read()
+    def convert_to_normalized_coordinates(self,property_file=None):
+        if(property_file is not None):
+            raise Warning("A property file is used instead of the parameters of the catalog")
+            prop = MapPixelProperty(name=property_file)
+            prop.read()
+            boundary_cartesian_coord = prop.boundary_cartesian_coord
+            boundary_sky_coord = prop.boundary_sky_coord
+        else:
+            boundary_cartesian_coord = self.boundary_cartesian_coord
+            boundary_sky_coord = self.boundary_sky_coord
         if(self.catalog_type=="cartesian"):
-            boundary = prop.boundary_cartesian_coord
+            boundary = boundary_cartesian_coord
         if(self.catalog_type=="sky"):
-            boundary = prop.boundary_sky_coord
+            boundary = boundary_sky_coord
         self.coord[:,0] = self.coord[:,0]  - boundary[0][0]
         self.coord[:,1] = self.coord[:,1]  - boundary[0][1]
         self.coord[:,2] = self.coord[:,2]  - boundary[0][2]
 
-    def convert_to_sky(self,map_property_file,mode):
-        prop = MapPixelProperty(name=map_property_file)
-        prop.read()
-        self.convert_to_absolute_coordinates(map_property_file)
-        if((mode.lower()=="middle")|(mode.lower()=="full_angle")|(mode.lower()=="full")):
+    def convert_to_sky(self,property_file=None):
+        if(property_file is not None):
+            raise Warning("A property file is used instead of the parameters of the catalog")
+            prop = MapPixelProperty(name=property_file)
+            prop.read()
+            coordinate_transform = prop.coordinate_transform
             Omega_m = prop.Omega_m
-            suplementary_parameters = utils.return_suplementary_parameters(self.coordinate_transform,property=prop)
+            zmin = prop.boundary_sky_coord[0][2]
+            zmax = prop.boundary_sky_coord[1][2]
+        else:
+            coordinate_transform = self.coordinate_transform
+            Omega_m = self.Omega_m
+            zmin = self.boundary_sky_coord[0][2]
+            zmax = self.boundary_sky_coord[1][2]
+        self.convert_to_absolute_coordinates(property_file=property_file)
+        if((coordinate_transform.lower()=="middle")|(coordinate_transform.lower()=="full_angle")|(coordinate_transform.lower()=="full")):
+            suplementary_parameters = utils.return_suplementary_parameters(coordinate_transform,zmin=zmin,zmax=zmax)
             (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(Omega_m)
-            self.coord[:,0],self.coord[:,1],self.coord[:,2] = utils.convert_cartesian_to_sky(self.coord[:,0],self.coord[:,1],self.coord[:,2],mode,inv_rcomov=inv_rcomov,inv_distang=inv_distang,distang=distang,suplementary_parameters=suplementary_parameters)
+            self.coord[:,0],self.coord[:,1],self.coord[:,2] = utils.convert_cartesian_to_sky(self.coord[:,0],self.coord[:,1],self.coord[:,2],coordinate_transform,inv_rcomov=inv_rcomov,inv_distang=inv_distang,distang=distang,suplementary_parameters=suplementary_parameters)
             self.catalog_type = "sky"
         else:
             raise KeyError("Conversion mode not available, please choose between : middle, full or full_angle")
 
-    def convert_to_cartesian(self,map_property_file,mode):
-        prop = MapPixelProperty(name=map_property_file)
-        prop.read()
-        if((mode.lower()=="middle")|(mode.lower()=="full_angle")|(mode.lower()=="full")):
+    def convert_to_cartesian(self,property_file=None):
+        if(property_file is not None):
+            raise Warning("A property file is used instead of the parameters of the catalog")
+            prop = MapPixelProperty(name=property_file)
+            prop.read()
+            coordinate_transform = prop.coordinate_transform
             Omega_m = prop.Omega_m
-            suplementary_parameters = utils.return_suplementary_parameters(self.coordinate_transform,property=prop)
+            zmin = prop.boundary_sky_coord[0][2]
+            zmax = prop.boundary_sky_coord[1][2]
+        else:
+            coordinate_transform = self.coordinate_transform
+            Omega_m = self.Omega_m
+            zmin = self.boundary_sky_coord[0][2]
+            zmax = self.boundary_sky_coord[1][2]
+        if((coordinate_transform.lower()=="middle")|(coordinate_transform.lower()=="full_angle")|(coordinate_transform.lower()=="full")):
+            suplementary_parameters = utils.return_suplementary_parameters(coordinate_transform,zmin=zmin,zmax=zmax)
             (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(Omega_m)
-            self.coord[:,0],self.coord[:,1],self.coord[:,2] = utils.convert_sky_to_cartesian(self.coord[:,0],self.coord[:,1],self.coord[:,2],mode,rcomov=rcomov,distang=distang,suplementary_parameters=suplementary_parameters)
+            self.coord[:,0],self.coord[:,1],self.coord[:,2] = utils.convert_sky_to_cartesian(self.coord[:,0],self.coord[:,1],self.coord[:,2],coordinate_transform,rcomov=rcomov,distang=distang,suplementary_parameters=suplementary_parameters)
             self.catalog_type = "cartesian"
         else:
             raise KeyError("Conversion mode not available, please choose between : middle, full or full_angle")
-        self.convert_to_normalized_coordinates(map_property_file)
+        self.convert_to_normalized_coordinates(property_file=property_file)
 
 
 
@@ -1223,8 +1310,11 @@ class Catalog(object):
 
 class QSOCatalog(Catalog):
 
-    def __init__(self,name=None,coord=None,primary_key=None,plate=None,modern_julian_date=None,fiber_id=None,redshift_name="Z",catalog_type="sky"):
-        super(QSOCatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type)
+    def __init__(self,name=None,coord=None,primary_key=None,plate=None,
+                      modern_julian_date=None,fiber_id=None,redshift_name="Z",
+                      catalog_type="sky",coordinate_transform=None,Omega_m=None,
+                      boundary_cartesian_coord=None,boundary_sky_coord=None):
+        super(QSOCatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
         self.redshift_name = redshift_name
         self.plate = plate
         self.modern_julian_date = modern_julian_date
@@ -1235,6 +1325,7 @@ class QSOCatalog(Catalog):
     @classmethod
     def init_from_fits(cls,name,redshift_name="Z"):
         catalog = Catalog.load_from_fits(name)
+        (coordinate_transform,boundary_cartesian_coord,boundary_sky_coord, Omega_m) = Catalog.load_header(catalog)
         if("RA" in catalog[1].get_colnames()):
             coord_ra = catalog[1]["RA"][:]
             coord_dec = catalog[1]["DEC"][:]
@@ -1246,7 +1337,7 @@ class QSOCatalog(Catalog):
             fiber_id = catalog[1]["FIBERID"][:]
             catalog_type = "sky"
             Catalog.close(catalog)
-            return(cls(name=name,coord=coord,primary_key=primary_key,plate=plate,modern_julian_date=modern_julian_date,fiber_id=fiber_id,redshift_name=redshift_name,catalog_type=catalog_type))
+            return(cls(name=name,coord=coord,primary_key=primary_key,plate=plate,modern_julian_date=modern_julian_date,fiber_id=fiber_id,redshift_name=redshift_name,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
         if("X" in catalog[1].get_colnames()):
             coord_ra = catalog[1]["X"][:]
             coord_dec = catalog[1]["Y"][:]
@@ -1255,10 +1346,10 @@ class QSOCatalog(Catalog):
             primary_key = catalog[1]["THING_ID"][:]
             catalog_type = "cartesian"
             Catalog.close(catalog)
-            return(cls(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type))
+            return(cls(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
 
     @classmethod
-    def init_from_pixel_catalog(cls,quasar_pixels,name=None):
+    def init_from_pixel_catalog(cls,quasar_pixels,name=None,coordinate_transform=None,Omega_m=None,boundary_cartesian_coord=None,boundary_sky_coord=None):
         if(name is None): name ="qso_catalog.fits"
         coord_ra = quasar_pixels[:,0]
         coord_dec = quasar_pixels[:,1]
@@ -1266,7 +1357,7 @@ class QSOCatalog(Catalog):
         coord = np.vstack([coord_ra,coord_dec,coord_z]).transpose()
         primary_key = quasar_pixels[:,3]
         catalog_type = "cartesian"
-        return(cls(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type))
+        return(cls(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
 
     def cut_catalog_qso(self,coord_min=None,coord_max=None):
         mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=True)
@@ -1289,6 +1380,7 @@ class QSOCatalog(Catalog):
     def write(self):
         fits = fitsio.FITS(self.name,'rw',clobber=True)
         nrows = self.coord.shape[0]
+        head = self.return_header()
         if(self.catalog_type == "sky"):
             h = np.zeros(nrows, dtype=[('RA','f8'),('DEC','f8'),(self.redshift_name,'f8'),('THING_ID','i8'),('PLATE','i4'),('MJD','i4'),('FIBERID','i2')])
             h['RA'] = self.coord[:,0]
@@ -1304,6 +1396,7 @@ class QSOCatalog(Catalog):
             h['Y'] = self.coord[:,1]
             h['Z'] = self.coord[:,2]
             h['THING_ID'] =self.primary_key
+        fits.write(h,header=head)
         fits.write(h)
         fits.close()
 
@@ -1319,8 +1412,11 @@ class QSOCatalog(Catalog):
 
 class DLACatalog(Catalog):
 
-    def __init__(self,name=None,coord=None,primary_key=None,z_qso=None,confidence=None,nhi=None,catalog_type="sky"):
-        super(DLACatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type)
+    def __init__(self,name=None,coord=None,primary_key=None,z_qso=None,
+                      confidence=None,nhi=None,catalog_type="sky",
+                      coordinate_transform=None,Omega_m=None,
+                      boundary_cartesian_coord=None,boundary_sky_coord=None):
+        super(DLACatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
         self.z_qso=z_qso
         self.confidence=confidence
         self.nhi=nhi
@@ -1331,6 +1427,7 @@ class DLACatalog(Catalog):
     @classmethod
     def init_from_fits(cls,name):
         catalog = Catalog.load_from_fits(name)
+        (coordinate_transform,boundary_cartesian_coord,boundary_sky_coord, Omega_m) = Catalog.load_header(catalog)
         if("Z_DLA" in catalog["DLA_CAT"].get_colnames()):
             coord_z = catalog["DLA_CAT"]["Z_DLA"][:]
             z_qso = catalog["DLA_CAT"]["Z_QSO"][:]
@@ -1340,7 +1437,7 @@ class DLACatalog(Catalog):
             nhi_dla = catalog["DLA_CAT"]["NHI_DLA"][:]
             catalog_type = "sky"
             Catalog.close(catalog)
-            return(cls(name=name,coord=coord,primary_key=primary_key,z_qso=z_qso,confidence=conf_dla,nhi=nhi_dla,catalog_type=catalog_type))
+            return(cls(name=name,coord=coord,primary_key=primary_key,z_qso=z_qso,confidence=conf_dla,nhi=nhi_dla,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
         if("X" in catalog[1].get_colnames()):
             coord_ra = catalog["DLA_CAT"]["X"][:]
             coord_dec = catalog["DLA_CAT"]["Y"][:]
@@ -1349,10 +1446,10 @@ class DLACatalog(Catalog):
             z_qso = catalog["DLA_CAT"]['Z_QSO'][:]
             catalog_type = "cartesian"
             Catalog.close(catalog)
-            return(cls(name=name,coord=coord,z_qso=z_qso,catalog_type=catalog_type))
+            return(cls(name=name,coord=coord,z_qso=z_qso,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
 
     @classmethod
-    def init_from_pixel_catalog(cls,dla_pixels,name=None):
+    def init_from_pixel_catalog(cls,dla_pixels,name=None,coordinate_transform=None,Omega_m=None,boundary_cartesian_coord=None,boundary_sky_coord=None):
         if(name is None): name ="dla_catalog.fits"
         coord_ra = dla_pixels[:,0]
         coord_dec = dla_pixels[:,1]
@@ -1360,7 +1457,7 @@ class DLACatalog(Catalog):
         coord = np.vstack([coord_ra,coord_dec,coord_z]).transpose()
         z_qso = dla_pixels[:,3]
         catalog_type = "cartesian"
-        return(cls(name=name,coord=coord,z_qso=z_qso,catalog_type=catalog_type))
+        return(cls(name=name,coord=coord,z_qso=z_qso,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
 
 
 
@@ -1390,6 +1487,7 @@ class DLACatalog(Catalog):
     def write(self):
         fits = fitsio.FITS(self.name,'rw',clobber=True)
         nrows = len(self.coord_ra)
+        head = self.return_header()
         if(self.catalog_type == "sky"):
             h = np.zeros(nrows, dtype=[('THING_ID','i8'),('Z_QSO','f8'),('Z_DLA','f8'),('CONF_DLA','f8'),('NHI_DLA','f8')])
             h['THING_ID'] =self.primary_key
@@ -1403,14 +1501,15 @@ class DLACatalog(Catalog):
             h['Y'] = self.coord[:,2]
             h['Z'] = self.coord[:,3]
             h['Z_QSO'] = self.z_qso
-        fits.write(h)
+        fits.write(h,header=head)
         fits.close()
 
 
 
 class GalaxyCatalog(Catalog):
 
-    def __init__(self,name=None,coord=None,primary_key=None,confidence=None,standard_deviation=None,magnitude=None,catalog_type="sky"):
+    def __init__(self,name=None,coord=None,primary_key=None,confidence=None,
+                      standard_deviation=None,magnitude=None,catalog_type="sky"):
         super(GalaxyCatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type)
 
         self.confidence = confidence
@@ -1465,9 +1564,12 @@ class GalaxyCatalog(Catalog):
 
 class VoidCatalog(Catalog):
 
-    def __init__(self,name=None,coord=None,primary_key=None,radius=None,weights=None,crossing_param=None,central_value=None,filling_factor=None,mean_value=None,catalog_type="sky"):
-        super(VoidCatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type)
-
+    def __init__(self,name=None,coord=None,primary_key=None,radius=None,
+                      weights=None,crossing_param=None,central_value=None,
+                      filling_factor=None,mean_value=None,catalog_type="sky",
+                      coordinate_transform=None,Omega_m=None,
+                      boundary_cartesian_coord=None,boundary_sky_coord=None):
+        super(VoidCatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
         self.radius = radius
         self.crossing_param = crossing_param
         self.central_value = central_value
@@ -1481,6 +1583,7 @@ class VoidCatalog(Catalog):
     @classmethod
     def init_from_fits(cls,name):
         catalog = Catalog.load_from_fits(name)
+        (coordinate_transform,boundary_cartesian_coord,boundary_sky_coord, Omega_m) = Catalog.load_header(catalog)
         if("RA" in catalog[1].get_colnames()):
             coord_ra = catalog[1]["RA"][:]
             coord_dec = catalog[1]["DEC"][:]
@@ -1496,18 +1599,18 @@ class VoidCatalog(Catalog):
         radius = catalog[1]["R"][:]
         primary_key = catalog[1]["THING_ID"][:]
         weights = catalog[1]["WEIGHT"][:]
-        crossing_param, central_value, filling_factor = None, None, None
+        crossing_param, central_value, mean_value, filling_factor = None, None, None, None
         if("CROSSING" in catalog[1].get_colnames()): crossing_param = catalog[1]["CROSSING"][:]
         if("VALUE" in catalog[1].get_colnames()): central_value = catalog[1]["VALUE"][:]
         if("MEAN" in catalog[1].get_colnames()): mean_value = catalog[1]["MEAN"][:]
         if("FILLING_FACTOR" in catalog[1].read_header()): filling_factor = catalog[1].read_header()["FILLING_FACTOR"]
 
         Catalog.close(catalog)
-        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type))
+        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
 
 
     @classmethod
-    def init_from_dictionary(cls,name,radius,coord,catalog_type,other_arrays=None,other_array_names = None):
+    def init_from_dictionary(cls,name,radius,coord,catalog_type,coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord,other_arrays=None,other_array_names = None):
         central_value, weights, filling_factor, primary_key, crossing_param, mean_value = None, None, None, None, None, None
         if(other_array_names is not None):
             if("VALUE" in other_array_names):central_value = other_arrays[np.argwhere("VALUE" == np.asarray(other_array_names))[0][0]]
@@ -1516,7 +1619,7 @@ class VoidCatalog(Catalog):
             if("FILLING_FACTOR" in other_array_names):filling_factor = other_arrays[np.argwhere("FILLING_FACTOR" == np.asarray(other_array_names))[0][0]]
             if("THING_ID" in other_array_names):primary_key = other_arrays[np.argwhere("THING_ID" == np.asarray(other_array_names))[0][0]]
             if("CROSSING" in other_array_names):crossing_param = other_arrays[np.argwhere("CROSSING" == np.asarray(other_array_names))[0][0]]
-        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type))
+        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
 
 
     @classmethod
@@ -1532,14 +1635,32 @@ class VoidCatalog(Catalog):
         if(catalog[0].mean_value is not None):mean_value = np.concatenate([cat.mean_value for cat in catalog])
         if(catalog[0].weights is not None):weights = np.concatenate([cat.weights for cat in catalog])
         if(catalog[0].filling_factor is not None):filling_factor = np.mean([cat.filling_factor for cat in catalog])
-        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type))
+        if(catalog[0].coordinate_transform is not None):coordinate_transform = catalog[0].coordinate_transform
+        if(catalog[0].Omega_m is not None):Omega_m = catalog[0].Omega_m
+        if(catalog[0].boundary_sky_coord is not None):
+            minra = np.min([cat.boundary_sky_coord[0][0] for cat in catalog])
+            maxra = np.min([cat.boundary_sky_coord[1][0] for cat in catalog])
+            mindec = np.min([cat.boundary_sky_coord[0][1] for cat in catalog])
+            maxdec = np.min([cat.boundary_sky_coord[1][1] for cat in catalog])
+            minredshift = np.min([cat.boundary_sky_coord[0][2] for cat in catalog])
+            maxredshift = np.min([cat.boundary_sky_coord[1][2] for cat in catalog])
+            boundary_sky_coord = ((minra,mindec,minredshift),(maxra,maxdec,maxredshift))
+        if(catalog[0].boundary_cartesian_coord is not None):
+            minx = np.min([cat.boundary_cartesian_coord[0][0] for cat in catalog])
+            maxx = np.min([cat.boundary_cartesian_coord[1][0] for cat in catalog])
+            miny = np.min([cat.boundary_cartesian_coord[0][1] for cat in catalog])
+            maxy = np.min([cat.boundary_cartesian_coord[1][1] for cat in catalog])
+            minz = np.min([cat.boundary_cartesian_coord[0][2] for cat in catalog])
+            maxz = np.min([cat.boundary_cartesian_coord[1][2] for cat in catalog])
+            boundary_cartesian_coord = ((minx,miny,minz),(maxx,maxy,maxz))
+        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
 
 
 
 
     def write(self,qso_like=False):
         fits = fitsio.FITS(self.name,'rw',clobber=True)
-        head = {}
+        head = self.return_header()
         if(self.catalog_type.lower() == "sky"):
             h = self.create_qso_like_dictionary(qso_like=qso_like)
         elif(self.catalog_type.lower() == "cartesian"):
@@ -1583,7 +1704,6 @@ class VoidCatalog(Catalog):
 
 
 
-
     def print_void_statistics(self):
         log = self.print_statistics(close=False)
         if(self.radius is not None):
@@ -1596,7 +1716,10 @@ class VoidCatalog(Catalog):
             log.add_array_statistics(self.central_value,"void average value")
         if(self.filling_factor is not None):
             log.add(f"Filling factor of the void catalog: {self.filling_factor}")
-
+        if(self.coordinate_transform is not None):
+            log.add(f"Coordinate transformation of the void catalog: {self.coordinate_transform}")
+        if(self.Omega_m is not None):
+            log.add(f"Omega_m used for the void catalog: {self.Omega_m}")
 
 
     def compute_filling_factor(self,size=None,property_name=None):
@@ -1716,6 +1839,9 @@ class VoidCatalog(Catalog):
         return(mask_cut)
 
 
+    def compute_cross_corr_parameters(self,):
+        x = 3
+        return()
 
     def get_delta_void(self,rmin,rmax,nr,nameout,name_map,map_property_file):
         if(os.path.isfile("{}_rmin{}_rmax{}_nr{}.fits".format(nameout,rmin,rmax,nr))):

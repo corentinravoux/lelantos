@@ -68,7 +68,7 @@ class VoidFinder(object):
             (radius, coord_Mpc,other_arrays,other_array_names) = self.find_voids_sphere(self.tomographic_map)
         else :
             raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
-        self.save_voids(radius, coord_Mpc,other_arrays,other_array_names)
+        self.save_voids(radius, coord_Mpc,other_arrays,other_array_names,self.tomographic_map.coordinate_transform,self.tomographic_map.Omega_m,self.tomographic_map.boundary_cartesian_coord,self.tomographic_map.boundary_sky_coord)
         return(radius, coord_Mpc)
 
 
@@ -97,7 +97,7 @@ class VoidFinder(object):
             raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
         (radius, coord_Mpc,other_arrays,other_array_names) = self.merge_chunks(Chunks)
         new_coord_Mpc, new_radius, new_other_arrays = self.delete_voids(self.tomographic_map,radius,coord_Mpc,other_arrays=other_arrays,mpc=True)
-        self.save_voids(new_radius, new_coord_Mpc,new_other_arrays,other_array_names)
+        self.save_voids(new_radius, new_coord_Mpc,new_other_arrays,other_array_names,self.tomographic_map.coordinate_transform,self.tomographic_map.Omega_m,self.tomographic_map.boundary_cartesian_coord,self.tomographic_map.boundary_sky_coord)
         return(new_radius, new_coord_Mpc)
 
 
@@ -565,7 +565,7 @@ class VoidFinder(object):
 
 
 
-    def save_voids(self,radius,coord,other_arrays,other_array_names):
+    def save_voids(self,radius,coord,other_arrays,other_array_names,coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord):
         dict_void = {"R" : radius, "COORD" : coord}
         for i in range(len(other_arrays)):
             dict_void[other_array_names[i]] = other_arrays[i]
@@ -579,7 +579,7 @@ class VoidFinder(object):
             name = f"""Catalog_{name_out}_{self.params_void_finder["method"]}_{self.params_void_finder["threshold"]}threshold_{self.params_void_finder["dist_clusters"]}dist_clusters_{self.params_void_finder["minimal_radius"]}rmin_{self.delete_option}_deletion"""
         else :
             raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
-        void = tomographic_objects.VoidCatalog.init_from_dictionary(f"{name}.fits",radius,coord,"cartesian",other_arrays=other_arrays,other_array_names = other_array_names)
+        void = tomographic_objects.VoidCatalog.init_from_dictionary(f"{name}.fits",radius,coord,"cartesian",coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord,other_arrays=other_arrays,other_array_names = other_array_names)
         void.write()
 
 
