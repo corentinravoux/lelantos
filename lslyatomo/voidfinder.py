@@ -52,7 +52,23 @@ class VoidFinder(object):
 
         self.tomographic_map = tomographic_objects.TomographicMap.init_classic(name=map_name,shape=map_shape,size=map_size,property_file=property_file)
         self.tomographic_map.read()
-        self.log = utils.create_report_log(name=os.path.join(self.pwd,"Python_Report"))
+
+        log_name = f"void_finder_report_{self.get_name_catalog()}.txt"
+        self.log = utils.create_report_log(name=os.path.join(self.pwd,log_name))
+
+
+    def get_name_catalog(self):
+        if (self.find_cluster):
+            name_out= "Clusters"
+        else:
+            name_out= "Voids"
+        if(self.params_void_finder["method"]=="SPHERICAL"):
+            name = f"""_{name_out}_{self.params_void_finder["method"]}_{self.params_void_finder["threshold"]}threshold_{self.params_void_finder["average"]}average_{self.params_void_finder["minimal_radius"]}rmin_{self.delete_option}_deletion"""
+        elif(self.params_void_finder["method"]=="WATERSHED"):
+            name = f"""_{name_out}_{self.params_void_finder["method"]}_{self.params_void_finder["threshold"]}threshold_{self.params_void_finder["dist_clusters"]}dist_clusters_{self.params_void_finder["minimal_radius"]}rmin_{self.delete_option}_deletion"""
+        else :
+            raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
+        return(name)
 
 
     def find_voids(self):
@@ -569,22 +585,9 @@ class VoidFinder(object):
         dict_void = {"R" : radius, "COORD" : coord}
         for i in range(len(other_arrays)):
             dict_void[other_array_names[i]] = other_arrays[i]
-        if (self.find_cluster):
-            name_out= "Clusters"
-        else:
-            name_out= "Voids"
-        if(self.params_void_finder["method"]=="SPHERICAL"):
-            name = f"""Catalog_{name_out}_{self.params_void_finder["method"]}_{self.params_void_finder["threshold"]}threshold_{self.params_void_finder["average"]}average_{self.params_void_finder["minimal_radius"]}rmin_{self.delete_option}_deletion"""
-        elif(self.params_void_finder["method"]=="WATERSHED"):
-            name = f"""Catalog_{name_out}_{self.params_void_finder["method"]}_{self.params_void_finder["threshold"]}threshold_{self.params_void_finder["dist_clusters"]}dist_clusters_{self.params_void_finder["minimal_radius"]}rmin_{self.delete_option}_deletion"""
-        else :
-            raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
-        void = tomographic_objects.VoidCatalog.init_from_dictionary(f"{name}.fits",radius,coord,"cartesian",coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord,other_arrays=other_arrays,other_array_names = other_array_names)
+        name = f"Catalog_{self.get_name_catalog()}.fits"
+        void = tomographic_objects.VoidCatalog.init_from_dictionary(name,radius,coord,"cartesian",coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord,other_arrays=other_arrays,other_array_names = other_array_names)
         void.write()
-
-
-
-
 
 
 
