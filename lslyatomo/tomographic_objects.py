@@ -175,13 +175,6 @@ class TomographicMap(object):
             concatenate = np.concatenate([np.asarray(mapChunks[f'{i:03d}' + f'{j:03d}']) for j in range(numberChunks[1])],axis = 1)
             concatenateList.append(concatenate)
         merged_map_array = np.concatenate([concatenateList[i] for i in range(numberChunks[0])],axis = 0)
-        map_shape = merged_map_array.shape
-        map_size = (lx,ly,Dachshundparams[0]["lz"])
-        prop = MapPixelProperty(name=property_file)
-        prop.read()
-        prop.shape = map_shape
-        prop.size = map_size
-        prop.write()
         merged_map = cls.init_from_property_files(property_file,map_array=merged_map_array,name=name_map)
         return(merged_map)
 
@@ -217,7 +210,12 @@ class TomographicMap(object):
         listmap.tofile(self.name)
 
     def write_property_file(self,property_file_name):
-        property_file = MapPixelProperty(name=property_file_name,size=self.size,shape=self.shape,boundary_cartesian_coord=self.boundary_cartesian_coord,boundary_sky_coord=self.boundary_sky_coord,coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m)
+        property_file = MapPixelProperty(name=property_file_name,size=self.size,
+                                         shape=self.shape,
+                                         boundary_cartesian_coord=self.boundary_cartesian_coord,
+                                         boundary_sky_coord=self.boundary_sky_coord,
+                                         coordinate_transform=self.coordinate_transform,
+                                         Omega_m=self.Omega_m)
         property_file.write()
 
     def rebin_map(self,new_shape, operation='mean'):
@@ -296,6 +294,42 @@ class TomographicMap(object):
         self.writeClamatoMapFile(name_dist_map_out,new_dist_map)
 
 
+
+
+    def compute_pk3d(self,kmin,kmax,n_k,distance_map=None,criteria_distance_mask=None,log=False):
+        if((distance_map is not None)&(criteria_distance_mask is not None)):
+            self.mask_map_from_name(distance_map,criteria_distance_mask)
+
+        map_3D = self.map_array
+        map_fft_3D = np.fft.fftn(map_3D)
+        del map_3D
+        number_Mpc_per_pixels = self.mpc_per_pixel
+        kx = np.fft.fftfreq(map_fft_3D.shape[0],number_Mpc_per_pixels[0])
+        ky = np.fft.fftfreq(map_fft_3D.shape[1],number_Mpc_per_pixels[1])
+        kz = np.fft.fftfreq(map_fft_3D.shape[2],number_Mpc_per_pixels[2])
+        kx_space , ky_space, kz_space = np.meshgrid(kx,ky,kz)
+        del kx,ky,kz
+        normalization_factor = (number_Mpc_per_pixels[0]*number_Mpc_per_pixels[1]*number_Mpc_per_pixels[2])/(self.shapeMap[0]*self.shapeMap[1]*self.shapeMap[2])
+        power = normalization_factor * np.absolute(map_fft_3D)**2
+        norm_k = np.array(map_fft_3D.shape)
+        del map_fft_3D
+        norm_k = np.sqrt(kx_space[:,:,:]**2 + ky_space[:,:,:]**2 + kz_space[:,:,:]**2)
+        del kx_space,ky_space,kz_space
+        if(log):
+            k_space = np.logspace(kmin,kmax,n_k)
+        else :
+            k_space = np.linspace(np.min(norm_k),np.max(norm_k),n_k)
+        delta_k = (np.max(norm_k)-np.min(norm_k)) / n_k
+        Pk_3D = np.zeros(k_space.shape)
+        for i in range(len(Pk_3D)) :
+            mask = (norm_k < k_space[i] + delta_k)&(norm_k >= k_space[i])
+            Pk_3D[i] = np.nanmean(power[mask])
+        del power,norm_k, delta_k
+        mask2 = Pk_3D != -1
+        pk_3D_final = Pk_3D[mask2]
+        k_space_final = k_space[mask2]
+        del Pk_3D,k_space
+        return(k_space_final,pk_3D_final)
 
 
 

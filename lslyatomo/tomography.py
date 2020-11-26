@@ -32,11 +32,12 @@ def create_merged_map(launching_file_name,map_name,property_file):
     map_merged = tomographic_objects.TomographicMap.init_by_merging(launching_file_name,map_name,property_file)
     map_merged.write()
 
-def rebin_map(map_name,property_file,new_shape,new_name):
+def rebin_map(map_name,property_file,new_shape,new_name,new_prop_name,operation="mean"):
     map_class = tomographic_objects.TomographicMap.init_from_property_files(property_file,name=map_name)
     map_class.read()
-    map_class.rebin_map(new_shape)
+    map_class.rebin_map(new_shape, operation=operation)
     map_class.name = new_name
+    map_class.write_property_file(new_prop_name)
     map_class.write()
 
 def create_distance_map(map_name,pixel_file,property_file,nb_process=1,radius_local=50):
@@ -477,39 +478,9 @@ class TomographyPlot(object):
         return(corr,dist_range)
 
 
-
-    # CR - move to tomographic_objects ?
-    def compute_Pk3D(self,size_map,n_k,kmin,kmax,log=False,distance_mask=None,criteria_distance_mask=None,cut_plot=None):
-        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask,cut_plot=cut_plot)
-        self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask)
-
-        map_3D = tomographic_map.map_array
-        map_fft_3D = np.fft.fftn(map_3D)
-        number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
-        kx = np.fft.fftfreq(map_fft_3D.shape[0],number_Mpc_per_pixels[0])
-        ky = np.fft.fftfreq(map_fft_3D.shape[1],number_Mpc_per_pixels[1])
-        kz = np.fft.fftfreq(map_fft_3D.shape[2],number_Mpc_per_pixels[2])
-        kx_space , ky_space, kz_space = np.meshgrid(kx,ky,kz)
-        normalization_factor = (number_Mpc_per_pixels[0]*number_Mpc_per_pixels[1]*number_Mpc_per_pixels[2])/(self.shapeMap[0]*self.shapeMap[1]*self.shapeMap[2])
-        power = normalization_factor * np.absolute(map_fft_3D)**2
-        norm_k = np.array(map_fft_3D.shape)
-        norm_k = np.sqrt(kx_space[:,:,:]**2 + ky_space[:,:,:]**2 + kz_space[:,:,:]**2)
-        if(log):
-            k_space = np.logspace(kmin,kmax,n_k)
-        else :
-            k_space = np.linspace(np.min(norm_k),np.max(norm_k),n_k)
-        delta_k = (np.max(norm_k)-np.min(norm_k)) / n_k
-        Pk_3D = np.zeros(k_space.shape)
-        for i in range(len(Pk_3D)) :
-            mask = (norm_k < k_space[i] + delta_k)&(norm_k >= k_space[i])
-#            if(len(power[mask])==0):
-#                Pk_3D[i] = -1
-#            else :
-            Pk_3D[i] = np.mean(power[mask])
-        mask2 = Pk_3D != -1
-        pk_3D_final = Pk_3D[mask2]
-        k_space_final = k_space[mask2]
-        del kx,ky,kz,kx_space,ky_space,kz_space,power,norm_k,Pk_3D,delta_k,k_space,map_3D,map_fft_3D
+    def plot_pk3D(self,name_map,name_prop,n_k,kmin,kmax,log=False,distance_map=None,criteria_distance_mask=None):
+        tomographic_map = tomographic_objects.TomographicMap.init_from_property_files(name_prop,name=name_map)
+        (k_space_final,pk_3D_final) = tomographic_map.compute_pk3d(kmin,kmax,n_k,distance_map=distance_map,criteria_distance_mask=criteria_distance_mask,log=log)
         if(log):
             plt.semilogx(k_space_final,pk_3D_final)
         else :
@@ -635,27 +606,27 @@ class TomographyStack(object):
 
 
 
-    def compute_jack_knife_ellipticity(self,snap,list_stacks,list_stacks_snap,sizemap,name_stack_merged,name_mean_stack_snap,deltamin,deltamax,size_stack,shape_stack,signe = 1, ncont = 4,ticks=True,length_between_los_and_quasar=None):
-
-        mean_stack = []
-        for i in range(len(stack_name)):
-            stack = cls.init_stack_by_property_file(property_stack_name[i],name=stack_name)
-            stack.read()
-            mean_stack.append(stack.map_array)
-
-
-        ellipticities = {}
-        for i in range(len(snap)):
-            list_stacks_knife = list_stacks_snap.copy()
-            list_stacks_knife.remove(list_stacks_snap[i])
-            (elipticity) = self.merge_and_compute_ellipticity(list_stacks_knife,sizemap,name_mean_stack_snap[i],deltamin,deltamax,size_stack,shape_stack,signe = signe, ncont = ncont)
-            ellipticities[snap[i]] = elipticity
-        ellipticities["full"] = self.merge_and_compute_ellipticity(list_stacks,sizemap,name_stack_merged,deltamin,deltamax,size_stack,shape_stack,signe = signe, ncont = ncont)
-        sigma ={}
-        for el in ["x direction, y over z","y direction, x over z","z direction, x over y"]:
-            mean = ellipticities["full"][el]
-            Sum = 0
-            for s in snap :
-                Sum = Sum + (ellipticities[s][el] - mean)**2
-            sigma[el] = np.sqrt(Sum/(len(snap)*(len(snap)-1)))
-        return(ellipticities,sigma)
+    # def compute_jack_knife_ellipticity(self,snap,list_stacks,list_stacks_snap,sizemap,name_stack_merged,name_mean_stack_snap,deltamin,deltamax,size_stack,shape_stack,signe = 1, ncont = 4,ticks=True,length_between_los_and_quasar=None):
+    #
+    #     mean_stack = []
+    #     for i in range(len(stack_name)):
+    #         stack = cls.init_stack_by_property_file(property_stack_name[i],name=stack_name)
+    #         stack.read()
+    #         mean_stack.append(stack.map_array)
+    #
+    #
+    #     ellipticities = {}
+    #     for i in range(len(snap)):
+    #         list_stacks_knife = list_stacks_snap.copy()
+    #         list_stacks_knife.remove(list_stacks_snap[i])
+    #         (elipticity) = self.merge_and_compute_ellipticity(list_stacks_knife,sizemap,name_mean_stack_snap[i],deltamin,deltamax,size_stack,shape_stack,signe = signe, ncont = ncont)
+    #         ellipticities[snap[i]] = elipticity
+    #     ellipticities["full"] = self.merge_and_compute_ellipticity(list_stacks,sizemap,name_stack_merged,deltamin,deltamax,size_stack,shape_stack,signe = signe, ncont = ncont)
+    #     sigma ={}
+    #     for el in ["x direction, y over z","y direction, x over z","z direction, x over y"]:
+    #         mean = ellipticities["full"][el]
+    #         Sum = 0
+    #         for s in snap :
+    #             Sum = Sum + (ellipticities[s][el] - mean)**2
+    #         sigma[el] = np.sqrt(Sum/(len(snap)*(len(snap)-1)))
+    #     return(ellipticities,sigma)
