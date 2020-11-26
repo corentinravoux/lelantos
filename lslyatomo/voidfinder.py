@@ -63,9 +63,9 @@ class VoidFinder(object):
         else:
             name_out= "Voids"
         if(self.params_void_finder["method"]=="SPHERICAL"):
-            name = f"""_{name_out}_{self.params_void_finder["method"]}_{self.params_void_finder["threshold"]}threshold_{self.params_void_finder["average"]}average_{self.params_void_finder["minimal_radius"]}rmin_{self.delete_option}_deletion"""
+            name = f"""{name_out}_{self.params_void_finder["method"]}_{self.params_void_finder["threshold"]}threshold_{self.params_void_finder["average"]}average_{self.params_void_finder["minimal_radius"]}rmin_{self.delete_option}_deletion"""
         elif(self.params_void_finder["method"]=="WATERSHED"):
-            name = f"""_{name_out}_{self.params_void_finder["method"]}_{self.params_void_finder["threshold"]}threshold_{self.params_void_finder["dist_clusters"]}dist_clusters_{self.params_void_finder["minimal_radius"]}rmin_{self.delete_option}_deletion"""
+            name = f"""{name_out}_{self.params_void_finder["method"]}_{self.params_void_finder["threshold"]}threshold_{self.params_void_finder["dist_clusters"]}dist_clusters_{self.params_void_finder["minimal_radius"]}rmin_{self.delete_option}_deletion"""
         else :
             raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
         return(name)
