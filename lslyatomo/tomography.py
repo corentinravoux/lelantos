@@ -20,7 +20,6 @@ analysis.
 #############################################################################
 
 
-import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
@@ -181,15 +180,8 @@ class TomographyPlot(object):
 
     @staticmethod
     def get_direction_informations(direction,rotate,size_map):
-        if (direction.lower() == "x")|(direction.lower() == "ra"):
-            x_index, y_index, index_direction = 2, 1, 0
-        elif (direction.lower() == "y")|(direction.lower() == "dec"):
-            x_index, y_index, index_direction = 2, 0, 1
-        elif (direction.lower() == "z")|(direction.lower() == "redshift"):
-            x_index, y_index, index_direction = 1, 0, 2
-        if(rotate): x_index,y_index = y_index,x_index
-        index_dict = {0:"x",1:"y",2:"z"}
 
+        x_index,y_index,index_direction,index_dict = utils.get_direction_indexes(direction,rotate)
 
         if(rotate):extentmap = [0,size_map[x_index],0,size_map[y_index]]
         else:extentmap = [0,size_map[x_index],size_map[y_index],0]
@@ -250,7 +242,7 @@ class TomographyPlot(object):
 
 
     @staticmethod
-    def plot_slice(map_slice,extentmap,xlab,ylab,name,deltamin,deltamax,x_index,y_index,pixel_in=None,pixel_bis_in=None,qso_in=None,qso_bis_in=None,void_in=None,void_bis_in=None,galaxy_in=None,redshift_axis=False,tomographic_map=None,rotate=False,hd=False,xlim=None,ylim=None,**kwargs):
+    def plot_slice(map_slice,extentmap,xlab,ylab,name,deltamin,deltamax,x_index,y_index,pixel_in=None,pixel_bis_in=None,qso_in=None,qso_bis_in=None,void_in=None,void_bis_in=None,galaxy_in=None,redshift_axis=False,tomographic_map=None,rotate=False,hd=False,xlim=None,ylim=None,save_fig=True,**kwargs):
         plt.figure()
         fig = plt.gcf()
         ax = plt.gca()
@@ -272,12 +264,11 @@ class TomographyPlot(object):
 
         if(xlim is not None):plt.xlim(xlim)
         if(ylim is not None):plt.ylim(ylim)
-
-        if(hd):plt.savefig(f"{name}.pdf",format="pdf", dpi=200)
-        else:plt.savefig(f"{name}.pdf",format="pdf")
-
-        plt.show()
-        plt.close()
+        if(save_fig):
+            if(hd):plt.savefig(f"{name}.pdf",format="pdf", dpi=200)
+            else:plt.savefig(f"{name}.pdf",format="pdf")
+            plt.show()
+            plt.close()
 
 
     @staticmethod
@@ -556,52 +547,18 @@ class TomographyStack(object):
             self.shape_stack = shape_stack
 
     def stack(self):
-        # stack = tomographic_objects.StackMap.init_by_tomographic_map_simple(self.tomographic_map,self.catalog,self.size_stack,name=self.name_stack)
-        stack = tomographic_objects.StackMap.init_by_tomographic_map(self.tomographic_map,self.catalog,self.size_stack,self.shape_stack,interpolation_method=self.interpolation_method,name=self.name_stack,normalized=self.normalized,coordinate_convert=self.coordinate_convert)
-        stack.write_property_file(self.property_file_stack)
+        stack = tomographic_objects.StackMap.init_by_tomographic_map(self.tomographic_map,self.catalog,self.size_stack,
+                                                                     self.shape_stack,self.property_file_stack,
+                                                                     interpolation_method=self.interpolation_method,
+                                                                     name=self.name_stack,normalized=self.normalized,
+                                                                     coordinate_convert=self.coordinate_convert)
         stack.write()
         self.stack = stack
 
-
-
-    # def stack_voids(self):
-    #     size_map = self.tomographic_map.size
-    #     shapeMap = self.tomographic_map.shape
-    #     map_3D = self.tomographic_map.map_array
-    #     size_stack = self.size_stack
-    #     coord = self.catalog.coord
-    #     voids = coord
-    #     number_Mpc_per_pixels = np.array(size_map)/(np.array(shapeMap)-1)
-    #     number_Mpc_per_pixels = np.array(size_map)/(np.array(shapeMap))
-    #     shape_stack = (np.round(size_stack/number_Mpc_per_pixels,0)).astype(int)
-    #     index_voids = np.zeros(len(voids))
-    #     index_voids = (np.round(voids/number_Mpc_per_pixels,0)).astype(int)
-    #     mask = (index_voids[:,0] < shape_stack[0])|(index_voids[:,0] >= shapeMap[0] - shape_stack[0])
-    #     mask |=(index_voids[:,1] < shape_stack[1])|(index_voids[:,1] >= shapeMap[1] - shape_stack[1])
-    #     mask |=(index_voids[:,2] < shape_stack[2])|(index_voids[:,2] >= shapeMap[2] - shape_stack[2])
-    #     clean_voids = index_voids[~mask]
-    #     nb_void = len(clean_voids)
-    #     local_maps = np.zeros((nb_void,2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1))
-    #     for i in range(nb_void):
-    #         local_maps[i] = map_3D[clean_voids[i][0]-shape_stack[0]:clean_voids[i][0]+shape_stack[0]+1,clean_voids[i][1]-shape_stack[1]:clean_voids[i][1]+shape_stack[1]+1,clean_voids[i][2]-shape_stack[2]:clean_voids[i][2]+shape_stack[2]+1]
-    #     stack = np.mean(local_maps,axis=0)
-    #     print(shape_stack)
-    #     stack.tofile(self.name_stack)
-
-
-
-    # CR - to test
-    def compute_mean_distance_to_los(self,pixel_name):
-        pixel = tomographic_objects.Pixel.init_from_property_files(self.tomographic_map.property_file,name=pixel_name)
-        pixel.read()
-        x,y,z = pixel.repack_by_los()
-        diffz=np.zeros(len(self.catalog.coord.shape[0]))
-        for i in range(len(diffz)):
-            arg_array  = np.argwhere((self.catalog.coord[i,0] == x[:])&(self.catalog.coord[i,0] == y[:]))
-            if(len(arg_array)!=0):
-                arg = arg_array[0][0]
-                diffz[i] = self.catalog.coord[i,2] - z[arg][-1]
-        return(np.mean(diffz))
+    def merge_stack(self,stack_name,property_stack_name,name,property_name):
+        stack = tomographic_objects.StackMap.init_by_merging(stack_name,property_stack_name,name,property_name)
+        stack.write()
+        self.stack = stack
 
 
 
@@ -614,7 +571,7 @@ class TomographyStack(object):
 
 
     @staticmethod
-    def plot_stack(stack,name_plot,deltamin,deltamax,direction,los_quasar=None,rotate=False,**kwargs):
+    def plot_stack(stack,name_plot,deltamin,deltamax,direction,rotate=False,ellipticity=False,hd=False,los_quasar=None,**kwargs):
         (x_index, y_index, index_direction, extentmap, xlab, ylab) = TomographyPlot.get_direction_informations(direction,rotate,stack.size)
         if direction == "x":
             stack_slice = stack.map_array[stack.shape[0]//2,:,:]
@@ -629,141 +586,64 @@ class TomographyStack(object):
         extentmap = [-stack.size[0],+stack.size[0],-stack.size[0],+stack.size[0]]
         TomographyPlot.plot_slice(stack_slice,extentmap,xlab,ylab,name_plot,deltamin,deltamax,x_index,y_index,**kwargs)
 
-        # if(los_quasar is not None):
-        #     if (los_quasar < stack.size):
-        #         if((direction_normale=="x")|(direction_normale=="y")):
-        #             plt.plot([-stack.size,-los_quasar],[0,0],"r-")
-        # plt.savefig("stack_"+ name +"{}.pdf".format(direction_normale),format="pdf")
+        if(los_quasar is not None):
+            TomographyStack.plot_mean_los_distance(direction,stack,los_quasar=los_quasar)
+
+        if(ellipticity):
+            TomographyStack.plot_ellipticity(stack,stack_slice,x_index,y_index,direction,rotate,**kwargs)
+
+
+        if(hd):plt.savefig(f"stack_{name_plot}_{direction}.pdf",format="pdf", dpi=200)
+        else:plt.savefig(f"stack_{name_plot}_{direction}.pdf",format="pdf")
+        plt.show()
+        plt.close()
+
+
+    @staticmethod
+    def plot_mean_los_distance(direction,stack,los_quasar=None):
+        if(stack.mean_los_distance is None):
+            stack.compute_distance_to_los(los_quasar)
+        if (stack.mean_los_distance < stack.size):
+            if((direction=="x")|(direction=="y")):
+                plt.plot([-stack.size,-stack.mean_los_distance],[0,0],"r-")
 
 
 
-
-
-    ##### ELLIPTICITY ####
-    def merge_and_compute_ellipticity(self,list_stacks,sizemap,name_stack_merged,deltamin,deltamax,size_stack,shape_stack,signe = 1, ncont = 4,ticks=True,length_between_los_and_quasar=None):
-        Mpcperpixels = np.array(sizemap)/(np.array(self.shapeMap)-1)
-        stack = self.merge_stacks(list_stacks,shape_stack,name_stack_merged)
-        nameout = name_stack_merged.split(".bin")[0]
-        (elipticity,p) = self.compute_stack_ellipticity(stack,Mpcperpixels,deltamin,deltamax,nameout,size_stack,shape_stack,signe=signe,ncont=ncont,ticks=ticks,length_between_los_and_quasar=length_between_los_and_quasar)
-        return(elipticity)
-
-
-    def compute_stack_ellipticity(self,stack,Mpcperpixels,deltamin,deltamax,name,size_stack,shape_stack,signe=1,ncont=4,ticks=True,length_between_los_and_quasar=None):
-        elipticity = {}
-        for direction in ["x","y","z"]:
-            plt.figure()
-            if(direction == "x"):
-                Slice = np.transpose(stack[stack.shape[0]//2,:,:])
-                xlab = "Comoving distance in the y direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-                ylab = "Comoving distance in the z direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-            elif(direction == "y"):
-                Slice = np.transpose(stack[:,stack.shape[1]//2,:])
-                xlab = "Comoving distance in the x direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-                ylab = "Comoving distance in the z direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-            elif(direction == "z"):
-                Slice = np.transpose(stack[:,:,stack.shape[2]//2])
-                xlab = "Comoving distance in the x direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-                ylab = "Comoving distance in the y direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-            extentmap = [-size_stack,+size_stack,-size_stack,+size_stack]
-            binsx,binsy = Slice.shape[0],Slice.shape[1]
-            gauss = utils.gaussian_fitter_2d(signe * Slice)
-            p,success = gauss.FitGauss2D()
-            x,y=np.indices((binsx,binsy),dtype=np.float)
-            if(direction == "x"):
-                angle = p[5]
-                if((angle <45)&(angle>-45)):
-                    sigmay,sigmaz,iy,iz = p[4],p[3],1,2
-                elif((angle <135)&(angle>-135)):
-                    sigmay,sigmaz,iy,iz = p[3],p[4],2,1
-                else :
-                    sigmay,sigmaz,iy,iz = p[4],p[3],1,2
-                sigmay = (np.cos(np.radians(angle))**2 * Mpcperpixels[iy] + (np.sin(np.radians(angle))**2)* Mpcperpixels[iz])*sigmay
-                sigmaz = (np.cos(np.radians(angle))**2 * Mpcperpixels[iz] + (np.sin(np.radians(angle))**2)* Mpcperpixels[iy])*sigmaz
-                if((angle <45)&(angle>-45)):
-                    p[4],p[3] = sigmay,sigmaz
-                elif((angle <135)&(angle>-135)):
-                    p[3],p[4] = sigmay,sigmaz
-                else :
-                    p[4],p[3] = sigmay,sigmaz
-                xcenter,ycenter = (x - shape_stack[2]//2) * Mpcperpixels[2],-(y - shape_stack[1]//2) * Mpcperpixels[1]
-                elipticity["x direction, y over z"] = sigmay/sigmaz
-                elname ="sigmay/sigmaz = " + str(np.round(sigmay/sigmaz,2))
-            elif(direction == "y"):
-                angle = p[5]
-                if((angle <45)&(angle>-45)):
-                    sigmax,sigmaz,ix,iz = p[4],p[3],0,2
-                elif((angle <135)&(angle>-135)):
-                    sigmax,sigmaz,ix,iz = p[3],p[4],2,0
-                else :
-                    sigmax,sigmaz,ix,iz = p[4],p[3],0,2
-                sigmax = (np.cos(np.radians(angle))**2 * Mpcperpixels[ix] + (np.sin(np.radians(angle))**2)* Mpcperpixels[iz])*sigmax
-                sigmaz = (np.cos(np.radians(angle))**2 * Mpcperpixels[iz] + (np.sin(np.radians(angle))**2)* Mpcperpixels[ix])*sigmaz
-                if((angle <45)&(angle>-45)):
-                    p[4],p[3] = sigmax,sigmaz
-                elif((angle <135)&(angle>-135)):
-                    p[3],p[4] = sigmax,sigmaz
-                else :
-                    p[4],p[3] = sigmax,sigmaz
-                xcenter,ycenter = (x - shape_stack[0]//2) * Mpcperpixels[0],-(y - shape_stack[2]//2) * Mpcperpixels[2]
-                elipticity["y direction, x over z"] = sigmax/sigmaz
-                elname ="sigmax/sigmaz = " + str(np.round(sigmax/sigmaz,2))
-            elif(direction == "z"):
-                angle = p[5]
-                if((angle <45)&(angle>-45)):
-                    sigmax,sigmay,ix,iy = p[4],p[3],0,1
-                elif((angle <135)&(angle>-135)):
-                    sigmax,sigmay,ix,iy = p[3],p[4],1,0
-                else :
-                    sigmax,sigmay,ix,iy = p[4],p[3],0,1
-                sigmax = (np.cos(np.radians(angle))**2 * Mpcperpixels[ix] + (np.sin(np.radians(angle))**2)* Mpcperpixels[iy])*sigmax
-                sigmay = (np.cos(np.radians(angle))**2 * Mpcperpixels[iy] + (np.sin(np.radians(angle))**2)* Mpcperpixels[ix])*sigmay
-                if((angle <45)&(angle>-45)):
-                    p[4],p[3] = sigmax,sigmay
-                elif((angle <135)&(angle>-135)):
-                    p[3],p[4] = sigmax,sigmay
-                else :
-                    p[4],p[3] = sigmax,sigmay
-                xcenter,ycenter = (x - shape_stack[0]//2) * Mpcperpixels[0], -(y - shape_stack[1]//2) * Mpcperpixels[1]
-                elipticity["z direction, x over y"] = sigmax/sigmay
-                elname ="sigmax/sigmay = " + str(np.round(sigmax/sigmay,2))
-            gaussian = gauss.Gaussian2D(*p)
-            data_fitted = gaussian(y,x)
-            if(ncont is not None): plt.contour(xcenter,ycenter,data_fitted.reshape(binsx, binsy),ncont,linewidths=2, colors='w')
-            plt.imshow(Slice, interpolation='bilinear',cmap='jet_r',vmin = deltamin, vmax = deltamax,extent=extentmap)
-            cbar = plt.colorbar()
-            cbar.set_label("Flux contrast " + r"$\delta_{Fmap}$")
-            if(length_between_los_and_quasar is not None):
-                if (length_between_los_and_quasar < size_stack):
-                    if((direction=="x")|(direction=="y")):
-                        plt.plot([0,0],[-size_stack,-length_between_los_and_quasar],"r-")
-            if(ticks): plt.text(-0.9*size_stack,0.9*size_stack,elname)
-            plt.xlabel(xlab)
-            plt.ylabel(ylab)
-            plt.savefig(name + "_gaussian_fit_direction_" + direction + ".pdf",format="pdf")
-        return(elipticity,p)
-
-
-
-
-    def create_and_plot_stack_voids_or_cluster(self,mapsize,clusters,size_stack,deltamin,deltamax,nameout,normalized=None,number=None,coordinate_correction=None):
-        map_3d = self.readClamatoMapFile()
-        dict_void_or_cluster =pickle.load(open(clusters,"rb"))
-        coord = dict_void_or_cluster["coord"]
-        radius = dict_void_or_cluster["radius"]
-        if(coordinate_correction is not None):
-            Om,maxlist_name = coordinate_correction
-            self.initialize_coordinates_conversion(Om,maxlist_name)
-            stack = self.stack_voids_correction_xyztildestack(map_3d,mapsize,coord,size_stack)
-        else :
-            stack = self.stack_voids(map_3d,mapsize,coord,radius,size_stack,normalized=normalized,number=number)
-        self.plot_stack(stack,nameout,deltamin,deltamax,size_stack)
-        self.save_a_stack(stack,"stack_{}.bin".format(nameout))
-        print("shape of stack {}".format(stack.shape))
+    @staticmethod
+    def plot_ellipticity(stack,stack_slice,x_index,y_index,direction,rotate,**kwargs):
+        if(rotate):
+            raise NotImplementedError("showing ellipticity with a rotate figure is not implemented, please put rotate to False")
+        if(stack.elipticity is None):
+            stack.compute_stack_ellipticity()
+        x,y=np.indices((stack_slice.shape[0],stack_slice.shape[1]),dtype=np.float)
+        xcenter,ycenter = (x - stack.shape[x_index]//2) * stack.mpc_per_pixel[x_index],-(y - stack.shape[y_index]//2) * stack.mpc_per_pixel[y_index]
+        # xcenter,ycenter = (x - stack.shape[2]//2) * stack.mpc_per_pixel[2],-(y - stack.shape[1]//2) * stack.mpc_per_pixel[1]
+        # xcenter,ycenter = (x - stack.shape[0]//2) * stack.mpc_per_pixel[0],-(y - stack.shape[2]//2) * stack.mpc_per_pixel[2]
+        # xcenter,ycenter = (x - stack.shape[0]//2) * stack.mpc_per_pixel[0], -(y - stack.shape[1]//2) * stack.mpc_per_pixel[1]
+        gauss = utils.gaussian_fitter_2d()
+        gaussian = gauss.Gaussian2D(*stack.ellipticity[direction + "_gauss"])
+        data_fitted = gaussian(y,x)
+        levels = utils.return_key(kwargs,"levels",[1 - np.exp(-(1)^2/2),1 - np.exp(-(2)^2/2),1 - np.exp(-(3)^2/2)])
+        plt.contour(xcenter,ycenter,data_fitted.reshape(stack_slice.shape[0], stack_slice.shape[1]),
+                    levels,linewidths=utils.return_key(kwargs,"linewidths",2),
+                    colors=utils.return_key(kwargs,"colors","w"))
+        ticks = utils.return_key(kwargs,"ticks",False)
+        if(ticks):
+            elname =f"""{stack.ellipticity[direction + "_order"]} = {str(np.round(stack.elipticity[direction],2))}"""
+            plt.text(-0.9*stack.size,0.9*stack.size,elname)
 
 
 
 
     def compute_jack_knife_ellipticity(self,snap,list_stacks,list_stacks_snap,sizemap,name_stack_merged,name_mean_stack_snap,deltamin,deltamax,size_stack,shape_stack,signe = 1, ncont = 4,ticks=True,length_between_los_and_quasar=None):
+
+        mean_stack = []
+        for i in range(len(stack_name)):
+            stack = cls.init_stack_by_property_file(property_stack_name[i],name=stack_name)
+            stack.read()
+            mean_stack.append(stack.map_array)
+
+
         ellipticities = {}
         for i in range(len(snap)):
             list_stacks_knife = list_stacks_snap.copy()

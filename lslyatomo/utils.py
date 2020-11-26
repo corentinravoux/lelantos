@@ -141,6 +141,17 @@ def convert_z_sky_to_cartesian_middle(z,rcomov):
     Z = rcomov(z)
     return(Z)
 
+def get_direction_indexes(direction,rotate):
+    if (direction.lower() == "x")|(direction.lower() == "ra"):
+        x_index, y_index, index_direction = 2, 1, 0
+    elif (direction.lower() == "y")|(direction.lower() == "dec"):
+        x_index, y_index, index_direction = 2, 0, 1
+    elif (direction.lower() == "z")|(direction.lower() == "redshift"):
+        x_index, y_index, index_direction = 1, 0, 2
+    if(rotate): x_index,y_index = y_index,x_index
+    index_dict = {0:"x",1:"y",2:"z"}
+    return(x_index,y_index,index_direction,index_dict)
+
 
 saclay_mock_lines_per_box = {"box" : 5,"vx" : 5,"vy" : 5,"vz" : 5,"eta_xx":1,"eta_xy":1,"eta_xz":1,"eta_yx":1,"eta_yy":1,"eta_yz":1,"eta_zx":1,"eta_zy":1,"eta_zz":1}
 
@@ -316,7 +327,7 @@ def gaussian_smoothing(mapdata,sigma):
 
 class gaussian_fitter_2d(object):
 
-    def __init__(self,inpdata):
+    def __init__(self,inpdata=None):
 
         self.inpdata = inpdata
 

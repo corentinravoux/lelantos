@@ -417,7 +417,7 @@ class BoxPlot(object):
         data, xedges,yedges = np.histogram2d(X,Y,bins=(binsx,binsy))
         xcenters=(xedges[:-1]+xedges[1:])/2.
         ycenters=(yedges[:-1]+yedges[1:])/2.
-        Fitter = utils.gaussian_fitter_2d(data)
+        Fitter = utils.gaussian_fitter_2d(inpdata=data)
         p,success = Fitter.FitGauss2D()
         x,y=np.indices((binsx,binsy),dtype=np.float)
         gauss = Fitter.Gaussian2D(*p)

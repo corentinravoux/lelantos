@@ -602,7 +602,6 @@ class VoidPlot(object):
 
 
 
-
     def create_void_histogram_multiple(self,radius,nb_bins,rmin,rmax,name,norm=False):
         plt.figure()
         bins = np.linspace(rmin,rmax, nb_bins)

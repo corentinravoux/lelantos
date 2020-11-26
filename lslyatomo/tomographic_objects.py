@@ -191,12 +191,12 @@ class TomographicMap(object):
     @property
     def mpc_per_pixel(self):
         return(np.array(self.size)/(np.array(self.shape)))
-#        return(np.array(self.size)/(np.array(self.shape)-1))
+        #return(np.array(self.size)/(np.array(self.shape)-1))
 
     @property
     def pixel_per_mpc(self):
         return((np.array(self.shape))/np.array(self.size))
-        # return((np.array(self.shape)-1)/np.array(self.size))
+        #return((np.array(self.shape)-1)/np.array(self.size))
 
 
     def read(self):
@@ -443,11 +443,30 @@ class DistanceMap(TomographicMap):
 
 class StackMap(TomographicMap):
 
-    def __init__(self,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None,tomographic_map=None,catalog=None):
+    def __init__(self,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None,tomographic_map=None,catalog=None,elipticity=None,mean_los_distance=None):
         super(StackMap,self).__init__(map_array=map_array,name=name,shape=shape,size=size,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,property_file=property_file,Omega_m=Omega_m)
 
         self.tomographic_map = tomographic_map
         self.catalog = catalog
+        self.elipticity = elipticity
+        self.mean_los_distance = mean_los_distance
+
+    @classmethod
+    def init_by_merging(cls,stack_name,property_stack_name,name,property_name):
+        mean_stack = []
+        for i in range(len(stack_name)):
+            stack = cls.init_stack_by_property_file(property_stack_name[i],name=stack_name)
+            stack.read()
+            mean_stack.append(stack.map_array)
+        super(StackMap,cls).__init__()
+        cls.write_property_file(property_name)
+        return(cls(map_array=np.concatenate(mean_stack,axis=0),name=name,
+                   shape=stack.shape,size=stack.size,
+                   boundary_cartesian_coord=stack.boundary_cartesian_coord,
+                   boundary_sky_coord=stack.boundary_sky_coord,
+                   coordinate_transform=stack.coordinate_transform,
+                   property_file=property_name))
+
 
 
     @classmethod
@@ -490,7 +509,7 @@ class StackMap(TomographicMap):
 
 
     @classmethod
-    def init_by_tomographic_map(cls,tomographic_map,catalog,size_stack,shape_stack,interpolation_method="NEAREST",name=None,normalized=None,coordinate_convert=None):
+    def init_by_tomographic_map(cls,tomographic_map,catalog,size_stack,shape_stack,property_file,interpolation_method="NEAREST",name=None,normalized=None,coordinate_convert=None):
         (coord,radius,min_radius) = cls.initiate_stack(coordinate_convert,normalized,tomographic_map,catalog)
         coord_stack = cls.create_init_stack_coordinates(shape_stack,size_stack)
         voids_list,local_maps = [],[]
@@ -527,6 +546,7 @@ class StackMap(TomographicMap):
         if(normalized):
             size_stack = size_stack / float(min_radius)
         shape = (2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1)
+        stack.write_property_file(property_file)
         return(cls(tomographic_map=tomographic_map,
                    catalog=catalog,
                    map_array=stack,
@@ -535,7 +555,7 @@ class StackMap(TomographicMap):
                    boundary_cartesian_coord=boundary_cartesian_coord,
                    boundary_sky_coord=boundary_sky_coord,
                    coordinate_transform=tomographic_map.coordinate_transform,
-                   property_file=None))
+                   property_file=property_file))
 
 
 
@@ -614,14 +634,62 @@ class StackMap(TomographicMap):
 
 
 
-    def merge_stacks(self,list_stacks,shape_stack,name):
-        stacks = []
-        for i in range(len(list_stacks)):
-            stack = self.read_stacks(list_stacks[i],shape_stack)
-            stacks.append(stack)
-        mean_stack = np.mean(stacks,axis=0)
-        self.save_a_stack(mean_stack,name)
-        return(mean_stack)
+
+    def compute_distance_to_los(self,pixel_name):
+        pixel = Pixel(name=pixel_name)
+        pixel.read()
+        x,y,z = pixel.repack_by_los()
+        diffz=np.zeros(len(self.catalog.coord.shape[0]))
+        for i in range(len(diffz)):
+            arg_array  = np.argwhere((self.catalog.coord[i,0] == x[:])&(self.catalog.coord[i,0] == y[:]))
+            if(len(arg_array)!=0):
+                arg = arg_array[0][0]
+                diffz[i] = self.catalog.coord[i,2] - z[arg][-1]
+        self.mean_los_distance = np.mean(diffz)
+
+
+    def compute_stack_ellipticity(self,sign=1):
+        elipticity = {}
+        sign = np.sign(self.map_array[self.map_array.shape[0]//2,self.map_array.shape[1]//2,self.map_array.shape[2]//2])
+        for direction in ["x","y","z"]:
+            x_index,y_index,index_direction,index_dict = utils.get_direction_indexes(direction,False)
+            if(direction == "x"):
+                Slice = np.transpose(self.map_array[self.map_array.shape[0]//2,:,:])
+            elif(direction == "y"):
+                Slice = np.transpose(self.map_array[:,self.map_array.shape[1]//2,:])
+            elif(direction == "z"):
+                Slice = np.transpose(self.map_array[:,:,self.map_array.shape[2]//2])
+            gauss = utils.gaussian_fitter_2d(inpdata = sign * Slice)
+            p,success = gauss.FitGauss2D()
+            angle = p[5]
+            if((angle <45)&(angle>-45)):
+                sigma1,sigma2,i1,i2 = p[4],p[3],y_index, x_index
+            elif((angle <135)&(angle>-135)):
+                sigma1,sigma2,i1,i2 = p[3],p[4],x_index, y_index
+            else :
+                sigma1,sigma2,i1,i2 = p[4],p[3],y_index, x_index
+            sigma1 = (np.cos(np.radians(angle))**2 * self.mpc_per_pixel[i1] + (np.sin(np.radians(angle))**2)* self.mpc_per_pixel[i2])*sigma1
+            sigma2 = (np.cos(np.radians(angle))**2 * self.mpc_per_pixel[i2] + (np.sin(np.radians(angle))**2)* self.mpc_per_pixel[i1])*sigma2
+            if((angle <45)&(angle>-45)):
+                p[4],p[3] = sigma1,sigma2
+            elif((angle <135)&(angle>-135)):
+                p[3],p[4] = sigma1,sigma2
+            else :
+                p[4],p[3] = sigma1,sigma2
+            elipticity[direction] = sigma1/sigma2
+            elipticity[direction + "_gauss"] = p
+            if(direction == "x"):
+                elipticity[direction + "_order"] = "sigmay/sigmaz"
+            elif(direction == "y"):
+                elipticity[direction + "_order"] = "sigmax/sigmaz"
+            elif(direction == "z"):
+                elipticity[direction + "_order"] = "sigmax/sigmay"
+        self.elipticity = elipticity
+
+
+
+
+
 
     def save_a_stack(self,stack,name,los_z = None):
         if(los_z is not None):
