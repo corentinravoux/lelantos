@@ -167,35 +167,40 @@ class VoidFinder(object):
         for i in range(self.split_map[0]):
             for j in range(self.split_map[1]):
                 coord_mpc = Chunks[str(i) + str(j)]["coord_Mpc"]
-                if(self.split_overlap is not None):
-                    if((i==self.split_map[0]-1)&(i==0)):
-                        pixel_x_interval = [0,0]
-                    elif i == 0 :
-                        pixel_x_interval = [0, self.split_overlap]
-                    elif i == self.split_map[0]-1 :
-                        pixel_x_interval = [ self.split_overlap,0]
+                if(coord_mpc.shape[0] !=0):
+                    if(self.split_overlap is not None):
+                        if((i==self.split_map[0]-1)&(i==0)):
+                            pixel_x_interval = [0,0]
+                        elif i == 0 :
+                            pixel_x_interval = [0, self.split_overlap]
+                        elif i == self.split_map[0]-1 :
+                            pixel_x_interval = [ self.split_overlap,0]
+                        else:
+                            pixel_x_interval = [ self.split_overlap,self.split_overlap]
+                        if((j==self.split_map[1]-1)&(j==0)):
+                            pixel_y_interval = [0,0]
+                        elif j == 0 :
+                            pixel_y_interval = [0, self.split_overlap]
+                        elif j == self.split_map[1]-1 :
+                            pixel_y_interval =  [ self.split_overlap,0]
+                        else:
+                            pixel_y_interval = [ self.split_overlap,self.split_overlap]
+                        mask = (coord_mpc[:,0] > pixel_x_interval[0])
+                        mask &= (coord_mpc[:,0] < Chunks[str(i) + str(j)]["map_size"][0] - pixel_x_interval[1])
+                        mask &= (coord_mpc[:,1] > pixel_y_interval[0])
+                        mask &= (coord_mpc[:,1] < Chunks[str(i) + str(j)]["map_size"][1] - pixel_y_interval[1])
                     else:
-                        pixel_x_interval = [ self.split_overlap,self.split_overlap]
-                    if((j==self.split_map[1]-1)&(j==0)):
-                        pixel_y_interval = [0,0]
-                    elif j == 0 :
-                        pixel_y_interval = [0, self.split_overlap]
-                    elif j == self.split_map[1]-1 :
-                        pixel_y_interval =  [ self.split_overlap,0]
-                    else:
-                        pixel_y_interval = [ self.split_overlap,self.split_overlap]
-                    mask = (coord_mpc[:,0] > pixel_x_interval[0])
-                    mask &= (coord_mpc[:,0] < Chunks[str(i) + str(j)]["map_size"][0] - pixel_x_interval[1])
-                    mask &= (coord_mpc[:,1] > pixel_y_interval[0])
-                    mask &= (coord_mpc[:,1] < Chunks[str(i) + str(j)]["map_size"][1] - pixel_y_interval[1])
-                else:
-                    mask = np.full(coord_mpc.shape[0],True)
-                radius_to_contatenate.append(Chunks[str(i) + str(j)]["radius"][mask])
-                for k in range(len(other_array_names)):
-                    other_arrays_to_contatenate[k].append(np.array(Chunks[str(i) + str(j)]["other_arrays"][k])[mask])
-                coord_Mpc_to_contatenate.append((Chunks[str(i) + str(j)]["coord_Mpc"] + np.array(Chunks[str(i) + str(j)]["map_min"]))[mask])
-        radius = np.concatenate(radius_to_contatenate,axis=0)
-        coord_Mpc = np.concatenate(coord_Mpc_to_contatenate,axis=0)
+                        mask = np.full(coord_mpc.shape[0],True)
+                    radius_to_contatenate.append(Chunks[str(i) + str(j)]["radius"][mask])
+                    for k in range(len(other_array_names)):
+                        other_arrays_to_contatenate[k].append(np.array(Chunks[str(i) + str(j)]["other_arrays"][k])[mask])
+                    coord_Mpc_to_contatenate.append((Chunks[str(i) + str(j)]["coord_Mpc"] + np.array(Chunks[str(i) + str(j)]["map_min"]))[mask])
+        if(len(radius_to_contatenate) == 0):
+            radius = np.empty(0)
+            coord_Mpc = np.empty(0)
+        else:
+            radius = np.concatenate(radius_to_contatenate,axis=0)
+            coord_Mpc = np.concatenate(coord_Mpc_to_contatenate,axis=0)
         for k in range(len(other_array_names)):
             other_arrays_to_contatenate[k] = np.concatenate(other_arrays_to_contatenate[k],axis=0)
         return(radius, coord_Mpc,other_arrays_to_contatenate,other_array_names)
