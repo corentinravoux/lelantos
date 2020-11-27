@@ -301,8 +301,8 @@ class BoxExtractor():
         prop.read()
         if(shape_map_output is None):
             shape_map_output = prop.shape
-        X_tomo_min,Y_tomo_min,Z_tomo_min = prop.boundary_sky_coord[0]
-        X_tomo_max,Y_tomo_max,Z_tomo_max = prop.boundary_sky_coord[1]
+        X_tomo_min,Y_tomo_min,Z_tomo_min = prop.boundary_cartesian_coord[0]
+        X_tomo_max,Y_tomo_max,Z_tomo_max = prop.boundary_cartesian_coord[1]
         X_tomo_array,Y_tomo_array, Z_tomo_array = self.create_box_array(X_tomo_min,X_tomo_max,Y_tomo_min,Y_tomo_max,Z_tomo_min,Z_tomo_max,shape_map_output)
         suplementary_parameters = utils.return_suplementary_parameters(prop.coordinate_transform,property=prop)
         (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(prop.Omega_m)
@@ -313,7 +313,9 @@ class BoxExtractor():
             (dm_map,prop_maps,prop) = self.extract_box(ra_array,dec_array,z_array,shape_map_output,rsd_box)
         if(growth_multiplication): dm_map = self.multiply_by_growth(dm_map,z_array)
         if(matter_field): dm_map = self.convert_to_matter_field(dm_map)
-        if(gaussian_smoothing is not None): dm_map = utils.gaussian_smoothing(dm_map,gaussian_smoothing)
+        if(gaussian_smoothing is not None):
+            gaussian_smoothing_pix = gaussian_smoothing*utils.pixel_per_mpc(prop.size,shape_map_output)
+            dm_map = utils.gaussian_smoothing(dm_map,gaussian_smoothing_pix)
         dm_map_object = tomographic_objects.TomographicMap(map_array=dm_map,name=name)
         dm_map_object.write()
         del dm_map, dm_map_object
@@ -538,7 +540,8 @@ class BoxPlot(object):
         length_list = (max_x-min_x)*(max_y-min_y)*(max_z-min_z)
         box_DM = box.map_array[min_x:max_x,min_y:max_y,min_z:max_z]
         if(gaussian_smoothing is not None):
-            box_DM = utils.gaussian_smoothing(box_DM,gaussian_smoothing)
+            gaussian_smoothing_pix = gaussian_smoothing*utils.pixel_per_mpc(box.size,box.shape)
+            box_DM = utils.gaussian_smoothing(box_DM,gaussian_smoothing_pix)
         list_box = box_DM.reshape(length_list)
         del box_DM, box
         map_3D = tomography_map.map_array[min_x:max_x,min_y:max_y,min_z:max_z]

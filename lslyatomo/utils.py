@@ -39,6 +39,15 @@ from scipy.ndimage import map_coordinates
 lambdaLy = 1215.673123130217
 
 
+def mpc_per_pixel(size,shape):
+    return(np.array(size)/(np.array(shape)))
+    #return(np.array(size)/(np.array(shape)-1))
+
+def pixel_per_mpc(size,shape):
+    return((np.array(shape))/np.array(size))
+    #return((np.array(shape)-1)/np.array(size))
+
+
 def get_cosmo_function(Omega_m,Omega_k=0.):
     try:
         from picca import constants

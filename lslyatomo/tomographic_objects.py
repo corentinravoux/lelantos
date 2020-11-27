@@ -183,13 +183,11 @@ class TomographicMap(object):
 
     @property
     def mpc_per_pixel(self):
-        return(np.array(self.size)/(np.array(self.shape)))
-        #return(np.array(self.size)/(np.array(self.shape)-1))
+        return(utils.mpc_per_pixel(self.size,self.shape))
 
     @property
     def pixel_per_mpc(self):
-        return((np.array(self.shape))/np.array(self.size))
-        #return((np.array(self.shape)-1)/np.array(self.size))
+        return(utils.pixel_per_mpc(self.size,self.shape))
 
 
     def read(self):
@@ -249,52 +247,6 @@ class TomographicMap(object):
 
 
 
-    #### To DO
-
-    def displace_map(self,size_map,max_list,max_list_to_center,size_map_to_center,shape_map_to_center,name_out_map,dist_map=None,name_dist_map_out=None,pixels=None,pixels_out=None,qso=None,qso_out=None):
-        if(self.shapeMap != shape_map_to_center):
-            raise KeyError("Not implemented already for different map shape")
-        map_3d = self.readClamatoMapFile()
-        new_map = np.zeros(shape_map_to_center)
-        if(dist_map is not None):
-            dist_map_3d = self.readClamatoMapFile_Other(dist_map,self.shapeMap)
-            new_dist_map = np.full(shape_map_to_center,np.inf)
-        indice = np.transpose(np.indices(shape_map_to_center),axes=(1,2,3,0))
-        nb_mpc_per_pixels = np.array(size_map)/(np.array(self.shapeMap)-1)
-        nb_mpc_per_pixels_to_center = np.array(size_map_to_center)/(np.array(shape_map_to_center)-1)
-        coord_mpc = indice * nb_mpc_per_pixels_to_center
-        del indice
-        (minx,maxx,miny,maxy,minz,maxz,minredshift,maxredshift,minra,maxra,mindec,maxdec) = pickle.load(open(max_list,"rb"))
-        (minx2,maxx2,miny2,maxy2,minz2,maxz2,minredshift2,maxredshift2,minra2,maxra2,mindec2,maxdec2) = pickle.load(open(max_list_to_center,"rb"))
-        coord_centered = np.zeros(coord_mpc.shape)
-        coord_centered[:,:,:,0],coord_centered[:,:,:,1],coord_centered[:,:,:,2] = coord_mpc[:,:,:,0] - (minx - minx2),coord_mpc[:,:,:,1] -( miny - miny2),coord_mpc[:,:,:,2] - (minz - minz2)
-        if(pixels is not None):
-            qso = np.transpose(np.array(pickle.load(open("DataQSOposition.pickle","rb"))))
-            pixel_file = self.readClamatoPixelFile_other(pixels)
-            pixel_file[:,0],pixel_file[:,1],pixel_file[:,2] = pixel_file[:,0] + (minx - minx2) ,pixel_file[:,1]  + (miny - miny2),pixel_file[:,2] + (minz - minz2)
-            qso[:,0],qso[:,1],qso[:,2] = qso[:,0] + (minx - minx2) ,qso[:,1]  + (miny - miny2),qso[:,2] + (minz - minz2)
-            mask = (pixel_file[:,0]>=0)&(pixel_file[:,0]<size_map_to_center[0])
-            mask &= (pixel_file[:,1]>=0)&(pixel_file[:,1]<size_map_to_center[1])
-            mask &= (pixel_file[:,2]>=0)&(pixel_file[:,2]<size_map_to_center[2])
-            self.writeClamatoPixelFile(pixels_out,pixel_file[mask])
-            mask = (qso[:,0]>=0)&(qso[:,0]<size_map_to_center[0])
-            mask &= (qso[:,1]>=0)&(qso[:,1]<size_map_to_center[1])
-            mask &= (qso[:,2]>=0)&(qso[:,2]<size_map_to_center[2])
-            pickle.dump(np.transpose(qso),open("DataQSOposition.pickle","wb"))
-        del coord_mpc
-        indice_centered = np.round(coord_centered / nb_mpc_per_pixels,0).astype(int)
-        mask =(indice_centered[:,:,:,0] >= 0)&(indice_centered[:,:,:,0] < shape_map_to_center[0])
-        mask&=(indice_centered[:,:,:,1] >= 0)&(indice_centered[:,:,:,1] < shape_map_to_center[1])
-        mask&=(indice_centered[:,:,:,2] >= 0)&(indice_centered[:,:,:,2] < shape_map_to_center[2])
-        new_map[mask] = map_3d[indice_centered[:,:,:,0][mask],indice_centered[:,:,:,1][mask],indice_centered[:,:,:,2][mask]]
-        if(dist_map is not None):
-            new_dist_map[mask] = dist_map_3d[indice_centered[:,:,:,0][mask],indice_centered[:,:,:,1][mask],indice_centered[:,:,:,2][mask]]
-        del indice_centered,mask
-        self.writeClamatoMapFile(name_out_map,new_map)
-        self.writeClamatoMapFile(name_dist_map_out,new_dist_map)
-
-
-
 
     def compute_pk3d(self,kmin,kmax,n_k,distance_map=None,criteria_distance_mask=None,log=False):
         if((distance_map is not None)&(criteria_distance_mask is not None)):
@@ -330,6 +282,60 @@ class TomographicMap(object):
         k_space_final = k_space[mask2]
         del Pk_3D,k_space
         return(k_space_final,pk_3D_final)
+
+
+    def displace_map(self,property_file_name_to_center,name_out_map,dist_map=None,name_dist_map_out=None,pixel=None,pixel_out=None,qso=None,qso_out=None):
+        prop = MapPixelProperty(name= property_file_name_to_center)
+        prop.read()
+        if(self.shape != prop.shape):
+            raise KeyError("Not implemented already for different map shape")
+        map_3d = self.readClamatoMapFile()
+        new_map = np.zeros(prop.shape)
+        if(dist_map is not None):
+            dist_map_3d = DistanceMap.init_from_tomographic_map(self,name=dist_map)
+            dist_map_3d.read()
+            new_dist_map = np.full(prop.shape,np.inf)
+        indice = np.transpose(np.indices(prop.shape),axes=(1,2,3,0))
+        coord_mpc = indice * prop.mpc_per_pixel
+        del indice
+        coord_centered = np.zeros(coord_mpc.shape)
+        minx,miny,minz = self.boundary_cartesian_coord[0]
+        minx2,miny2,minz2 = prop.boundary_cartesian_coord[0]
+        coord_centered[:,:,:,0],coord_centered[:,:,:,1],coord_centered[:,:,:,2] = coord_mpc[:,:,:,0] - (minx - minx2),coord_mpc[:,:,:,1] -( miny - miny2),coord_mpc[:,:,:,2] - (minz - minz2)
+        del coord_mpc
+        indice_centered = np.round(coord_centered / self.mpc_per_pixel,0).astype(int)
+        mask =(indice_centered[:,:,:,0] >= 0)&(indice_centered[:,:,:,0] < prop.shape[0])
+        mask&=(indice_centered[:,:,:,1] >= 0)&(indice_centered[:,:,:,1] < prop.shape[1])
+        mask&=(indice_centered[:,:,:,2] >= 0)&(indice_centered[:,:,:,2] < prop.shape[2])
+        new_map[mask] = map_3d[indice_centered[:,:,:,0][mask],indice_centered[:,:,:,1][mask],indice_centered[:,:,:,2][mask]]
+        self.map_array = new_map
+        self.write()
+        if(dist_map is not None):
+            new_dist_map[mask] = dist_map_3d[indice_centered[:,:,:,0][mask],indice_centered[:,:,:,1][mask],indice_centered[:,:,:,2][mask]]
+            dist_map_3d.map_array = new_dist_map
+            dist_map_3d.write()
+        del indice_centered,mask
+        if(pixel is not None):
+            pixel_class = Pixel(name=pixel)
+            pixel_class.read()
+            pixel_class.pixel_array
+            pixel_class.pixel_array[:,0],pixel_class.pixel_array[:,1],pixel_class.pixel_array[:,2] = pixel_class.pixel_array[:,0] + (minx - minx2) ,pixel_class.pixel_array[:,1]  + (miny - miny2),pixel_class.pixel_array[:,2] + (minz - minz2)
+            mask = (pixel_class.pixel_array[:,0]>=0)&(pixel_class.pixel_array[:,0]<prop.size[0])
+            mask &= (pixel_class.pixel_array[:,1]>=0)&(pixel_class.pixel_array[:,1]<prop.size[1])
+            mask &= (pixel_class.pixel_array[:,2]>=0)&(pixel_class.pixel_array[:,2]<prop.size[2])
+            pixel_class.name = pixel_out
+            pixel_class.write()
+        if(qso is not None):
+            qso_class = QSOCatalog.init_from_fits(qso)
+            qso_class.coord[:,0],qso_class.coord[:,1],qso_class.coord[:,2] = qso_class.coord[:,0] + (minx - minx2) ,qso_class.coord[:,1]  + (miny - miny2),qso_class.coord[:,2] + (minz - minz2)
+            mask = (qso_class.coord[:,0]>=0)&(qso_class.coord[:,0]<prop.size[0])
+            mask &= (qso_class.coord[:,1]>=0)&(qso_class.coord[:,1]<prop.size[1])
+            mask &= (qso_class.coord[:,2]>=0)&(qso_class.coord[:,2]<prop.size[2])
+            qso_class.name = qso_out
+            qso_class.write()
+
+
+
 
 
 
@@ -368,14 +374,15 @@ class DistanceMap(TomographicMap):
     def create_distance_map_serial(cls,pixel,tomographic_map,radius_local=50):
         x,y,z = pixel.repack_by_los()
         pixels = [[[x[i],y[i]],z[i]] for i in range(len(x))]
-        mpc_per_pixels = tomographic_map.mpc_per_pixel
         distance_array = np.full(tomographic_map.shape,np.inf)
         indice = np.transpose(np.indices(tomographic_map.shape),axes=(1,2,3,0))
-        indice_mpc = indice * mpc_per_pixels
+        indice_mpc = indice * tomographic_map.mpc_per_pixel
         del indice
         for i in range(len(pixels)):
-            minimal_coordinates_local = [int(round(((pixels[i][0][0]-radius_local)/mpc_per_pixels)[0],0)),int(round(((pixels[i][0][1]-radius_local)/mpc_per_pixels)[1],0))]
-            maximal_coordinates_local = [int(round(((pixels[i][0][0]+radius_local)/mpc_per_pixels)[0],0)),int(round(((pixels[i][0][1]+radius_local)/mpc_per_pixels)[1],0))]
+            minimal_coordinates_local = [int(round(((pixels[i][0][0]-radius_local)/tomographic_map.mpc_per_pixel)[0],0)),
+                                         int(round(((pixels[i][0][1]-radius_local)/tomographic_map.mpc_per_pixel)[1],0))]
+            maximal_coordinates_local = [int(round(((pixels[i][0][0]+radius_local)/tomographic_map.mpc_per_pixel)[0],0)),
+                                         int(round(((pixels[i][0][1]+radius_local)/tomographic_map.mpc_per_pixel)[1],0))]
             LOS_range_min_local = distance_array[max(minimal_coordinates_local[0],0):min(tomographic_map.shape[0],maximal_coordinates_local[0]),max(minimal_coordinates_local[1],0):min(tomographic_map.shape[1],maximal_coordinates_local[1]),0:tomographic_map.shape[2]]
             indice_local = indice_mpc[max(minimal_coordinates_local[0],0):min(tomographic_map.shape[0],maximal_coordinates_local[0]),max(minimal_coordinates_local[1],0):min(tomographic_map.shape[1],maximal_coordinates_local[1]),0:tomographic_map.shape[2]] # - np.array([pixels[i][0][0],pixels[i][0][1],0])
 
@@ -403,10 +410,9 @@ class DistanceMap(TomographicMap):
         cls.log.add("Creation of global variables")
         x,y,z = pixel.repack_by_los()
         pixels = [[[x[i],y[i]],z[i]] for i in range(len(x))]
-        mpc_per_pixels = tomographic_map.mpc_per_pixel
         indice = np.transpose(np.indices(tomographic_map.shape),axes=(1,2,3,0))
         global dist_map
-        dist_map = indice * mpc_per_pixels
+        dist_map = indice * tomographic_map.mpc_per_pixel
         del indice
         cls.log.add("Number LOS to treat : {}".format(len(pixels)))
         cls.log.add("Launching of Pool with shared array initialization")
@@ -949,6 +955,13 @@ class MapPixelProperty(object):
         return(cls(name=name,size=size,shape=shape,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,Omega_m=Omega_m))
 
 
+    @property
+    def mpc_per_pixel(self):
+        return(utils.mpc_per_pixel(self.size,self.shape))
+
+    @property
+    def pixel_per_mpc(self):
+        return(utils.pixel_per_mpc(self.size,self.shape))
 
     def read(self):
         if(self.name is None):
@@ -981,6 +994,8 @@ class MapPixelProperty(object):
         if(self.coordinate_transform is not None): log.add(f"Coordinate transformation of the associated map: {self.coordinate_transform}")
         if(self.Omega_m is not None): log.add(f"Value of Omega_m used: {self.Omega_m}")
         log.close()
+
+
 
 #############################################################################
 #############################################################################
