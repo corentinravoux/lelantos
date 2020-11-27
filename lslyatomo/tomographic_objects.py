@@ -457,22 +457,21 @@ class DistanceMap(TomographicMap):
     def get_mask_distance(self,distance):
         return(self.map_array > distance)
 
-        ### TO DO
-    def give_redshift_cut(self,mask_los_distance,compute_redshift_out_LOS,sizeMap,redshift_axis=None):
+
+
+    def give_redshift_cut(self,distance_criteria,percent_criteria):
+        if(self.coordinate_transform !="middle"):
+            raise KeyError("Only implemented for middle coordinate transformation")
+        mask_distance = self.get_mask_distance(distance_criteria)
         i,percent = 0,0.
-        while((percent<compute_redshift_out_LOS)&(i< mask_los_distance.shape[-1])):
-            nb_True = len(mask_los_distance[:,:,i][mask_los_distance[:,:,i] == True])
-            percent = nb_True/(mask_los_distance.shape[0]*mask_los_distance.shape[1])
+        while((percent<percent_criteria)&(i< mask_distance.shape[-1])):
+            nb_True = len(mask_distance[:,:,i][mask_distance[:,:,i] == True])
+            percent = nb_True/(mask_distance.shape[0]*mask_distance.shape[1])
             i=i+1
-        dist_mpc = i * (sizeMap[-1]/self.shapeMap[-1])
-        if(redshift_axis is not None):
-            Om,maxlist_name = redshift_axis
-            maxlist = pickle.load(open(maxlist_name,'rb'))
-            minz,minredshift = maxlist[4],maxlist[6]
-            Cosmo = constants.cosmo(Om)
-            self.rcomoving = Cosmo.r_comoving
-            redshift = fsolve(self.f,minredshift,args=(dist_mpc + minz))[0]
-            print(redshift)
+        dist_mpc = i * self.mpc_per_pixel[2]
+        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(self.Omega_m)
+        redshift = utils.convert_z_cartesian_to_sky_middle(np.array([dist_mpc]),inv_rcomov)[0]
+        return(redshift)
 
 
 
@@ -586,7 +585,7 @@ class StackMap(TomographicMap):
         if(normalized):
             size_stack = size_stack / float(min_radius)
         shape = (2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1)
-        stack.write_property_file(property_file)
+        cls.write_property_file(property_file)
         return(cls(tomographic_map=tomographic_map,
                    catalog=catalog,
                    map_array=stack,
@@ -725,17 +724,6 @@ class StackMap(TomographicMap):
             elif(direction == "z"):
                 elipticity[direction + "_order"] = "sigmax/sigmay"
         self.elipticity = elipticity
-
-
-
-
-
-
-    def save_a_stack(self,stack,name,los_z = None):
-        if(los_z is not None):
-            np.savetxt("lenght_between_los_and_quasar.txt",[los_z],header="difference in Mpc between end of LOS and quasar center\n")
-        stack.tofile(name)
-
 
 
 
