@@ -555,7 +555,7 @@ class TomographyStack(object):
             if(rotate): stack_slice = np.transpose(np.flip(stack_slice,axis=1))
 
         extentmap = [-stack.size[0],+stack.size[0],-stack.size[0],+stack.size[0]]
-        TomographyPlot.plot_slice(stack_slice,extentmap,xlab,ylab,name_plot,deltamin,deltamax,x_index,y_index,**kwargs)
+        TomographyPlot.plot_slice(stack_slice,extentmap,xlab,ylab,name_plot,deltamin,deltamax,x_index,y_index,save_fig=False,**kwargs)
 
         if(los_quasar is not None):
             TomographyStack.plot_mean_los_distance(direction,stack,los_quasar=los_quasar)
@@ -584,7 +584,7 @@ class TomographyStack(object):
     def plot_ellipticity(stack,stack_slice,x_index,y_index,direction,rotate,**kwargs):
         if(rotate):
             raise NotImplementedError("showing ellipticity with a rotate figure is not implemented, please put rotate to False")
-        if(stack.elipticity is None):
+        if(stack.ellipticity is None):
             stack.compute_stack_ellipticity()
         x,y=np.indices((stack_slice.shape[0],stack_slice.shape[1]),dtype=np.float)
         xcenter,ycenter = (x - stack.shape[x_index]//2) * stack.mpc_per_pixel[x_index],-(y - stack.shape[y_index]//2) * stack.mpc_per_pixel[y_index]
@@ -594,13 +594,13 @@ class TomographyStack(object):
         gauss = utils.gaussian_fitter_2d()
         gaussian = gauss.Gaussian2D(*stack.ellipticity[direction + "_gauss"])
         data_fitted = gaussian(y,x)
-        levels = utils.return_key(kwargs,"levels",[1 - np.exp(-(1)^2/2),1 - np.exp(-(2)^2/2),1 - np.exp(-(3)^2/2)])
+        levels = utils.return_key(kwargs,"levels",[1 - np.exp(-(1)**2/2),1 - np.exp(-(2)**2/2),1 - np.exp(-(3)**2/2)])
         plt.contour(xcenter,ycenter,data_fitted.reshape(stack_slice.shape[0], stack_slice.shape[1]),
                     levels,linewidths=utils.return_key(kwargs,"linewidths",2),
                     colors=utils.return_key(kwargs,"colors","w"))
         ticks = utils.return_key(kwargs,"ticks",False)
         if(ticks):
-            elname =f"""{stack.ellipticity[direction + "_order"]} = {str(np.round(stack.elipticity[direction],2))}"""
+            elname =f"""{stack.ellipticity[direction + "_order"]} = {str(np.round(stack.ellipticity[direction],2))}"""
             plt.text(-0.9*stack.size,0.9*stack.size,elname)
 
 
@@ -619,8 +619,8 @@ class TomographyStack(object):
     #     for i in range(len(snap)):
     #         list_stacks_knife = list_stacks_snap.copy()
     #         list_stacks_knife.remove(list_stacks_snap[i])
-    #         (elipticity) = self.merge_and_compute_ellipticity(list_stacks_knife,sizemap,name_mean_stack_snap[i],deltamin,deltamax,size_stack,shape_stack,signe = signe, ncont = ncont)
-    #         ellipticities[snap[i]] = elipticity
+    #         (ellipticity) = self.merge_and_compute_ellipticity(list_stacks_knife,sizemap,name_mean_stack_snap[i],deltamin,deltamax,size_stack,shape_stack,signe = signe, ncont = ncont)
+    #         ellipticities[snap[i]] = ellipticity
     #     ellipticities["full"] = self.merge_and_compute_ellipticity(list_stacks,sizemap,name_stack_merged,deltamin,deltamax,size_stack,shape_stack,signe = signe, ncont = ncont)
     #     sigma ={}
     #     for el in ["x direction, y over z","y direction, x over z","z direction, x over y"]:

@@ -482,12 +482,12 @@ class DistanceMap(TomographicMap):
 
 class StackMap(TomographicMap):
 
-    def __init__(self,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None,tomographic_map=None,catalog=None,elipticity=None,mean_los_distance=None):
+    def __init__(self,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None,tomographic_map=None,catalog=None,ellipticity=None,mean_los_distance=None):
         super(StackMap,self).__init__(map_array=map_array,name=name,shape=shape,size=size,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,property_file=property_file,Omega_m=Omega_m)
 
         self.tomographic_map = tomographic_map
         self.catalog = catalog
-        self.elipticity = elipticity
+        self.ellipticity = ellipticity
         self.mean_los_distance = mean_los_distance
 
     @classmethod
@@ -497,14 +497,14 @@ class StackMap(TomographicMap):
             stack = cls.init_stack_by_property_file(property_stack_name[i],name=stack_name)
             stack.read()
             mean_stack.append(stack.map_array)
-        super(StackMap,cls).__init__()
-        cls.write_property_file(property_name)
-        return(cls(map_array=np.concatenate(mean_stack,axis=0),name=name,
-                   shape=stack.shape,size=stack.size,
-                   boundary_cartesian_coord=stack.boundary_cartesian_coord,
-                   boundary_sky_coord=stack.boundary_sky_coord,
-                   coordinate_transform=stack.coordinate_transform,
-                   property_file=property_name))
+        stack_class = cls(map_array=np.concatenate(mean_stack,axis=0),name=name,
+                          shape=stack.shape,size=stack.size,
+                          boundary_cartesian_coord=stack.boundary_cartesian_coord,
+                          boundary_sky_coord=stack.boundary_sky_coord,
+                          coordinate_transform=stack.coordinate_transform,
+                          property_file=property_name)
+        stack_class.write_property_file(property_name)
+        return(stack_class)
 
 
 
@@ -521,30 +521,6 @@ class StackMap(TomographicMap):
         stack.catalog = catalog
         return(stack)
 
-
-    @classmethod
-    def init_by_tomographic_map_simple(cls,tomographic_map,catalog,size_stack,name=None):
-        shape_stack = (np.round(size_stack/tomographic_map.mpc_per_pixel,0)).astype(int)
-        index_catalog = (np.round(catalog.coord/tomographic_map.mpc_per_pixel,0)).astype(int)
-
-        mask = (index_catalog[:,0] < shape_stack[0])
-        mask |=(index_catalog[:,0] >= tomographic_map.shape[0] - shape_stack[0])
-        mask |=(index_catalog[:,1] < shape_stack[1])
-        mask |=(index_catalog[:,1] >= tomographic_map.shape[1] - shape_stack[1])
-        mask |=(index_catalog[:,2] < shape_stack[2])
-        mask |=(index_catalog[:,2] >= tomographic_map.shape[2] - shape_stack[2])
-
-        index_catalog_clean = index_catalog[~mask]
-        local_maps = np.zeros((len(index_catalog_clean),2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1))
-        for i in range(len(index_catalog_clean)):
-            local_maps[i] = tomographic_map.map_array[index_catalog_clean[i][0]-shape_stack[0]:index_catalog_clean[i][0]+shape_stack[0]+1,
-                                                      index_catalog_clean[i][1]-shape_stack[1]:index_catalog_clean[i][1]+shape_stack[1]+1,
-                                                      index_catalog_clean[i][2]-shape_stack[2]:index_catalog_clean[i][2]+shape_stack[2]+1]
-        stack = np.mean(local_maps,axis=0)
-        boundary_cartesian_coord = None
-        boundary_sky_coord = None
-        shape = (2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1)
-        return(cls(tomographic_map=tomographic_map,catalog=catalog,map_array=stack,name=name,shape=shape,size=(size_stack,size_stack,size_stack),boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=tomographic_map.coordinate_transform,property_file=None))
 
 
     @classmethod
@@ -585,8 +561,7 @@ class StackMap(TomographicMap):
         if(normalized):
             size_stack = size_stack / float(min_radius)
         shape = (2*shape_stack[0]+1,2*shape_stack[1]+1,2*shape_stack[2]+1)
-        cls.write_property_file(property_file)
-        return(cls(tomographic_map=tomographic_map,
+        stack_class =cls(tomographic_map=tomographic_map,
                    catalog=catalog,
                    map_array=stack,
                    name=name,
@@ -594,7 +569,9 @@ class StackMap(TomographicMap):
                    boundary_cartesian_coord=boundary_cartesian_coord,
                    boundary_sky_coord=boundary_sky_coord,
                    coordinate_transform=tomographic_map.coordinate_transform,
-                   property_file=property_file))
+                   property_file=property_file)
+        stack_class.write_property_file(property_file)
+        return(stack_class)
 
 
 
@@ -629,26 +606,22 @@ class StackMap(TomographicMap):
         coord_converted = np.zeros(coord_stack_local.shape)
         suplementary_parameters = utils.return_suplementary_parameters(coordinate_convert,property=property)
         (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(property.Omega_m)
-        coord_converted[:,:,:,0],
-        coord_converted[:,:,:,1],
-        coord_converted[:,:,:,2] = utils.convert_cartesian_to_sky(coord_stack_local[:,:,:,0],
-                                                                  coord_stack_local[:,:,:,1],
-                                                                  coord_stack_local[:,:,:,2],
-                                                                  coordinate_convert,
-                                                                  inv_rcomov=inv_rcomov,
-                                                                  inv_distang=inv_distang,
-                                                                  distang=distang,
-                                                                  suplementary_parameters=suplementary_parameters)
+        coord_converted[:,:,:,0],coord_converted[:,:,:,1],coord_converted[:,:,:,2] = utils.convert_cartesian_to_sky(coord_stack_local[:,:,:,0],
+                                                                                                                    coord_stack_local[:,:,:,1],
+                                                                                                                    coord_stack_local[:,:,:,2],
+                                                                                                                    coordinate_convert,
+                                                                                                                    inv_rcomov=inv_rcomov,
+                                                                                                                    inv_distang=inv_distang,
+                                                                                                                    distang=distang,
+                                                                                                                    suplementary_parameters=suplementary_parameters)
         suplementary_parameters = utils.return_suplementary_parameters(coordinate_transform,property=property)
-        coord_converted[:,:,:,0],
-        coord_converted[:,:,:,1],
-        coord_converted[:,:,:,2] = utils.convert_sky_to_cartesian(coord_converted[:,:,:,0],
-                                                                  coord_converted[:,:,:,1],
-                                                                  coord_converted[:,:,:,2],
-                                                                  coordinate_transform,
-                                                                  rcomov=rcomov,
-                                                                  distang=distang,
-                                                                  suplementary_parameters=suplementary_parameters)
+        coord_converted[:,:,:,0],coord_converted[:,:,:,1],coord_converted[:,:,:,2] = utils.convert_sky_to_cartesian(coord_converted[:,:,:,0],
+                                                                                                                    coord_converted[:,:,:,1],
+                                                                                                                    coord_converted[:,:,:,2],
+                                                                                                                    coordinate_transform,
+                                                                                                                    rcomov=rcomov,
+                                                                                                                    distang=distang,
+                                                                                                                    suplementary_parameters=suplementary_parameters)
         return(coord_converted)
 
     @classmethod
@@ -688,7 +661,7 @@ class StackMap(TomographicMap):
 
 
     def compute_stack_ellipticity(self,sign=1):
-        elipticity = {}
+        ellipticity = {}
         sign = np.sign(self.map_array[self.map_array.shape[0]//2,self.map_array.shape[1]//2,self.map_array.shape[2]//2])
         for direction in ["x","y","z"]:
             x_index,y_index,index_direction,index_dict = utils.get_direction_indexes(direction,False)
@@ -715,15 +688,15 @@ class StackMap(TomographicMap):
                 p[3],p[4] = sigma1,sigma2
             else :
                 p[4],p[3] = sigma1,sigma2
-            elipticity[direction] = sigma1/sigma2
-            elipticity[direction + "_gauss"] = p
+            ellipticity[direction] = sigma1/sigma2
+            ellipticity[direction + "_gauss"] = p
             if(direction == "x"):
-                elipticity[direction + "_order"] = "sigmay/sigmaz"
+                ellipticity[direction + "_order"] = "sigmay/sigmaz"
             elif(direction == "y"):
-                elipticity[direction + "_order"] = "sigmax/sigmaz"
+                ellipticity[direction + "_order"] = "sigmax/sigmaz"
             elif(direction == "z"):
-                elipticity[direction + "_order"] = "sigmax/sigmay"
-        self.elipticity = elipticity
+                ellipticity[direction + "_order"] = "sigmax/sigmay"
+        self.ellipticity = ellipticity
 
 
 
