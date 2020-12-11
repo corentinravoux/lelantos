@@ -22,12 +22,11 @@ Tested on irene and cobalt (CCRT)
 
 import numpy as np
 import logging, time, os
-import scipy
 import fitsio
 from scipy.ndimage.filters import gaussian_filter
 from scipy import interpolate
 from scipy.ndimage import map_coordinates
-
+from scipy.optimize import leastsq
 
 
 #############################################################################
@@ -402,7 +401,7 @@ class gaussian_fitter_2d(object):
             Weights=np.sqrt(np.square(dXcoords)+np.square(dYcoords)) # Taking radius as the weights for least square fitting
             return np.ravel((self.Gaussian2D(*ip)(*np.indices(self.inpdata.shape)) - self.inpdata)/np.sqrt(Weights))  #Taking a sqrt(weight) here so that while scipy takes square of this array it will become 1/r weight.
 
-        p, success = scipy.optimize.leastsq(errfun, ip)
+        p, success = leastsq(errfun, ip)
 
         return p,success
 
