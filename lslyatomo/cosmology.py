@@ -619,123 +619,89 @@ class PixelAnalizer(object):
         plt.savefig("{}_at_Z{}.pdf".format(name_histo,zpar),format="pdf")
 
 
+    @staticmethod
+    def plot_mean_distance_density(zpar,dperpz,densityz,nameout,coupled=False,comparison=False,dperp_comparison=None,density_comparison=None,zpar_comparison=None,legend=None,dperp_other=None,density_other=None):
+        if(coupled):
+            PixelAnalizer.plot_mean_distance_density_coupled(zpar,dperpz,densityz,nameout,comparison=False,
+                                               dperp_comparison=dperp_comparison,
+                                               density_comparison=density_comparison,
+                                               zpar_comparison=zpar_comparison,legend=legend,
+                                               dperp_other=dperp_other,density_other=density_other)
+        else:
+            PixelAnalizer.plot_mean_distance_density_not_coupled(zpar,dperpz,densityz,nameout,comparison=False,
+                                               dperp_comparison=dperp_comparison,
+                                               density_comparison=density_comparison,
+                                               zpar_comparison=zpar_comparison,legend=legend,
+                                               dperp_other=dperp_other,density_other=density_other)
+
 
 
     @staticmethod
-    def plot_mean_distance_density(zpar,dperpz,densityz,nameout,coupled_plot=False,comparison=False,dperp_comparison=None,density_comparison=None,zpar_comparison=None,legend=None):
-        if(coupled_plot is False):
+    def plot_mean_distance_density_not_coupled(zpar,dperpz,densityz,nameout,comparison=False,dperp_comparison=None,density_comparison=None,zpar_comparison=None,legend=None,dperp_other=None,density_other=None):
+        plt.figure()
+        plt.xlabel("Redshift")
+        plt.ylabel("Mean los separation [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]")
+        plt.grid()
+        plt.plot(zpar,dperpz)
+        if(comparison):
+            plt.plot(zpar_comparison,dperp_comparison)
+            plt.legend(legend)
+            if(dperp_other is not None):
+                for i in range(len(dperp_other)):
+                    plt.plot(dperp_other[i][0],dperp_other[i][1])
+        plt.savefig("separation_{}.pdf".format(nameout), format = "pdf")
 
-            plt.figure()
-            plt.xlabel("Redshift")
-            plt.ylabel("Mean los separation [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]")
-            plt.grid()
-            plt.plot(zpar,dperpz)
-            if(comparison):
-                plt.plot(zpar_comparison,dperp_comparison)
-                plt.legend(legend)
-            plt.savefig("separation_{}.pdf".format(nameout), format = "pdf")
-
-            plt.figure()
-            plt.xlabel("Redshift")
-            plt.ylabel("Density [" + r"$\mathrm{deg^{-2}}$" + "]")
-            plt.grid()
-            plt.plot(zpar,densityz)
-            if(comparison):
-                plt.plot(zpar_comparison,density_comparison)
-                plt.legend(legend)
-            plt.savefig("density_{}.pdf".format(nameout), format = "pdf")
-
-        else:
-            fig, ax1 = plt.subplots()
-
-            color = 'tab:blue'
-            ax1.set_xlabel("Redshift z")
-            ax1.set_ylabel("Mean separation [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]", color=color)
-            ax1.plot(zpar,dperpz, color=color)
-            if(comparison):
-                ax1.plot(zpar_comparison,dperp_comparison, color=color,linestyle ="--")
-            ax1.tick_params(axis='y', labelcolor=color)
-
-            ax2 = ax1.twinx()
-
-            color = 'tab:orange'
-            ax2.set_ylabel("Density [" + r"$\mathrm{deg^{-2}}$" + "]", color=color)
-            ax2.plot(zpar,densityz, color=color)
-            if(comparison):
-                ax2.plot(zpar_comparison,density_comparison, color=color,linestyle ="--")
-            ax2.tick_params(axis='y', labelcolor=color)
-
-            fig.tight_layout()
-            if(comparison):
-                legend_elements = [Line2D([0], [0], color='k', lw=1, label=legend[0]),Line2D([0], [0], color='k',linestyle ="--", lw=1, label=legend[1])]
-                ax1.legend(handles=legend_elements,loc = "upper center")
-            plt.savefig("{}.pdf".format(nameout),format ="pdf",dpi=200)
+        plt.figure()
+        plt.xlabel("Redshift")
+        plt.ylabel("Density [" + r"$\mathrm{deg^{-2}}$" + "]")
+        plt.grid()
+        plt.plot(zpar,densityz)
+        if(comparison):
+            plt.plot(zpar_comparison,density_comparison)
+            plt.legend(legend)
+            if(density_other is not None):
+                for i in range(len(density_other)):
+                    plt.plot(density_other[i][0],density_other[i][1])
+        plt.savefig("density_{}.pdf".format(nameout), format = "pdf")
 
 
-### Improved on lsstomo :
-        # if(coupled_plot is False):
+    @staticmethod
+    def plot_mean_distance_density_coupled(zpar,dperpz,densityz,nameout,comparison=False,dperp_comparison=None,density_comparison=None,zpar_comparison=None,legend=None,dperp_other=None,density_other=None):
+        fig, ax1 = plt.subplots()
+        line = ["dotted","dashdot","densely dashdotdotted"]
 
-        #     plt.figure()
-        #     plt.plot(stripe_dperp[0],stripe_dperp[1])
-        #     plt.plot(saclay_dperp[0],saclay_dperp[1])
-        #     if(otherdperp is not None):
-        #         for i in range(len(dperp_other)):
-        #             plt.plot(dperp_other[i][0],dperp_other[i][1])
-        #     plt.ylabel("Mean los separation [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]")
-        #     plt.xlabel("Redshift")
-        #     plt.legend(legend)
-        #     plt.grid()
-        #     plt.savefig("separation_{}.pdf".format(nameout), format = "pdf")
+        color = 'tab:blue'
+        ax1.set_xlabel("Redshift z")
+        ax1.set_ylabel("Mean separation [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]", color=color)
+        ax1.plot(zpar,dperpz, color=color)
+        if(comparison):
+            ax1.plot(zpar_comparison,dperp_comparison, color=color,linestyle ="--")
+            if(dperp_other is not None):
+                for i in range(len(dperp_other)):
+                    ax1.plot(dperp_other[i][0],dperp_other[i][1], color=color,linestyle =line[i])
+        ax1.tick_params(axis='y', labelcolor=color)
 
+        ax2 = ax1.twinx()
 
-        #     plt.figure()
-        #     plt.plot(stripe_density[0],stripe_density[1])
-        #     plt.plot(saclay_density[0],saclay_density[1])
-        #     if(otherdensity is not None):
-        #         for i in range(len(otherdensity)):
-        #             plt.plot(density_other[i][0],density_other[i][1])
-        #     plt.ylabel("Density [" + r"$\mathrm{deg^{-2}}$" + "]")
-        #     plt.xlabel("Redshift")
-        #     plt.legend(legend)
-        #     plt.grid()
-        #     plt.savefig("density_{}.pdf".format(nameout), format = "pdf")
+        color = 'tab:orange'
+        ax2.set_ylabel("Density [" + r"$\mathrm{deg^{-2}}$" + "]", color=color)
+        ax2.plot(zpar,densityz, color=color)
+        if(comparison):
+            ax2.plot(zpar_comparison,density_comparison, color=color,linestyle ="--")
+            if(density_other is not None):
+                for i in range(len(density_other)):
+                    ax2.plot(density_other[i][0],density_other[i][1], color=color,linestyle =line[i])
+        ax2.tick_params(axis='y', labelcolor=color)
 
-        # else :
-        #     fig, ax1 = plt.subplots()
-        #     line = ["dotted","dashdot","densely dashdotdotted"]
-        #     color = 'tab:blue'
-        #     ax1.set_xlabel("Redshift")
-        #     ax1.set_ylabel("Mean separation [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]", color=color)
-        #     ax1.plot(stripe_dperp[0],stripe_dperp[1], color=color)
-        #     ax1.plot(saclay_dperp[0],saclay_dperp[1], color=color,linestyle ="--")
-        #     if(otherdperp is not None):
-        #         for i in range(len(dperp_other)):
-        #             ax1.plot(dperp_other[i][0],dperp_other[i][1], color=color,linestyle =line[i])
-        #     ax1.tick_params(axis='y', labelcolor=color)
+        fig.tight_layout()
+        if(comparison):
+            legend_elements = [Line2D([0], [0], color='k', lw=1, label=legend[0]),Line2D([0], [0], color='k',linestyle ="--", lw=1, label=legend[1])]
+            if(dperp_other is not None):
+                for i in range(len(dperp_other)):
+                    legend_elements.append(Line2D([0], [0], color='k',linestyle =line[i], lw=1, label=legend[i+2]))
 
-        #     ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-
-        #     color = 'tab:orange'
-        #     ax2.set_ylabel("Density [" + r"$\mathrm{deg^{-2}}$" + "]", color=color)  # we already handled the x-label with ax1
-        #     ax2.plot(stripe_density[0],stripe_density[1], color=color)
-        #     ax2.plot(saclay_density[0],saclay_density[1], color=color,linestyle ="--")
-        #     if(otherdensity is not None):
-        #         for i in range(len(otherdensity)):
-        #             ax2.plot(density_other[i][0],density_other[i][1], color=color,linestyle =line[i])
-        #     ax2.tick_params(axis='y', labelcolor=color)
-
-        #     fig.tight_layout()  # otherwise the right y-label is slightly clipped
-        #     legend_elements = [Line2D([0], [0], color='k', lw=1, label=legend[0]),Line2D([0], [0], color='k',linestyle ="--", lw=1, label=legend[1])]
-        #     if(otherdperp is not None):
-        #         for i in range(len(dperp_other)):
-        #             legend_elements.append(Line2D([0], [0], color='k',linestyle =line[i], lw=1, label=legend[i+2]))
-        #     ax1.legend(handles=legend_elements,loc = "upper center")
-        #     plt.savefig("{}.pdf".format(nameout),format ="pdf",dpi=200)
-
-
-
-
-
+            ax1.legend(handles=legend_elements,loc = "upper center")
+        plt.savefig("{}.pdf".format(nameout),format ="pdf",dpi=200)
 
 
 
