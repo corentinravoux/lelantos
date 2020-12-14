@@ -314,17 +314,18 @@ def interpolate_map(interpolation_method,map_array,coord):
     return(DM_map)
 
 
-def interpolate_and_fill_map(interpolation_method,map_to_fill,map_array,coord,mask):
+def interpolate_and_fill_map(interpolation_method,map_array,coord):
     if(interpolation_method.upper() == "NEAREST"):
-        coord = np.around(coord,decimals=0).astype(int)
-        map_to_fill[:,:,:][mask] = map_array[coord[:,:,:,0][mask],coord[:,:,:,1][mask],coord[:,:,:,2][mask]]
+        coord_nearest = np.around(coord,decimals=0).astype(int)
+        map_to_fill = map_array[coord_nearest[:,0],coord_nearest[:,1],coord_nearest[:,2]]
+        del coord_nearest
     elif(interpolation_method.upper() == "LINEAR"):
-        map_to_fill[:,:,:][mask] = map_coordinates(map_array, np.transpose(coord[mask]), order=1)
+        map_to_fill = map_coordinates(map_array, np.transpose(coord), order=1)
     elif(interpolation_method.upper() == "SPLINE"):
-        map_to_fill[:,:,:][mask] = map_coordinates(map_array, np.transpose(coord[mask]), order=2)
+        map_to_fill = map_coordinates(map_array, np.transpose(coord), order=2)
     else :
         raise ValueError("Please select NEAREST, LINEAR or SPLINE as interpolation_method")
-
+    return(map_to_fill)
 
 
 def gaussian_smoothing(mapdata,sigma):

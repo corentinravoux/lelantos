@@ -554,20 +554,24 @@ class TomographyStack(object):
             stack_slice = stack.map_array[:,:,stack.shape[2]//2]
             if(rotate): stack_slice = np.transpose(np.flip(stack_slice,axis=1))
 
-        extentmap = [-stack.size[0],+stack.size[0],-stack.size[0],+stack.size[0]]
-        TomographyPlot.plot_slice(stack_slice,extentmap,xlab,ylab,name_plot,deltamin,deltamax,x_index,y_index,save_fig=False,**kwargs)
+        extentmap = [-stack.size[0]/2,+stack.size[0]/2,-stack.size[0]/2,+stack.size[0]/2]
+        TomographyPlot.plot_slice(np.transpose(stack_slice),extentmap,xlab,ylab,name_plot,deltamin,deltamax,x_index,y_index,save_fig=False,**kwargs)
 
         if(los_quasar is not None):
             TomographyStack.plot_mean_los_distance(direction,stack,los_quasar=los_quasar)
 
         if(ellipticity):
-            TomographyStack.plot_ellipticity(stack,stack_slice,x_index,y_index,direction,rotate,**kwargs)
-
-
+            if(stack.ellipticity is None):
+                stack.compute_stack_ellipticity()
+            TomographyStack.plot_ellipticity(stack_slice,stack.ellipticity,
+                                            stack.mpc_per_pixel[y_index],
+                                            stack.mpc_per_pixel[x_index],
+                                            direction,rotate,**kwargs)
         if(hd):plt.savefig(f"stack_{name_plot}_{direction}.pdf",format="pdf", dpi=200)
         else:plt.savefig(f"stack_{name_plot}_{direction}.pdf",format="pdf")
         plt.show()
         plt.close()
+
 
 
     @staticmethod
@@ -581,27 +585,25 @@ class TomographyStack(object):
 
 
     @staticmethod
-    def plot_ellipticity(stack,stack_slice,x_index,y_index,direction,rotate,**kwargs):
+    def plot_ellipticity(stack_slice,ellipticity,mpx,mpy,direction,rotate,**kwargs):
+        # CR - might need further tests
         if(rotate):
             raise NotImplementedError("showing ellipticity with a rotate figure is not implemented, please put rotate to False")
-        if(stack.ellipticity is None):
-            stack.compute_stack_ellipticity()
-        x,y=np.indices((stack_slice.shape[0],stack_slice.shape[1]),dtype=np.float)
-        xcenter,ycenter = (x - stack.shape[x_index]//2) * stack.mpc_per_pixel[x_index],-(y - stack.shape[y_index]//2) * stack.mpc_per_pixel[y_index]
-        # xcenter,ycenter = (x - stack.shape[2]//2) * stack.mpc_per_pixel[2],-(y - stack.shape[1]//2) * stack.mpc_per_pixel[1]
-        # xcenter,ycenter = (x - stack.shape[0]//2) * stack.mpc_per_pixel[0],-(y - stack.shape[2]//2) * stack.mpc_per_pixel[2]
-        # xcenter,ycenter = (x - stack.shape[0]//2) * stack.mpc_per_pixel[0], -(y - stack.shape[1]//2) * stack.mpc_per_pixel[1]
+        x,y=np.indices((stack_slice.shape[0],stack_slice.shape[0]),dtype=np.float)
+        xcenter = (x - x.shape[0]//2) * mpx
+        ycenter = -(y - y.shape[1]//2) * mpy
         gauss = utils.gaussian_fitter_2d()
-        gaussian = gauss.Gaussian2D(*stack.ellipticity[direction + "_gauss"])
-        data_fitted = gaussian(y,x)
+        gaussian = gauss.Gaussian2D(*ellipticity[direction + "_gauss"])
+        data_fitted = gaussian(xcenter,ycenter)
         levels = utils.return_key(kwargs,"levels",[1 - np.exp(-(1)**2/2),1 - np.exp(-(2)**2/2),1 - np.exp(-(3)**2/2)])
-        plt.contour(xcenter,ycenter,data_fitted.reshape(stack_slice.shape[0], stack_slice.shape[1]),
+        plt.contour(np.transpose(xcenter),np.transpose(ycenter),
+                    np.transpose(data_fitted.reshape(stack_slice.shape[0], stack_slice.shape[0])),
                     levels,linewidths=utils.return_key(kwargs,"linewidths",2),
                     colors=utils.return_key(kwargs,"colors","w"))
         ticks = utils.return_key(kwargs,"ticks",False)
         if(ticks):
-            elname =f"""{stack.ellipticity[direction + "_order"]} = {str(np.round(stack.ellipticity[direction],2))}"""
-            plt.text(-0.9*stack.size,0.9*stack.size,elname)
+            elname =f"""{ellipticity[direction + "_order"]} = {str(np.round(ellipticity[direction],2))}"""
+            plt.text(0.1, 0.9,elname, ha='center', va='center', transform=plt.gca().transAxes)
 
 
 
@@ -614,7 +616,7 @@ class TomographyStack(object):
             stack.read()
             mean_stack.append(stack.map_array)
 
-    
+
         ellipticities = {}
         for i in range(len(snap)):
             list_stacks_knife = list_stacks_snap.copy()

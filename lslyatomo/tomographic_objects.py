@@ -565,7 +565,7 @@ class StackMap(TomographicMap):
                    catalog=catalog,
                    map_array=stack,
                    name=name,
-                   shape=shape,size=(size_stack,size_stack,size_stack),
+                   shape=shape,size=(2*size_stack,2*size_stack,2*size_stack),
                    boundary_cartesian_coord=boundary_cartesian_coord,
                    boundary_sky_coord=boundary_sky_coord,
                    coordinate_transform=tomographic_map.coordinate_transform,
@@ -664,31 +664,29 @@ class StackMap(TomographicMap):
         ellipticity = {}
         sign = np.sign(self.map_array[self.map_array.shape[0]//2,self.map_array.shape[1]//2,self.map_array.shape[2]//2])
         for direction in ["x","y","z"]:
-            x_index,y_index,index_direction,index_dict = utils.get_direction_indexes(direction,False)
+            x_index,y_index = utils.get_direction_indexes(direction,True)[0:2]
             if(direction == "x"):
-                Slice = np.transpose(self.map_array[self.map_array.shape[0]//2,:,:])
+                Slice = self.map_array[self.map_array.shape[0]//2,:,:]
             elif(direction == "y"):
-                Slice = np.transpose(self.map_array[:,self.map_array.shape[1]//2,:])
+                Slice = self.map_array[:,self.map_array.shape[1]//2,:]
             elif(direction == "z"):
-                Slice = np.transpose(self.map_array[:,:,self.map_array.shape[2]//2])
+                Slice = self.map_array[:,:,self.map_array.shape[2]//2]
             gauss = utils.gaussian_fitter_2d(inpdata = sign * Slice)
             p,success = gauss.FitGauss2D()
             angle = p[5]
+            p[1] = (p[1] - Slice.shape[0]//2) * self.mpc_per_pixel[x_index]
+            p[2] = -(p[2] - Slice.shape[1]//2) * self.mpc_per_pixel[y_index]
+            sigma1 = p[3] * np.sqrt( (np.cos(np.radians(angle)) * self.mpc_per_pixel[x_index])**2 + (np.sin(np.radians(angle)) * self.mpc_per_pixel[y_index])**2)
+            sigma2 = p[4] * np.sqrt( (np.cos(np.radians(angle)) * self.mpc_per_pixel[y_index])**2 + (np.sin(np.radians(angle)) * self.mpc_per_pixel[x_index])**2)
             if((angle <45)&(angle>-45)):
-                sigma1,sigma2,i1,i2 = p[4],p[3],y_index, x_index
+                sigma1,sigma2 = sigma1,sigma2
+                x_index,y_index = x_index,y_index
             elif((angle <135)&(angle>-135)):
-                sigma1,sigma2,i1,i2 = p[3],p[4],x_index, y_index
-            else :
-                sigma1,sigma2,i1,i2 = p[4],p[3],y_index, x_index
-            sigma1 = (np.cos(np.radians(angle))**2 * self.mpc_per_pixel[i1] + (np.sin(np.radians(angle))**2)* self.mpc_per_pixel[i2])*sigma1
-            sigma2 = (np.cos(np.radians(angle))**2 * self.mpc_per_pixel[i2] + (np.sin(np.radians(angle))**2)* self.mpc_per_pixel[i1])*sigma2
-            if((angle <45)&(angle>-45)):
-                p[4],p[3] = sigma1,sigma2
-            elif((angle <135)&(angle>-135)):
-                p[3],p[4] = sigma1,sigma2
-            else :
-                p[4],p[3] = sigma1,sigma2
-            ellipticity[direction] = sigma1/sigma2
+                sigma1,sigma2 = sigma1,sigma2
+                x_index,y_index = y_index,x_index
+            p[3],p[4] = sigma1,sigma2
+            p[5] = np.degrees(np.arctan2(np.tan(np.radians(angle))*self.mpc_per_pixel[y_index],self.mpc_per_pixel[x_index]))
+            ellipticity[direction] = sigma2/sigma1
             ellipticity[direction + "_gauss"] = p
             if(direction == "x"):
                 ellipticity[direction + "_order"] = "sigmay/sigmaz"

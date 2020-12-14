@@ -126,16 +126,16 @@ class BoxExtractor():
         self.log.add("Loading of the Saclay map {}".format(i_box))
         DM_mocks_map = utils.saclay_mock_get_box(self.box_dir[i_box],self.box_shape[i_box])
         self.log.add("Creation of the DM map with box {}".format(i_box))
-        utils.interpolate_and_fill_map(self.interpolation_method,DM_map,DM_mocks_map,coords_pixels_box_saclay,mask)
+        DM_map[mask] = utils.interpolate_and_fill_map(self.interpolation_method,DM_mocks_map,coords_pixels_box_saclay[mask])
         del DM_mocks_map
         if(get_prop is not None):
             for i in range(len(get_prop)):
                 self.log.add("Loading of the Saclay {} map {}".format(get_prop[i],i_box))
                 prop_mocks_map = utils.saclay_mock_get_box(self.box_dir[i_box],self.box_shape[i_box],name_box=get_prop[i])
                 self.log.add("Creation of the {} map with box {}".format(get_prop[i],i_box))
-                utils.interpolate_and_fill_map(self.interpolation_method,Props_map[i],prop_mocks_map,coords_pixels_box_saclay,mask)
+                Props_map[i][mask] = utils.interpolate_and_fill_map(self.interpolation_method,prop_mocks_map,coords_pixels_box_saclay[mask])
                 del prop_mocks_map
-        del coords_pixels_box_saclay,mask
+        del coords_pixels_box_saclay,mask,get_prop
         return(DM_map,Props_map)
 
 
@@ -297,16 +297,17 @@ class BoxExtractor():
 
 
     def create_box(self,map_property_file,name,rsd_box=False,growth_multiplication=True,matter_field=True,gaussian_smoothing=None,shape_map_output=None):
-        prop = tomographic_objects.MapPixelProperty(name=map_property_file)
-        prop.read()
+        property_file = tomographic_objects.MapPixelProperty(name=map_property_file)
+        property_file.read()
         if(shape_map_output is None):
-            shape_map_output = prop.shape
-        X_tomo_min,Y_tomo_min,Z_tomo_min = prop.boundary_cartesian_coord[0]
-        X_tomo_max,Y_tomo_max,Z_tomo_max = prop.boundary_cartesian_coord[1]
+            shape_map_output = property_file.shape
+        X_tomo_min,Y_tomo_min,Z_tomo_min = property_file.boundary_cartesian_coord[0]
+        X_tomo_max,Y_tomo_max,Z_tomo_max = property_file.boundary_cartesian_coord[1]
         X_tomo_array,Y_tomo_array, Z_tomo_array = self.create_box_array(X_tomo_min,X_tomo_max,Y_tomo_min,Y_tomo_max,Z_tomo_min,Z_tomo_max,shape_map_output)
-        suplementary_parameters = utils.return_suplementary_parameters(prop.coordinate_transform,property=prop)
-        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(prop.Omega_m)
-        ra_array,dec_array,z_array  = utils.convert_cartesian_to_sky(X_tomo_array,Y_tomo_array, Z_tomo_array,prop.coordinate_transform,inv_rcomov=inv_rcomov,inv_distang=inv_distang,distang=distang,suplementary_parameters=suplementary_parameters)
+        suplementary_parameters = utils.return_suplementary_parameters(property_file.coordinate_transform,property=property_file)
+        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(property_file.Omega_m)
+        ra_array,dec_array,z_array  = utils.convert_cartesian_to_sky(X_tomo_array,Y_tomo_array, Z_tomo_array,property_file.coordinate_transform,inv_rcomov=inv_rcomov,inv_distang=inv_distang,distang=distang,suplementary_parameters=suplementary_parameters)
+        del X_tomo_array,Y_tomo_array, Z_tomo_array,suplementary_parameters,rcomov,distang,inv_rcomov,inv_distang
         if(type(self.box_dir) == list):
             (dm_map,prop_maps,prop) = self.extract_box_multiple(ra_array,dec_array,z_array,shape_map_output,rsd_box)
         else :
@@ -314,11 +315,12 @@ class BoxExtractor():
         if(growth_multiplication): dm_map = self.multiply_by_growth(dm_map,z_array)
         if(matter_field): dm_map = self.convert_to_matter_field(dm_map)
         if(gaussian_smoothing is not None):
-            gaussian_smoothing_pix = gaussian_smoothing*utils.pixel_per_mpc(prop.size,shape_map_output)
+            gaussian_smoothing_pix = gaussian_smoothing*utils.pixel_per_mpc(property_file.size,shape_map_output)
             dm_map = utils.gaussian_smoothing(dm_map,gaussian_smoothing_pix)
         dm_map_object = tomographic_objects.TomographicMap(map_array=dm_map,name=name)
+        del dm_map
         dm_map_object.write()
-        del dm_map, dm_map_object
+        del dm_map_object
         if(rsd_box):
             for i in range(len(prop)):
                 prop_map_object = tomographic_objects.TomographicMap(map_array=prop_maps[i],name=f"{name}_{prop[i]}")
