@@ -20,7 +20,7 @@ Tested on irene and cobalt (CCRT)
 
 
 
-import os,pickle
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
