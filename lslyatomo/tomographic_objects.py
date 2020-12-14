@@ -956,7 +956,7 @@ class Delta(object):
             from picca import data
         except:
             import lslyatomo.picca.data as data
-            raise Warning("Picca might be updated, we suggest to install picca independently")
+            print("Picca might be updated, we suggest to install picca independently")
         if(self.delta_file is None):
             self.read_from_fits()
         try:
@@ -1238,7 +1238,7 @@ class Catalog(object):
 
     def convert_to_absolute_coordinates(self,property_file=None):
         if(property_file is not None):
-            raise Warning("A property file is used instead of the parameters of the catalog")
+            print("A property file is used instead of the parameters of the catalog")
             prop = MapPixelProperty(name=property_file)
             prop.read()
             boundary_cartesian_coord = prop.boundary_cartesian_coord
@@ -1256,7 +1256,7 @@ class Catalog(object):
 
     def convert_to_normalized_coordinates(self,property_file=None):
         if(property_file is not None):
-            raise Warning("A property file is used instead of the parameters of the catalog")
+            print("A property file is used instead of the parameters of the catalog")
             prop = MapPixelProperty(name=property_file)
             prop.read()
             boundary_cartesian_coord = prop.boundary_cartesian_coord
@@ -1274,7 +1274,7 @@ class Catalog(object):
 
     def convert_to_sky(self,property_file=None):
         if(property_file is not None):
-            raise Warning("A property file is used instead of the parameters of the catalog")
+            print("A property file is used instead of the parameters of the catalog")
             prop = MapPixelProperty(name=property_file)
             prop.read()
             coordinate_transform = prop.coordinate_transform
@@ -1297,7 +1297,7 @@ class Catalog(object):
 
     def convert_to_cartesian(self,property_file=None):
         if(property_file is not None):
-            raise Warning("A property file is used instead of the parameters of the catalog")
+            print("A property file is used instead of the parameters of the catalog")
             prop = MapPixelProperty(name=property_file)
             prop.read()
             coordinate_transform = prop.coordinate_transform
@@ -1323,10 +1323,10 @@ class Catalog(object):
     def redshift(self):
         if(self.catalog_type == "cartesian"):
             self.convert_to_sky()
-            redshift = self.coord[:,2]
+            redshift = self.coord[:,2].copy()
             self.convert_to_cartesian()
         else:
-            redshift = self.coord[:,2]
+            redshift = self.coord[:,2].copy()
         return(redshift)
 
 

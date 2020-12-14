@@ -52,7 +52,7 @@ def get_cosmo_function(Omega_m,Omega_k=0.):
         from picca import constants
     except:
         import lsstomo.picca.constants as constants
-        raise Warning("Picca might be updated, we suggest to install picca independently")
+        print("Picca might be updated, we suggest to install picca independently")
     try:
         Cosmo = constants.cosmo(Omega_m,Ok=Omega_k)
         rcomov = Cosmo.r_comoving
@@ -169,7 +169,7 @@ def saclay_mock_box_cosmo_parameters(box_shape,size_cell):
         from SaclayMocks import constant as saclay_mock_constant
     except :
         from lslyatomo.saclaymocks import constant as saclay_mock_constant
-        raise Warning("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
+        print("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
     NZ = box_shape[2]
     DZ = size_cell
     LZ = NZ*DZ
@@ -233,7 +233,7 @@ def saclay_mock_sky_to_cartesian(ra,dec,R,ra0,dec0):
         from SaclayMocks import box as saclay_mock_box
     except :
         from lslyatomo.saclaymocks import box as saclay_mock_box
-        raise Warning("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
+        print("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
     X,Y,Z = saclay_mock_box.ComputeXYZ2(ra*(np.pi/180),dec*(np.pi/180),R,ra0*(np.pi/180),dec0*(np.pi/180))
     return(X,Y,Z)
 
