@@ -1319,6 +1319,15 @@ class Catalog(object):
         self.convert_to_normalized_coordinates(property_file=property_file)
 
 
+    @property
+    def redshift(self):
+        if(self.catalog_type == "cartesian"):
+            self.convert_to_sky()
+            redshift = self.coord[:,2]
+            self.convert_to_cartesian()
+        else:
+            redshift = self.coord[:,2]
+        return(redshift)
 
 
     def cut_catalog(self,coord_min=None,coord_max=None,center_x_coord=False):

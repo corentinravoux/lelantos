@@ -27,6 +27,7 @@ from multiprocessing import Pool
 from scipy.stats import ks_2samp
 from functools import partial
 from lslyatomo import tomographic_objects,utils
+from scipy.optimize import curve_fit
 
 
 #############################################################################
@@ -600,169 +601,111 @@ class VoidFinder(object):
 
 
 
-class VoidPlot(object):
+class PlotVoid(object):
 
-    def __init__(self,pwd):
+    def __init__(self,pwd,void_catalog):
         self.pwd = pwd
+        self.void = tomographic_objects.Catalog.init_catalog_from_fits(void_catalog, "void")
 
 
-
-    def create_void_histogram_multiple(self,radius,nb_bins,rmin,rmax,name,norm=False):
+    def void_histogram(self,nb_bins,rmin,rmax,norm=False):
         plt.figure()
         bins = np.linspace(rmin,rmax, nb_bins)
-        (n, bins, patches) = plt.hist(radius, bins, alpha=1, label='x',density=norm)
+        (n, bins, patches) = plt.hist(self.void.radius, bins, alpha=1, label='x',density=norm)
         n = np.mean(n,axis=0)
-        pickle.dump([n,bins],open(name,'wb'))
 
 
-    def plot_radius_vs_redshift(self,name_dict,name):
-        dict_void = self.load_dictionary(name_dict)
-        radius = dict_void["radius"]
-        z = dict_void["coord"][:,2]
+    def plot_radius_redshift(self,name):
+        redshift = self.void.redshift
         plt.figure()
-        plt.plot(z,radius,"b.")
+        plt.plot(redshift,self.void.radius,"b.")
         plt.xlabel("Redshift")
         plt.ylabel("Radius size")
         plt.grid()
-        plt.savefig(name + ".pdf", format ="pdf")
+        plt.savefig(os.path.join(self.pwd,f"{name}_radius_redshift.pdf"), format ="pdf")
         plt.close()
 
-    def plot_meanradius_vs_redshift(self,name_dict,name,nb_bins):
-        dict_void = self.load_dictionary(name_dict)
-        radius = dict_void["radius"]
-        z = dict_void["coord"][:,2]
-        maxredshift = np.max(z)
-        minredshift = np.min(z)
+    def plot_meanradius_redshift(self,name,nb_bins):
+        redshift = self.void.redshift
+        maxredshift = np.max(redshift)
+        minredshift = np.min(redshift)
         redshift = np.linspace(minredshift,maxredshift,nb_bins)
         mean_radius = []
         for i in range(nb_bins):
-            mask = (z < minredshift + (i+1/nb_bins)*((maxredshift - minredshift))) & (z > minredshift + (i/nb_bins)*((maxredshift - minredshift)))
-            mean_radius.append(np.mean(radius[mask]))
+            mask = (redshift < minredshift + (i+1/nb_bins)*((maxredshift - minredshift)))
+            mask &= (redshift > minredshift + (i/nb_bins)*((maxredshift - minredshift)))
+            mean_radius.append(np.mean(self.void.radius[mask]))
         plt.figure()
         plt.plot(redshift,mean_radius,"b.")
         plt.xlabel("Redshift")
         plt.ylabel("Radius size")
         plt.grid()
-        plt.savefig(name + ".pdf", format ="pdf")
+        plt.savefig(os.path.join(self.pwd,f"{name}_meanradius_redshift.pdf"), format ="pdf")
         plt.close()
 
 
-    def plot_histo_redshift(self,name_dict,name,nb_bins):
-        dict_void = self.load_dictionary(name_dict)
-        z = dict_void["coord"][:,2]
+    def plot_histo_redshift(self,name,nb_bins):
+        redshift = self.void.redshift
         plt.figure()
-        plt.hist(z,nb_bins)
+        plt.hist(redshift,nb_bins)
         plt.xlabel("Redshift")
         plt.ylabel("Number of voids")
         plt.grid()
-        plt.savefig(name + ".pdf", format ="pdf")
+        plt.savefig(os.path.join(self.pwd,f"{name}_histo_redshift.pdf"), format ="pdf")
         plt.close()
 
-    def plot_void_histogram(self,radius,nb_bins,name,norm=False):
+    def plot_histo_radius(self,nb_bins,name,norm=False):
         plt.figure()
-        bins = np.linspace(np.min(radius),np.max(radius), nb_bins)
-        plt.hist(radius, bins, alpha=1, label='x',density=norm)
+        bins = np.linspace(np.min(self.void.radius),np.max(self.void.radius), nb_bins)
+        plt.hist(self.void.radius, bins, alpha=1, label='x',density=norm)
         plt.grid()
         plt.ylabel("Number of voids")
         plt.xlabel("Radius of the void in Mpc.h-1")
-        plt.savefig("histogram_voids_radius_"+ name + ".pdf",format="pdf")
+        plt.savefig(os.path.join(self.pwd,f"{name}_histo_radius.pdf"), format ="pdf")
 
 
-
-    def load_and_plot_comparison(self,name1,name2,nb_bins,name,legend,rmin,rmax,norm=False,hist1=False,hist2=False,log_scale=True,supplementary_void=None,factor_add=None,legend_supp=None,expo_fit=False):
-        bins1,bins2 = False,False
-        if(not hist1):
-            (radius1, coord1,filling_factor1) = self.load_void_dictionary(name1)
-        else :
-            radius1 = pickle.load(open(name1,'rb'))[0]
-            bins1 = pickle.load(open(name1,'rb'))[1]
-            assert(len(bins1) == nb_bins)
-        if(not hist2):
-            (radius2, coord2,filling_factor2) = self.load_void_dictionary(name2)
-        else :
-            radius2 = pickle.load(open(name2,'rb'))[0]
-            bins2 = pickle.load(open(name2,'rb'))[1]
-            assert(len(bins2) == nb_bins)
-        if (supplementary_void is not None):
-            radius_supp = []
-            for i in range(len(supplementary_void)):
-                (radius, coord,filling_factor) = self.load_void_dictionary(supplementary_void[i])
+    def load_and_plot_comparison(self,catalog_name,nb_bins,name,legend,rmin,rmax,norm=False,log_scale=True,factor_add=None,expo_fit=False,other_catalogs=None):
+        if(other_catalogs is not None):
+            other_radius = []
+            for i in range(len(other_catalogs)):
+                other_void = tomographic_objects.Catalog.init_catalog_from_fits(other_catalogs[i], "void")
                 if(factor_add is not None):
-                    radius = list(radius)*factor_add[i]
-                radius_supp.append(radius)
-        else :
-            radius_supp = None
-        KS_stat, p_value = ks_2samp(radius1,radius2)
-        self.plot_void_histogram_comparison(radius1,radius2,nb_bins,name,legend,rmin,rmax,norm=norm,hist1=hist1,hist2=hist2,log_scale=log_scale,radius_supp=radius_supp,legend_supp=legend_supp,expo_fit=expo_fit)
+                    other_radius.apped(other_void.radius*factor_add[i])
+                else:
+                    other_radius.apped(other_void.radius)
+        catalog = tomographic_objects.Catalog.init_catalog_from_fits(catalog_name, "void")
+        KS_stat, p_value = ks_2samp(self.void.radius,catalog.radius)
+        self.plot_void_histogram_comparison(catalog.radius,nb_bins,name,legend,rmin,rmax,norm=norm,log_scale=log_scale,expo_fit=expo_fit,other_radius=other_radius)
         return(KS_stat, p_value)
 
-    def load_and_plot(self,name_dict,nb_bins,name,norm=False):
-        (radius, coord,filling_factor) = self.load_void_dictionary(name_dict)
-        self.plot_void_histogram(radius,nb_bins,name,norm=norm)
 
-
-    def expo(self,x,a,b):
-        return(np.exp(a*x+b))
-
-    def plot_void_histogram_comparison(self,radius1,radius2,nb_bins,name,legend,rmin,rmax,norm=False,hist1=False,hist2=False,log_scale=True,radius_supp=None,legend_supp=None,expo_fit=False):
+    def plot_void_histogram_comparison(self,radius2,nb_bins,name,legend,rmin,rmax,norm=False,log_scale=True,expo_fit=None,other_radius=None):
         plt.figure()
         bins = np.linspace(rmin,rmax, nb_bins)
-        if(not hist1):
-            (n1, bins1, patches1)  = plt.hist(radius1, bins, alpha=0.5, label=legend[0],density=norm)
-        else :
-            (n1, bins1, patches1)  = plt.hist(bins[:-1],bins,weights=radius1, alpha=0.5, label=legend[0],density=norm)
-        if(not hist2):
-            (n2, bins2, patches2)  = plt.hist(radius2, bins, alpha=0.5, label=legend[1],density=norm)
-        else :
-            (n2, bins2, patches2)  = plt.hist(bins[:-1],weights=radius2, alpha=0.5, label=legend[0],density=norm)
-        if(radius_supp is not None):
-            for i in range(len(radius_supp)):
-                (n, bins, patches)  = plt.hist(radius_supp[i], bins, label=legend_supp[i],histtype='step',linestyle='dashed',ec="k")
-        if(expo_fit):
-            from scipy.optimize import curve_fit
+        (n1, bins1, patches1)  = plt.hist(self.void.radius, bins, alpha=0.5, label=legend[0],density=norm)
+        (n2, bins2, patches2)  = plt.hist(radius2, bins, alpha=0.5, label=legend[0],density=norm)
+        if(other_radius is not None):
+            for i in range(len(other_radius)):
+                (n_other, bins_other, patches_other)  = plt.hist(other_radius[i], bins, label=legend[i+1],histtype='step',linestyle='dashed',ec="k")
+        if(expo_fit is not None):
             bin_center = (bins1[1:] + bins1[0:-1]) / 2
-            mask = bin_center>14
+            mask = bin_center>expo_fit
             n1,n2,bins_fit = n1[mask],n2[mask],bin_center[mask]
-            fit = curve_fit(self.expo,bins_fit,n1)
-            fit2 = curve_fit(self.expo,bins_fit,n2)
+            fit_function = lambda x,a,b : np.exp(a*x+b)
+            fit = curve_fit(fit_function,bins_fit,n1)
+            fit2 = curve_fit(fit_function,bins_fit,n2)
             plt.plot(bins_fit,self.expo(bins_fit,*fit[0]),'r')
             plt.plot(bins_fit,self.expo(bins_fit,*fit2[0]),'b')
             perr = np.sqrt(np.diag(fit[1]))
             perr2 = np.sqrt(np.diag(fit2[1]))
-            print(perr,perr2)
+        else:
+            perr,perr2 = None,None
         if(log_scale):
             plt.yscale("log")
         plt.grid()
-        if(legend_supp is not None):
-            plt.legend(legend + legend_supp)
-        else :
-            plt.legend(legend )
         plt.xlabel("Void radius in Mpc.h" + r"$^{-1}$")
         if(log_scale):
             plt.savefig("histogram_voids_radius_"+ name + "log.pdf",format="pdf")
         else :
             plt.savefig("histogram_voids_radius_"+ name + "lin.pdf",format="pdf")
-
-
-    def plot_void_histogram_subset(self,radius,coord_Mpc,n,name,mapsize):
-        plt.figure()
-        sub_interval = mapsize[0]/n
-        intervales = [[i*sub_interval,(i+1)*sub_interval] for i in range(n)]
-        legend = ["Ra22-33","Ra33-44"]
-        color = ['red','blue']
-        for i in range(len(intervales)) :
-            mask = (coord_Mpc[:,0] > intervales[i][0]) &  (coord_Mpc[:,0] < intervales[i][1])
-            plt.hist(radius[mask],20,fill=False, edgecolor = color[i])
-            plt.grid()
-            plt.title("Histogram of the void radius")
-        plt.legend(legend)
-        plt.savefig("histogram_voids_radius_"+ name +".pdf",format="pdf")
-
-
-    def write_qso_to_mask(self,cross,nameout):
-        file = open(nameout,"w")
-        file.write("#Proto-cluster number & RA QSO (deg) & DEC QSO (deg) & redshift QSO\n")
-        for i in range(len(cross)):
-            for j in range(len(cross[i])):
-                file.write("{} , {} , {} , {}\n".format(i+1,cross[i][j][0],cross[i][j][1],cross[i][j][2]))
-        file.close()
+        return(perr,perr2)
