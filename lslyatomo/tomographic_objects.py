@@ -503,7 +503,8 @@ class StackMap(TomographicMap):
                           boundary_sky_coord=stack.boundary_sky_coord,
                           coordinate_transform=stack.coordinate_transform,
                           property_file=property_name)
-        stack_class.write_property_file(property_name)
+        if(property_name is not None):
+            stack_class.write_property_file(property_name)
         return(stack_class)
 
 
@@ -697,7 +698,13 @@ class StackMap(TomographicMap):
         self.ellipticity = ellipticity
 
 
-
+    def add_ellipticity_errors(self,ellipticities):
+        for direction in ["x","y","z"]:
+            sum_ellipticity = 0
+            for i in range(len(ellipticities)):
+                sum_ellipticity = sum_ellipticity + (ellipticities[direction] - self.ellipticity[direction])**2
+            self.ellipticity[direction +"_error"] = np.sqrt(sum_ellipticity/(len(ellipticities)*(len(ellipticities)-1)))
+            
 
 class Pixel(object):
 

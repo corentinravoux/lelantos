@@ -526,8 +526,20 @@ class TomographyStack(object):
         stack.write()
         self.stack = stack
 
-    def merge_stack(self,stack_name,property_stack_name,name,property_name):
-        stack = tomographic_objects.StackMap.init_by_merging(stack_name,property_stack_name,name,property_name)
+    def merge_stack(self,stack_name,property_stack_name,name,property_name,ellipticity_calculation=False):
+        merge_stack = tomographic_objects.StackMap.init_by_merging(stack_name,property_stack_name,name,property_name)
+        if(ellipticity_calculation):
+            merge_stack.compute_stack_ellipticity()
+            ellipticities = []
+            for i in range(len(stack_name)):
+                jack_knife_list = stack_name.copy()
+                jack_knife_property_list = property_stack_name.copy()
+                jack_knife_list.remove(stack_name[i])
+                jack_knife_property_list.remove(property_stack_name[i])
+                stack = tomographic_objects.StackMap.StackMap.init_by_merging(jack_knife_list,jack_knife_property_list,None,None)
+                stack.compute_stack_ellipticity()
+                ellipticities.append(stack.ellipticity)
+            merge_stack.add_ellipticity_eerors(ellipticities)
         stack.write()
         self.stack = stack
 
@@ -604,31 +616,3 @@ class TomographyStack(object):
         if(ticks):
             elname =f"""{ellipticity[direction + "_order"]} = {str(np.round(ellipticity[direction],2))}"""
             plt.text(0.1, 0.9,elname, ha='center', va='center', transform=plt.gca().transAxes)
-
-
-
-
-    def compute_jack_knife_ellipticity(self,snap,list_stacks,list_stacks_snap,sizemap,name_stack_merged,name_mean_stack_snap,deltamin,deltamax,size_stack,shape_stack,signe = 1, ncont = 4,ticks=True,length_between_los_and_quasar=None):
-
-        mean_stack = []
-        for i in range(len(stack_name)):
-            stack = cls.init_stack_by_property_file(property_stack_name[i],name=stack_name)
-            stack.read()
-            mean_stack.append(stack.map_array)
-
-
-        ellipticities = {}
-        for i in range(len(snap)):
-            list_stacks_knife = list_stacks_snap.copy()
-            list_stacks_knife.remove(list_stacks_snap[i])
-            (ellipticity) = self.merge_and_compute_ellipticity(list_stacks_knife,sizemap,name_mean_stack_snap[i],deltamin,deltamax,size_stack,shape_stack,signe = signe, ncont = ncont)
-            ellipticities[snap[i]] = ellipticity
-        ellipticities["full"] = self.merge_and_compute_ellipticity(list_stacks,sizemap,name_stack_merged,deltamin,deltamax,size_stack,shape_stack,signe = signe, ncont = ncont)
-        sigma ={}
-        for el in ["x direction, y over z","y direction, x over z","z direction, x over y"]:
-            mean = ellipticities["full"][el]
-            Sum = 0
-            for s in snap :
-                Sum = Sum + (ellipticities[s][el] - mean)**2
-            sigma[el] = np.sqrt(Sum/(len(snap)*(len(snap)-1)))
-        return(ellipticities,sigma)
