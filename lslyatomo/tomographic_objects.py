@@ -103,81 +103,45 @@ class TomographicMap(object):
     def init_by_merging(cls,launching_file_name,name_map,property_file):
         """ Need to generalized (maybe in the task manager class for reading and writting launching files) + naming filename must not be define there"""
         a = pickle.load(open(os.path.join(launching_file_name),"rb"))
-        listname,Dachshundparams,numberChunks,overlaping = a[0],a[1],a[2],a[3]
-        mapChunks = {}
-        sizemap = {}
+        listname,dachshund_params,number_chunks,overlaping = a[0],a[1],a[2],a[3]
+        map_chunks,sizemap,shapemap = {},{},{}
         for i in range(len(listname)):
-            name = os.path.join("Python_Results",Dachshundparams[i]["namemap"])
-            size = (Dachshundparams[i]["lx"],Dachshundparams[i]["ly"],Dachshundparams[i]["lz"])
-            shape = (Dachshundparams[i]["nx"],Dachshundparams[i]["ny"],Dachshundparams[i]["nz"])
-            submap = TomographicMap(name=name,shape=shape,size=size)
+            name = os.path.join("Python_Results",dachshund_params[i]["namemap"])
+            sizemap[listname[i]] = (dachshund_params[i]["lx"],dachshund_params[i]["ly"],dachshund_params[i]["lz"])
+            shapemap[listname[i]] = (dachshund_params[i]["nx"],dachshund_params[i]["ny"],dachshund_params[i]["nz"])
+            submap = TomographicMap(name=name,shape=shapemap[listname[i]],size=sizemap[listname[i]])
             submap.read()
-            mapChunks[listname[i]] = submap.map_array
-            sizemap[listname[i]] = (Dachshundparams[i]["lx"],Dachshundparams[i]["ly"])
-        lx = 0
-        ly = 0
+            map_chunks[listname[i]] = submap.map_array
         if overlaping !=0 :
-            for i in range(numberChunks[0]):
-                for j in range(numberChunks[1]):
+            for i in range(number_chunks[0]):
+                for j in range(number_chunks[1]):
                     filename = f'{i:03d}' + f'{j:03d}'
-                    Map = mapChunks[filename]
-                    nbPixelperMpcx = len(Map)/sizemap[filename][0]
-                    nbPixelperMpcy = len(Map[0])/sizemap[filename][1]
-                    nbpixelToremovex = int(round(nbPixelperMpcx * overlaping,0))
-                    nbpixelToremovey = int(round(nbPixelperMpcy * overlaping,0))
-                    if ((i==0)&(i == numberChunks[0] - 1)):
-                        Map = Map
+                    sub_map = map_chunks[filename]
+                    pixel_to_remove = np.around(utils.pixel_per_mpc(sizemap[filename],shapemap[listname[i]]) * overlaping,decimals=0).astype(int)
+                    if ((i==0)&(i == number_chunks[0] - 1)):
+                        sub_map = sub_map
                     elif(i==0):
-                        Map = Map[0:len(Map)-nbpixelToremovex,:,:]
-                    elif(i == numberChunks[0] - 1):
-                        Map = Map[nbpixelToremovex:len(Map),:,:]
+                        sub_map = sub_map[0:len(sub_map)-pixel_to_remove[0],:,:]
+                    elif(i == number_chunks[0] - 1):
+                        sub_map = sub_map[pixel_to_remove[0]:len(sub_map),:,:]
                     else :
-                        Map = Map[nbpixelToremovex:len(Map)-nbpixelToremovex,:,:]
-                    if ((j==0)&(j == numberChunks[1] - 1)):
-                        Map = Map
+                        sub_map = sub_map[pixel_to_remove[0]:len(sub_map)-pixel_to_remove[0],:,:]
+                    if ((j==0)&(j == number_chunks[1] - 1)):
+                        sub_map = sub_map
                     elif(j==0) :
-                        Map = Map[:,0:len(Map[0])-nbpixelToremovey,:]
-                    elif(j == numberChunks[1] - 1):
-                        Map = Map[:,nbpixelToremovey:len(Map[0]),:]
+                        sub_map = sub_map[:,0:len(sub_map[0])-pixel_to_remove[1],:]
+                    elif(j == number_chunks[1] - 1):
+                        sub_map = sub_map[:,pixel_to_remove[1]:len(sub_map[0]),:]
                     else :
-                        Map = Map[:,nbpixelToremovey:len(Map[0])-nbpixelToremovey,:]
-                    mapChunks[filename]=Map
-            for i in range(numberChunks[0]):
-                filename = f'{i:03d}' + f'{0:03d}'
-                if ((i==0)&(i == numberChunks[0] - 1)):
-                    lx = lx + sizemap[filename][0]
-                elif(i==0):
-                    lx = lx + sizemap[filename][0] - overlaping
-                elif(i == numberChunks[0] - 1):
-                    lx = lx + sizemap[filename][0] - overlaping
-                else :
-                    lx = lx + sizemap[filename][0] - 2*overlaping
-            for j in range(numberChunks[1]):
-                filename = f'{0:03d}' + f'{j:03d}'
-                if ((j==0)&(j == numberChunks[1] - 1)):
-                    ly = ly + sizemap[filename][1]
-                elif(j==0) :
-                    ly = ly + sizemap[filename][1] - overlaping
-                elif(j == numberChunks[1] - 1):
-                    ly = ly + sizemap[filename][1] - overlaping
-                else :
-                    ly = ly + sizemap[filename][1] - 2 * overlaping
-
-        else :
-            for i in range(numberChunks[0]):
-                filename = f'{i:03d}' + f'{0:03d}'
-                lx = lx + sizemap[filename][0]
-            for j in range(numberChunks[1]):
-                filename = f'{0:03d}' + f'{j:03d}'
-                ly = ly + sizemap[filename][1]
+                        sub_map = sub_map[:,pixel_to_remove[1]:len(sub_map[0])-pixel_to_remove[1],:]
+                    map_chunks[filename]=sub_map
         concatenateList = []
-        for i in range(numberChunks[0]):
-            concatenate = np.concatenate([np.asarray(mapChunks[f'{i:03d}' + f'{j:03d}']) for j in range(numberChunks[1])],axis = 1)
+        for i in range(number_chunks[0]):
+            concatenate = np.concatenate([np.asarray(map_chunks[f'{i:03d}' + f'{j:03d}']) for j in range(number_chunks[1])],axis = 1)
             concatenateList.append(concatenate)
-        merged_map_array = np.concatenate([concatenateList[i] for i in range(numberChunks[0])],axis = 0)
+        merged_map_array = np.concatenate([concatenateList[i] for i in range(number_chunks[0])],axis = 0)
         merged_map = cls.init_from_property_files(property_file,map_array=merged_map_array,name=name_map)
         return(merged_map)
-
 
 
 
@@ -704,7 +668,7 @@ class StackMap(TomographicMap):
             for i in range(len(ellipticities)):
                 sum_ellipticity = sum_ellipticity + (ellipticities[direction] - self.ellipticity[direction])**2
             self.ellipticity[direction +"_error"] = np.sqrt(sum_ellipticity/(len(ellipticities)*(len(ellipticities)-1)))
-            
+
 
 class Pixel(object):
 

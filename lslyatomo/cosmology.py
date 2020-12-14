@@ -86,66 +86,9 @@ def get_merged_multiple_exposure_deltas(namefile):
             listdelta.append(tomographic_objects.Delta.delta(Deltas[ids[i]][j]))
             listz.append(((10**np.asarray(tomographic_objects.Delta.log_lambda(Deltas[ids[i]][j])) / utils.lambdaLy)-1))
 
-        # Get the list of common elements in the pack to have minimum and maximum redshifts
-        zmin,zmax = 0, 10**10
-        zcommon = listz[0]
-        for j in range(1,len(listz)):
-            zcommon = list(set(zcommon).intersection(listz[j]))
-        zmin = np.min(zcommon)
-        zmax = np.max(zcommon)
+        (listz,listsigmas,listdelta) = delete_los_extrema(listz,listsigmas,listdelta)
 
-        # Deleting pixels at the beginning and at the end of LOSs
-        for j in range(len(listz)):
-            lineToDeleteFirst = 0
-            k = 0
-            while(listz[j][k] != zmin):
-                lineToDeleteFirst = lineToDeleteFirst + 1
-                k = k + 1
-            lineToDeleteLast = 0
-            k = -1
-            while(listz[j][k] != zmax):
-                lineToDeleteLast = lineToDeleteLast + 1
-                k = k -1
-            listz[j] = listz[j][lineToDeleteFirst:len(listz[j])-lineToDeleteLast]
-            listsigmas[j] = listsigmas[j][lineToDeleteFirst:len(listsigmas[j])-lineToDeleteLast]
-            listdelta[j] = listdelta[j][lineToDeleteFirst:len(listdelta[j])-lineToDeleteLast]
-
-        # Ensuring that all LOS have the same lenght
-        lenlists = []
-        for j in range(len(listz)):
-            lenlists.append(len(listz[j]))
-
-        # Selection of the pixels to delete in case of a missing pixel along one LOS + Deletion
-        while(np.max(lenlists)!=np.min(lenlists)):
-            eltTodelete = [[] for j in range(len(listz))]
-            mi = 10**10
-            mins = []
-            for j in range(len(lenlists)):
-                if(lenlists[j] < mi):
-                    mi = lenlists[j]
-                    mins =[j]
-                elif (lenlists[j] == mi):
-                    mins.append(j)
-            for j in range(len(mins)):
-                for k in range(len(listz)):
-                    for m in range(len(listz[k])):
-                        if((k!=mins[j])&(np.isin([listz[k][m]],listz[mins[j]]) == False)):
-                            eltTodelete[k].append(m)
-            newlistz, newlistsigma, newlistdelta = [[] for n in range(len(listz))],[[] for n in range(len(listz))],[[] for n in range(len(listz))]
-            for j in range(len(eltTodelete)):
-                eltTodeletej = list(set(eltTodelete[j]))
-                for k in range(len(listz[j])):
-                    if (np.isin([k], eltTodeletej)==False):
-                        newlistz[j].append(listz[j][k])
-                        newlistsigma[j].append(listsigmas[j][k])
-                        newlistdelta[j].append(listdelta[j][k])
-            listz = newlistz
-            listsigmas = newlistsigma
-            listdelta = newlistdelta
-            lenlists = []
-            for j in range(len(listz)):
-                lenlists.append(len(listz[j]))
-
+        (listz,listsigmas,listdelta,lenlists) = delete_missing_pixels(listz,listsigmas,listdelta)
 
         # Weighted merging of the LOSs
         zmerged, sigmamerged, deltamerged = listz[0],[],[]
@@ -166,7 +109,6 @@ def get_merged_multiple_exposure_deltas(namefile):
         z.append(zmerged)
         sigmas.append(sigmamerged)
     return(np.array(ra),np.array(dec),np.asarray(z),np.array(zqso),np.array(ids),np.asarray(sigmas),np.asarray(deltas))
-
 
 
 
@@ -194,7 +136,73 @@ def get_id_list(namefile):
             delta_tomo.close()
     return(Deltas,ids)
 
+def delete_los_extrema(listz,listsigmas,listdelta):
+    # Get the list of common elements in the pack to have minimum and maximum redshifts
+    zmin,zmax = 0, 10**10
+    zcommon = listz[0]
+    for j in range(1,len(listz)):
+        zcommon = list(set(zcommon).intersection(listz[j]))
+    zmin = np.min(zcommon)
+    zmax = np.max(zcommon)
 
+    # Deleting pixels at the beginning and at the end of LOSs
+    for j in range(len(listz)):
+        lineToDeleteFirst = 0
+        k = 0
+        while(listz[j][k] != zmin):
+            lineToDeleteFirst = lineToDeleteFirst + 1
+            k = k + 1
+        lineToDeleteLast = 0
+        k = -1
+        while(listz[j][k] != zmax):
+            lineToDeleteLast = lineToDeleteLast + 1
+            k = k -1
+        listz[j] = listz[j][lineToDeleteFirst:len(listz[j])-lineToDeleteLast]
+        listsigmas[j] = listsigmas[j][lineToDeleteFirst:len(listsigmas[j])-lineToDeleteLast]
+        listdelta[j] = listdelta[j][lineToDeleteFirst:len(listdelta[j])-lineToDeleteLast]
+    return(listz,listsigmas,listdelta)
+
+
+
+
+def delete_missing_pixels(listz,listsigmas,listdelta):
+
+    # Ensuring that all LOS have the same lenght
+    lenlists = []
+    for j in range(len(listz)):
+        lenlists.append(len(listz[j]))
+
+    # Selection of the pixels to delete in case of a missing pixel along one LOS + Deletion
+    while(np.max(lenlists)!=np.min(lenlists)):
+        eltTodelete = [[] for j in range(len(listz))]
+        mi = 10**10
+        mins = []
+        for j in range(len(lenlists)):
+            if(lenlists[j] < mi):
+                mi = lenlists[j]
+                mins =[j]
+            elif (lenlists[j] == mi):
+                mins.append(j)
+        for j in range(len(mins)):
+            for k in range(len(listz)):
+                for m in range(len(listz[k])):
+                    if((k!=mins[j])&(np.isin([listz[k][m]],listz[mins[j]]) == False)):
+                        eltTodelete[k].append(m)
+        newlistz, newlistsigma, newlistdelta = [[] for n in range(len(listz))],[[] for n in range(len(listz))],[[] for n in range(len(listz))]
+        for j in range(len(eltTodelete)):
+            eltTodeletej = list(set(eltTodelete[j]))
+            for k in range(len(listz[j])):
+                if (np.isin([k], eltTodeletej)==False):
+                    newlistz[j].append(listz[j][k])
+                    newlistsigma[j].append(listsigmas[j][k])
+                    newlistdelta[j].append(listdelta[j][k])
+        listz = newlistz
+        listsigmas = newlistsigma
+        listdelta = newlistdelta
+        lenlists = []
+        for j in range(len(listz)):
+            lenlists.append(len(listz[j]))
+        return(listz,listsigmas,listdelta,lenlists)
 
 
 
@@ -430,9 +438,12 @@ class DeltaConverter():
     def cut_in_chunks(self,cartesian_deltas,number_chunks,overlaping,shape_sub_map):
         if (overlaping is None) :
             overlaping = 0.0
-        minx,maxx,miny,maxy= np.min(cartesian_deltas[:,0]),np.max(cartesian_deltas[:,0]),np.min(cartesian_deltas[:,1]),np.max(cartesian_deltas[:,1])
+        minx,maxx = np.min(cartesian_deltas[:,0]),np.max(cartesian_deltas[:,0])
+        miny,maxy = np.min(cartesian_deltas[:,1]),np.max(cartesian_deltas[:,1])
+        minz,maxz = np.min(cartesian_deltas[:,2]),np.max(cartesian_deltas[:,2])
         intervalx = (maxx - minx)
         intervaly = (maxy - miny)
+        intervalz = (maxz - minz)
         subIntervalx = intervalx/number_chunks[0]
         subIntervaly = intervaly/number_chunks[1]
         Chunks = {}
@@ -470,20 +481,18 @@ class DeltaConverter():
                 chunks_deltas = np.transpose(np.stack(chunks_deltas))
                 Chunks[filename]["coord"] = chunks_deltas
                 Chunks[filename]["limits"] = [intervalxChunk[0],intervalxChunk[1],intervalyChunk[0],intervalyChunk[1],np.min(cartesian_deltas[:,2]),np.max(cartesian_deltas[:,2])]
-                nbPixelperMpcx = shape_sub_map[0]/(intervalxChunk[1] - intervalxChunk[0])
-                nbPixelperMpcy = shape_sub_map[1]/(intervalyChunk[1] - intervalyChunk[0])
-                nbpixelToremovex = int(round(nbPixelperMpcx * overlaping,0))
-                nbpixelToremovey = int(round(nbPixelperMpcy * overlaping,0))
+                size = (intervalxChunk[1] - intervalxChunk[0],intervalyChunk[1] - intervalyChunk[0],intervalz)
+                pixel_to_remove = int(round(utils.pixel_per_mpc(size,shape_sub_map) * overlaping,0))
                 if(number_chunks[0] !=1):
                     if ((i==0)|(i == number_chunks[0] - 1)):
-                        remove_shape_x = remove_shape_x + nbpixelToremovex
+                        remove_shape_x = remove_shape_x + pixel_to_remove[0]
                     else:
-                        remove_shape_x = remove_shape_x + 2*nbpixelToremovex
+                        remove_shape_x = remove_shape_x + 2*pixel_to_remove[0]
                 if(number_chunks[1] !=1):
                     if ((j==0)|(j == number_chunks[1] - 1)):
-                        remove_shape_y = remove_shape_y + nbpixelToremovey
+                        remove_shape_y = remove_shape_y + pixel_to_remove[1]
                     else:
-                        remove_shape_y = remove_shape_y + 2*nbpixelToremovey
+                        remove_shape_y = remove_shape_y + 2*pixel_to_remove[1]
         shape_x = shape_x - remove_shape_x//number_chunks[1]
         shape_y = shape_y - remove_shape_y//number_chunks[0]
         Chunks["overlaping"]=overlaping
