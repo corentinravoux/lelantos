@@ -88,7 +88,7 @@ class TomographicMap(object):
     def init_from_property_files(cls,property_file,map_array=None,name=None):
         Property = MapPixelProperty(name=property_file)
         verify_file(property_file)
-        size,shape,boundary_cartesian_coord,boundary_sky_coord,coordinate_transform = None,None,None,None,None
+        size,shape,boundary_cartesian_coord,boundary_sky_coord,coordinate_transform,Omega_m = None,None,None,None,None,None
         Property.read()
         if(Property.size is not None): size = Property.size
         if(Property.shape is not None): shape = Property.shape
@@ -100,13 +100,13 @@ class TomographicMap(object):
 
 
     @classmethod
-    def init_by_merging(cls,launching_file_name,name_map,property_file):
+    def init_by_merging(cls,submap_directory,launching_file_name,name_map,property_file):
         """ Need to generalized (maybe in the task manager class for reading and writting launching files) + naming filename must not be define there"""
         a = pickle.load(open(os.path.join(launching_file_name),"rb"))
         listname,dachshund_params,number_chunks,overlaping = a[0],a[1],a[2],a[3]
         map_chunks,sizemap,shapemap = {},{},{}
         for i in range(len(listname)):
-            name = os.path.join("Python_Results",dachshund_params[i]["namemap"])
+            name = os.path.join(submap_directory,dachshund_params[i]["namemap"])
             sizemap[listname[i]] = (dachshund_params[i]["lx"],dachshund_params[i]["ly"],dachshund_params[i]["lz"])
             shapemap[listname[i]] = (dachshund_params[i]["nx"],dachshund_params[i]["ny"],dachshund_params[i]["nz"])
             submap = TomographicMap(name=name,shape=shapemap[listname[i]],size=sizemap[listname[i]])
@@ -370,7 +370,7 @@ class DistanceMap(TomographicMap):
 
 
     @classmethod
-    def create_distance_map_parallel(cls,pixel,tomographic_map,name_dist_los,nb_process):
+    def create_distance_map_parallel(cls,pixel,tomographic_map,nb_process):
         cls.log.add("Creation of global variables")
         x,y,z = pixel.repack_by_los()
         pixels = [[[x[i],y[i]],z[i]] for i in range(len(x))]
@@ -1692,7 +1692,9 @@ class VoidCatalog(Catalog):
         if(catalog[0].central_value is not None):central_value = np.concatenate([cat.central_value for cat in catalog])
         if(catalog[0].mean_value is not None):mean_value = np.concatenate([cat.mean_value for cat in catalog])
         if(catalog[0].weights is not None):weights = np.concatenate([cat.weights for cat in catalog])
-        if(catalog[0].filling_factor is not None):filling_factor = np.mean([cat.filling_factor for cat in catalog])
+        filling_factor_boolean = np.array([catalog[i].filling_factor is not None for i in range(len(catalog))])
+        if(len(filling_factor_boolean[filling_factor_boolean==False])==0):
+            filling_factor = np.mean([cat.filling_factor for cat in catalog])
         if(catalog[0].coordinate_transform is not None):coordinate_transform = catalog[0].coordinate_transform
         if(catalog[0].Omega_m is not None):Omega_m = catalog[0].Omega_m
         if(catalog[0].boundary_sky_coord is not None):
@@ -1820,7 +1822,11 @@ class VoidCatalog(Catalog):
 
 
 
-    def cut_catalog_void(self,method_cut,coord_min=None,coord_max=None,cut_crossing_param=None,pixel_name=None,cut_radius=None,distance_map_name=None,distance_map_prop=None,distance_map_param=None,distance_map_percent=None,cut_border_prop=None):
+    def cut_catalog_void(self,method_cut,coord_min=None,coord_max=None,
+                         cut_crossing_param=None,pixel_name=None,
+                         cut_radius=None,distance_map_name=None,
+                         distance_map_prop=None,distance_map_param=None,
+                         distance_map_percent=None,cut_border_prop=None):
         mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=False)
         string_to_add = ""
         if type(method_cut) == str :
@@ -1837,7 +1843,7 @@ class VoidCatalog(Catalog):
         if("RADIUS" in method_cut):
             if (cut_radius is None) : raise KeyError("Give a radius cutting parameter")
             mask_select &= self.cut_radius(cut_radius)
-            string_to_add = string_to_add + f"_cutradius{cut_radius}"
+            string_to_add = string_to_add + f"_cutradius_{cut_radius[0]}rmin_{cut_radius[1]}rmax"
         if("BORDER" in method_cut):
             if cut_border_prop is None : raise KeyError("Give a property file for border cutting")
             mask_select &= self.cut_border(cut_border_prop)

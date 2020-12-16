@@ -18,7 +18,7 @@ Tested on Cobalt and Irene clusters.
 #############################################################################
 
 
-import os,time,pickle
+import os,time,pickle,shutil
 from subprocess import call
 from lslyatomo import utils
 
@@ -33,7 +33,7 @@ from lslyatomo import utils
 
 
 class Machine(object):
-    
+
     def __init__(self,ending_str,error_str,wait_check):
         self.ending_str = ending_str
         self.error_str = error_str
@@ -57,7 +57,7 @@ class Machine(object):
 
 
 class Nersc(Machine):
-    
+
     def __init__(self):
         ending_str = "Execution Sum Up"
         error_str = ["srun:"]
@@ -96,14 +96,14 @@ class Nersc(Machine):
 
 
 class Irene(Machine):
-    
+
     def __init__(self):
         ending_str = "Execution Sum Up"
         error_str = ["srun:"]
         wait_check = True
         super(Irene,self).__init__(ending_str,error_str,wait_check)
 
-        self.project_name = "gen10586"
+        self.project_name = "gen12028"
         self.launcher_name = "Tomography_start.sl"
         self.out_file_name = "{}.out"
         self.error_file_name = "{}.err"
@@ -115,9 +115,9 @@ class Irene(Machine):
         f.write("\n")
         f.write(f"#MSUB -r {software_name}" + "\n")
         f.write("#MSUB -T 60000  \n")
-        f.write("#MSUB -q skylake \n")
-        f.write(f"#MSUB -o {self.out_file_name.format(software_name)}" + "\n")
-        f.write(f"#MSUB -e {self.error_file_name.format(software_name)}" + "\n")
+        f.write("#MSUB -q rome \n")
+        f.write(f"#MSUB -o {os.path.join(dir_path,self.out_file_name.format(software_name))}" + "\n")
+        f.write(f"#MSUB -e {os.path.join(dir_path,self.error_file_name.format(software_name))}" + "\n")
         f.write("#MSUB -m scratch,work  \n")
         f.write("#MSUB -n 1\n")
         f.write(f"#MSUB -A {self.project_name}" + "\n")
@@ -134,7 +134,7 @@ class Irene(Machine):
 
 
 class PersonalComputer(Machine):
-    
+
     def __init__(self,ending_str="",error_str=[]):
         wait_check = False
         super(PersonalComputer,self).__init__(ending_str,error_str,wait_check)
@@ -145,8 +145,8 @@ class PersonalComputer(Machine):
 
     def create_launcher(self,dir_path,command_line,software_name):
         return()
-        
-        
+
+
     def launch(self,dir_path=None,software_command_line=None,software_name=None):
         out_name = os.path.join(dir_path,self.out_file_name.format(software_name))
         err_name = os.path.join(dir_path,self.error_file_name.format(software_name))
@@ -156,24 +156,24 @@ class PersonalComputer(Machine):
 
 
 class TomographySoftware(object):
-    
+
     def __init__(self,exec_file):
         self.exec_file = exec_file
-        
-   
+
+
 
 class Borg(TomographySoftware):
-    
+
     name = "borg"
-    
+
     def __init__(self):
-        
+
         source_path = os.path.dirname(os.path.realpath(__file__))
         name_exec = "borg.exe"
         exec_file = os.path.join(source_path,'exec',name_exec)
 
         super(Borg,self).__init__(exec_file)
-        self.command_line = self.exec_file + " {}"    
+        self.command_line = self.exec_file + " {}"
 
 
     def create_input(self,dir_path,launcher_params,name):
@@ -182,17 +182,17 @@ class Borg(TomographySoftware):
 
 
 class Dachshund(TomographySoftware):
-    
+
     name = "dachshund"
-    
+
     def __init__(self):
-        
+
         source_path = os.path.dirname(os.path.realpath(__file__))
         name_exec = "dachshund.exe"
         exec_file = os.path.join(source_path,'exec',name_exec)
-        
+
         super(Dachshund,self).__init__(exec_file)
-        self.command_line = self.exec_file + " {}"    
+        self.command_line = self.exec_file + " {}"
 
 
 
@@ -238,20 +238,19 @@ class Dachshund(TomographySoftware):
 
 
 class TomographyManager(object):
-    
+
     available_software = ("dachshund","borg")
     available_machine = ("irene","pc")
-    
+
     def __init__(self,pwd,software,machine,name_pixel,launch_file,**kwargs):
         self.pwd = pwd
         self.name_pixel = name_pixel
         self.launch_file = launch_file
-        
-        
+
         self.log = utils.create_report_log(name=os.path.join(self.pwd,"Python_Report"))
         self.software = self.init_sofware(software)
         self.machine = self.init_machine(machine,kwargs=kwargs)
-   
+
 
 
     def init_sofware(self,software):
@@ -260,11 +259,11 @@ class TomographyManager(object):
         elif(software.lower() == "borg"):
             return(Borg())
         else: return KeyError(f"The software {software} is not available, please choose in {TomographyManager.available_software}")
-            
-            
-            
+
+
+
     def init_machine(self,machine,**kwargs):
-        ### Deal with the kwargs
+        ### CR - Deal with the kwargs
         if(machine.lower() == "irene"):
             return(Irene())
         if(machine.lower() == "nersc"):
@@ -279,10 +278,9 @@ class TomographyManager(object):
     def create_python_dir(pwd):
         if (os.path.isdir(os.path.join(pwd,"Tmp")) == False):
             os.mkdir(os.path.join(pwd,"Tmp"))
-        if (os.path.isdir(os.path.join(pwd,"Python_Results")) == False):
-            os.mkdir(os.path.join(pwd,"Python_Results"))
-            
-   
+
+
+
     @staticmethod
     def create_dir(pwd,dirnames):
         for i in range(len(dirnames)):
@@ -290,21 +288,23 @@ class TomographyManager(object):
             if (os.path.isdir(dir_path) == False):
                 os.mkdir(dir_path)
 
-         
+
     @staticmethod
     def create_file(name):
         if(os.path.isfile(name) == False):
             f = open(name,"w")
             f.write("wait")
             f.close()
-            
+
+
+
 
 
 
 
     def is_finished(self,file_lines):
         return(self.machine.is_finished(file_lines))
-            
+
     def gives_error(self,file_lines):
         return(self.machine.gives_error(file_lines))
 
@@ -336,7 +336,7 @@ class TomographyManager(object):
             file.close()
             list_error[i] = self.gives_error(file_lines)
             self.log.add(f'The file {listname[i]} gave an error : {list_error[i]}')
-    
+
 
     def all_finished(self,listFinished):
         allFinished = True
@@ -353,7 +353,7 @@ class TomographyManager(object):
         launcher_name = launcher_param["nameinput"]
         self.software.create_input(dir_path,launcher_param,os.path.join(dir_path,launcher_name))
         self.machine.create_launcher(dir_path,self.software.command_line.format(os.path.join(dir_path,launcher_name)),self.software.name)
-        
+
     def launch(self,dir_path,launcher_param):
         launcher_name = launcher_param["nameinput"]
         self.machine.launch(dir_path = dir_path ,software_command_line= self.software.command_line.format(os.path.join(dir_path,launcher_name)),software_name=self.software.name)
@@ -372,7 +372,7 @@ class TomographyManager(object):
 
 
     def launch_all(self):
-        launching_file = pickle.load(open(self.launch_file,"rb")) 
+        launching_file = pickle.load(open(self.launch_file,"rb"))
         listname,launcher_params = launching_file[0],launching_file[1]
         TomographyManager.create_python_dir(self.pwd)
         TomographyManager.create_dir(self.pwd,listname)
@@ -385,21 +385,15 @@ class TomographyManager(object):
         time.sleep(5)
         self.treat_launch(self.pwd,listname)
 
-    
-    
+
+
     def copy(self):
-        launching_file = pickle.load(open(self.launch_file,"rb")) 
+        launching_file = pickle.load(open(self.launch_file,"rb"))
         listname,launcher_params = launching_file[0],launching_file[1]
         for i in range(len(listname)):
-            call(["cp",self.pwd + "/Tmp/" + listname[i] +"/" + launcher_params[i]["namepixel"],self.pwd + "/Python_Results/"])
-            call(["cp",self.pwd + "/Tmp/" + listname[i] +"/" + launcher_params[i]["namemap"],self.pwd + "/Python_Results/"])
-    
-    
-    
-    
-    def launch_all_and_copy(self):
-        self.launch_all()
-        self.copy()
+            # call(["cp",self.pwd + "/Tmp/" + listname[i] +"/" + launcher_params[i]["namepixel"],self.pwd ])
+            call(["cp",self.pwd + "/Tmp/" + listname[i] +"/" + launcher_params[i]["namemap"],self.pwd])
 
-        
 
+    def remove_tmp(self):
+        shutil.rmtree(os.path.join(self.pwd,"Tmp"), ignore_errors=True)

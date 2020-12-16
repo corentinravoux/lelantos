@@ -19,7 +19,7 @@ analysis.
 #############################################################################
 #############################################################################
 
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
@@ -28,8 +28,8 @@ from lslyatomo import utils
 
 
 
-def create_merged_map(launching_file_name,map_name,property_file):
-    map_merged = tomographic_objects.TomographicMap.init_by_merging(launching_file_name,map_name,property_file)
+def create_merged_map(submap_directory,launching_file_name,map_name,property_file):
+    map_merged = tomographic_objects.TomographicMap.init_by_merging(submap_directory,launching_file_name,map_name,property_file)
     map_merged.write()
 
 def rebin_map(map_name,property_file,new_shape,new_name,new_prop_name,operation="mean"):
@@ -65,8 +65,10 @@ def create_distance_map(map_name,pixel_file,property_file,nb_process=1,radius_lo
 
 class TomographyPlot(object):
 
+
     def __init__(self,pwd,map_name=None,map_shape=None,pixel_name=None,property_file=None,**kwargs):
         self.pwd = pwd
+        os.chdir(self.pwd)
         self.map_name = map_name
         self.map_shape = map_shape
         self.pixel_name = pixel_name
@@ -358,11 +360,41 @@ class TomographyPlot(object):
 
 
 
+    def plot(self,name,direction,space,center_mpc,deltamin,deltamax,qso=None,
+             void=None,galaxy=None,distance_mask = None,
+             criteria_distance_mask = None,rotate = False,hd=False,
+             minimal_void_crossing = None,redshift_axis=False,cut_plot=None):
 
-    def plot(self,name,direction,space,center_mpc,deltamin,deltamax,qso=None,void=None,galaxy=None,distance_mask = None,criteria_distance_mask = None,rotate = False,hd=False,minimal_void_crossing = None,redshift_axis=False,cut_plot=None):
+        if((type(center_mpc) == float)|(type(center_mpc) == int)):
+            self.plot_one_slice(name,direction,space,center_mpc,deltamin,
+                                deltamax,qso=qso,void=void,galaxy=galaxy,
+                                distance_mask = distance_mask,
+                                criteria_distance_mask = criteria_distance_mask,
+                                rotate = rotate,hd=hd,
+                                minimal_void_crossing = minimal_void_crossing,
+                                redshift_axis=redshift_axis,cut_plot=cut_plot)
+        elif(center_mpc.lower()=="all"):
+            self.plot_all_slice(name,direction,space,deltamin,deltamax,
+                                qso=qso,void=void,galaxy=galaxy,
+                                distance_mask = distance_mask,
+                                criteria_distance_mask = criteria_distance_mask,
+                                rotate = rotate,hd=hd,
+                                minimal_void_crossing = minimal_void_crossing,
+                                redshift_axis=redshift_axis,cut_plot=cut_plot)
+        else:
+            raise ValueError("Please give the distance of the slice you want to print or all")
+
+    def plot_one_slice(self,name,direction,space,center_mpc,deltamin,deltamax,qso=None,void=None,galaxy=None,distance_mask = None,criteria_distance_mask = None,rotate = False,hd=False,minimal_void_crossing = None,redshift_axis=False,cut_plot=None):
         tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(qso=qso,void=void,galaxy=galaxy,distance_mask = distance_mask,cut_plot=cut_plot)
-        mask_void = self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask, minimal_void_crossing = minimal_void_crossing)
-        self.print_one_slice(name,tomographic_map,direction,space,center_mpc,deltamin,deltamax,pixel=pixel,quasar_catalog=quasar_catalog,void_catalog=void_catalog,mask_void=mask_void,galaxy_catalog=galaxy_catalog,rotate = rotate,hd=hd,redshift_axis=redshift_axis)
+        mask_void = self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,
+                                                  criteria_distance_mask = criteria_distance_mask,
+                                                  minimal_void_crossing = minimal_void_crossing)
+        self.print_one_slice(name,tomographic_map,direction,space,center_mpc,
+                             deltamin,deltamax,pixel=pixel,
+                             quasar_catalog=quasar_catalog,
+                             void_catalog=void_catalog,mask_void=mask_void,
+                             galaxy_catalog=galaxy_catalog,rotate = rotate,
+                             hd=hd,redshift_axis=redshift_axis)
 
 
 
@@ -374,7 +406,6 @@ class TomographyPlot(object):
         while(center_mpc + space/2 <tomographic_map.size[index_dict[direction]]):
             self.print_one_slice(name,tomographic_map,direction,space,center_mpc,deltamin,deltamax,pixel=pixel,quasar_catalog=quasar_catalog,void_catalog=void_catalog,mask_void=mask_void,galaxy_catalog=galaxy_catalog,rotate = rotate,hd=hd,redshift_axis=redshift_axis)
             center_mpc += space
-            print(center_mpc,tomographic_map.size[index_dict[direction]])
 
 
     def plot_integrate_image(self,zmin,zmax,name,deltamin,deltamax,rotate=False,hd=False,cut_plot=None):
@@ -539,7 +570,7 @@ class TomographyStack(object):
                 stack = tomographic_objects.StackMap.StackMap.init_by_merging(jack_knife_list,jack_knife_property_list,None,None)
                 stack.compute_stack_ellipticity()
                 ellipticities.append(stack.ellipticity)
-            merge_stack.add_ellipticity_eerors(ellipticities)
+            merge_stack.add_ellipticity_errors(ellipticities)
         stack.write()
         self.stack = stack
 
@@ -547,14 +578,16 @@ class TomographyStack(object):
 
 
     @staticmethod
-    def plot_stack_3d(stack,name_plot,deltamin,deltamax,los_quasar=None,rotate=False,**kwargs):
+    def plot_stack(stack_name,stack_property,name_plot,deltamin,deltamax,rotate=False,ellipticity=False,hd=False,los_quasar=None,**kwargs):
+        stack = tomographic_objects.StackMap.init_classic(name=stack_name,property_file=stack_property)
+        stack.read()
         for direction in ["x","y","z"]:
-            TomographyStack.plot_stack(stack,name_plot,deltamin,deltamax,direction,los_quasar=los_quasar,rotate=rotate,**kwargs)
+            TomographyStack.plot_stack_direction(stack,name_plot,deltamin,deltamax,direction,rotate=rotate,ellipticity=ellipticity,hd=hd,los_quasar=los_quasar,**kwargs)
 
 
 
     @staticmethod
-    def plot_stack(stack,name_plot,deltamin,deltamax,direction,rotate=False,ellipticity=False,hd=False,los_quasar=None,**kwargs):
+    def plot_stack_direction(stack,name_plot,deltamin,deltamax,direction,rotate=False,ellipticity=False,hd=False,los_quasar=None,**kwargs):
         (x_index, y_index, index_direction, extentmap, xlab, ylab) = TomographyPlot.get_direction_informations(direction,rotate,stack.size)
         if direction == "x":
             stack_slice = stack.map_array[stack.shape[0]//2,:,:]
@@ -579,8 +612,8 @@ class TomographyStack(object):
                                             stack.mpc_per_pixel[y_index],
                                             stack.mpc_per_pixel[x_index],
                                             direction,rotate,**kwargs)
-        if(hd):plt.savefig(f"stack_{name_plot}_{direction}.pdf",format="pdf", dpi=200)
-        else:plt.savefig(f"stack_{name_plot}_{direction}.pdf",format="pdf")
+        if(hd):plt.savefig(f"{name_plot}_{direction}.pdf",format="pdf", dpi=200)
+        else:plt.savefig(f"{name_plot}_{direction}.pdf",format="pdf")
         plt.show()
         plt.close()
 

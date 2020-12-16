@@ -225,6 +225,7 @@ class DeltaConverter():
     def __init__(self,pwd,Omega_m,delta_path,coordinate_transform,plot_pixel_properties,software,return_qso_catalog=None,return_dla_catalog=None,dla_catalog=None,return_sky_catalogs=False,repeat=False):
 
         self.pwd = pwd
+        os.chdir(pwd)
         self.delta_path = delta_path
         self.Omega_m = Omega_m
         self.coordinate_transform = coordinate_transform
@@ -482,7 +483,7 @@ class DeltaConverter():
                 Chunks[filename]["coord"] = chunks_deltas
                 Chunks[filename]["limits"] = [intervalxChunk[0],intervalxChunk[1],intervalyChunk[0],intervalyChunk[1],np.min(cartesian_deltas[:,2]),np.max(cartesian_deltas[:,2])]
                 size = (intervalxChunk[1] - intervalxChunk[0],intervalyChunk[1] - intervalyChunk[0],intervalz)
-                pixel_to_remove = int(round(utils.pixel_per_mpc(size,shape_sub_map) * overlaping,0))
+                pixel_to_remove = np.around(utils.pixel_per_mpc(size,shape_sub_map) * overlaping,0).astype(int)
                 if(number_chunks[0] !=1):
                     if ((i==0)|(i == number_chunks[0] - 1)):
                         remove_shape_x = remove_shape_x + pixel_to_remove[0]
@@ -578,12 +579,10 @@ class DeltaConverter():
 
 class PixelAnalizer(object):
 
-    ### Include in pixel class instead of the coord
-
-
     def __init__(self,pwd,pixel=None):
 
         self.pwd = pwd
+        os.chdir(pwd)
         self.pixel = pixel
 
 
@@ -620,8 +619,8 @@ class PixelAnalizer(object):
 
 
     @staticmethod
-    def plot_mean_distance_density(zpar,dperpz,densityz,nameout,coupled=False,comparison=False,dperp_comparison=None,density_comparison=None,zpar_comparison=None,legend=None,dperp_other=None,density_other=None):
-        if(coupled):
+    def plot_mean_distance_density(zpar,dperpz,densityz,nameout,coupled_plot=False,comparison=False,dperp_comparison=None,density_comparison=None,zpar_comparison=None,legend=None,dperp_other=None,density_other=None):
+        if(coupled_plot):
             PixelAnalizer.plot_mean_distance_density_coupled(zpar,dperpz,densityz,nameout,comparison=False,
                                                dperp_comparison=dperp_comparison,
                                                density_comparison=density_comparison,
@@ -649,7 +648,7 @@ class PixelAnalizer(object):
             if(dperp_other is not None):
                 for i in range(len(dperp_other)):
                     plt.plot(dperp_other[i][0],dperp_other[i][1])
-        plt.savefig("separation_{}.pdf".format(nameout), format = "pdf")
+        plt.savefig(f"{nameout}_separation.pdf", format = "pdf")
 
         plt.figure()
         plt.xlabel("Redshift")
@@ -662,7 +661,7 @@ class PixelAnalizer(object):
             if(density_other is not None):
                 for i in range(len(density_other)):
                     plt.plot(density_other[i][0],density_other[i][1])
-        plt.savefig("density_{}.pdf".format(nameout), format = "pdf")
+        plt.savefig(f"{nameout}_density.pdf", format = "pdf")
 
 
     @staticmethod
@@ -701,7 +700,7 @@ class PixelAnalizer(object):
                     legend_elements.append(Line2D([0], [0], color='k',linestyle =line[i], lw=1, label=legend[i+2]))
 
             ax1.legend(handles=legend_elements,loc = "upper center")
-        plt.savefig("{}.pdf".format(nameout),format ="pdf",dpi=200)
+        plt.savefig(f"{nameout}_separation_density.pdf", format = "pdf")
 
 
 
@@ -736,9 +735,6 @@ class PixelAnalizer(object):
 
 
 
-
-
-
     def analyze_pixels(self,compute_histo,compute_mean_distance_density,histo_zpar=None,name_histo="histogram_dperp",name_dperp="density_mean_distance",coupled_plot=False):
         if(compute_histo):
             self.compute_plot_histo_mean_distance(histo_zpar,name_histo)
@@ -756,6 +752,7 @@ class DeltaAnalyzer(object):
 
     def __init__(self,pwd,delta_path,center_ra=True,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None,degree=True):
         self.pwd = pwd
+        os.chdir(pwd)
         self.delta_path = delta_path
         self.center_ra = center_ra
         self.z_cut_min = z_cut_min
@@ -1029,6 +1026,7 @@ class DeltaModifier(object):
 
     def __init__(self,pwd,delta_path,center_ra=True,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None,degree=True):
         self.pwd = pwd
+        os.chdir(pwd)
         self.delta_path = delta_path
         self.center_ra = center_ra
         self.dec_cut_min = dec_cut_min

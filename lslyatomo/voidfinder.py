@@ -30,6 +30,38 @@ from lslyatomo import tomographic_objects,utils
 from scipy.optimize import curve_fit
 
 
+
+def create_merged_catalog(pwd,list_catalog_name,merged_catalog_name):
+    void_merged = tomographic_objects.VoidCatalog.init_by_merging(list_catalog_name,name=os.path.join(pwd,merged_catalog_name))
+    void_merged.write()
+
+def cut_catalog(pwd,catalog_name,method_cut,cut_crossing_param=None,
+                pixel_name=None,cut_radius=None,distance_map_name=None,
+                distance_map_prop=None,distance_map_param=None,
+                distance_map_percent=None,cut_border_prop=None):
+    void_cut = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
+    cut_catalog_name = void_cut.cut_catalog_void(method_cut,cut_crossing_param=cut_crossing_param,
+                                                 pixel_name=pixel_name,cut_radius=cut_radius,
+                                                 distance_map_name=distance_map_name,
+                                                 distance_map_prop=distance_map_prop,
+                                                 distance_map_param=distance_map_param,
+                                                 distance_map_percent=distance_map_percent,
+                                                 cut_border_prop=cut_border_prop)
+    void_cut.name = os.path.join(pwd,cut_catalog_name)
+    void_cut.write()
+
+def compute_filling_factor(catalog_name,property_name):
+    void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
+    void.compute_filling_factor(property_name=property_name)
+    void.write()
+
+def get_crossing_qso(catalog_name,qso_name):
+    void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
+    qso = void.get_crossing_qso(qso_name)
+    return(qso)
+
+
+
 #############################################################################
 #############################################################################
 ############################### CLASSES #####################################
@@ -332,7 +364,8 @@ class VoidFinder(object):
                 func = partial(self.find_the_sphere,number_Mpc_per_pixels,number_pixel_maximal_radius)
             pool = Pool(self.number_core)
             out_pool = np.array(pool.map(func,coord_to_compute))
-            radius_to_compute , mean_value = out_pool[:,0], out_pool[:,1]
+            if(len(out_pool) !=0): radius_to_compute , mean_value = out_pool[:,0], out_pool[:,1]
+            else: radius_to_compute , mean_value = np.array([]),np.array([])
             self.log.add("End of pool for the map {}".format(tomographic_map.name))
         else :
             if(self.find_cluster):
@@ -591,7 +624,7 @@ class VoidFinder(object):
         dict_void = {"R" : radius, "COORD" : coord}
         for i in range(len(other_arrays)):
             dict_void[other_array_names[i]] = other_arrays[i]
-        name = f"Catalog_{self.get_name_catalog()}.fits"
+        name = os.path.join(self.pwd,f"Catalog_{self.get_name_catalog()}.fits")
         void = tomographic_objects.VoidCatalog.init_from_dictionary(name,radius,coord,"cartesian",coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord,other_arrays=other_arrays,other_array_names = other_array_names)
         void.write()
 
@@ -708,9 +741,9 @@ class PlotVoid(object):
         plt.grid()
         plt.xlabel("Void radius in Mpc.h" + r"$^{-1}$")
         if(log_scale):
-            plt.savefig("histogram_voids_radius_"+ name + "log.pdf",format="pdf")
+            plt.savefig(os.path.join(self.pwd,"histogram_voids_radius_"+ name + "log.pdf"),format="pdf")
         else :
-            plt.savefig("histogram_voids_radius_"+ name + "lin.pdf",format="pdf")
+            plt.savefig(os.path.join(self.pwd,"histogram_voids_radius_"+ name + "lin.pdf"),format="pdf")
         plt.show()
         plt.close()
         return(perr,perr2)
