@@ -1319,6 +1319,19 @@ class Catalog(object):
         self.convert_to_normalized_coordinates(property_file=property_file)
 
 
+    # CR - add center and degree as a catalog parameter (always centered and in radians) + add conversion in the other way
+    def convert_coordinates(self,decenter=False,degree=False):
+        if(self.catalog_type != "sky"):
+            return()
+        if(decenter) :
+            mask = self.coord[:,0] < 0
+            self.coord[:,0][mask] = self.coord[:,0][mask] + 2*np.pi
+        if(degree):
+            self.coord[:,0] = np.degrees(self.coord[:,0])
+            self.coord[:,1] = np.degrees(self.coord[:,1])
+
+
+
     @property
     def redshift(self):
         if(self.catalog_type == "cartesian"):
@@ -1722,7 +1735,7 @@ class VoidCatalog(Catalog):
         fits = fitsio.FITS(self.name,'rw',clobber=True)
         head = self.return_header()
         if(self.catalog_type.lower() == "sky"):
-            h = self.create_qso_like_dictionary(qso_like=qso_like)
+            h = self.create_sky_void_dictionary(qso_like=qso_like)
         elif(self.catalog_type.lower() == "cartesian"):
             h = self.create_cartesian_void_dictionary()
         self.update_dictionary(h,head)
@@ -1737,6 +1750,7 @@ class VoidCatalog(Catalog):
         if(qso_like):
             h['PLATE'] = np.asarray(['1' + '{0:09d}'.format(i) for i in range(len(self.radius))]).astype("i8")
             h['MJD'] = np.asarray(['1' + '{0:09d}'.format(i) for i in range(len(self.radius))]).astype("i8")
+            h['FIBERID'] = np.asarray(['1' + '{0:05d}'.format(i) for i in range(len(self.radius))]).astype("i8")
         return(h)
 
     def create_cartesian_void_dictionary(self):
@@ -1774,6 +1788,8 @@ class VoidCatalog(Catalog):
             log.add_array_statistics(self.central_value,"void central value")
         if(self.mean_value is not None):
             log.add_array_statistics(self.mean_value,"void average value")
+        if(self.weights is not None):
+            log.add_array_statistics(self.weights,"void weights")
         if(self.filling_factor is not None):
             log.add(f"Filling factor of the void catalog: {self.filling_factor}")
         if(self.coordinate_transform is not None):
@@ -1912,6 +1928,12 @@ class VoidCatalog(Catalog):
         self.convert_to_normalized_coordinates()
         void_coords = np.transpose(np.stack([X,Y,Z,self.weights,redshift]))
         return(void_coords)
+
+    def convert_to_cross_corr_radec(self):
+        if self.catalog_type == "cartesian":
+            self.convert_to_sky()
+        self.convert_coordinates(decenter=True,degree=True)
+
 
     def get_delta_void(self,rmin,rmax,nr,nameout,name_map,map_property_file):
         if(os.path.isfile("{}_rmin{}_rmax{}_nr{}.fits".format(nameout,rmin,rmax,nr))):

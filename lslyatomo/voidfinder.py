@@ -61,6 +61,12 @@ def get_crossing_qso(catalog_name,qso_name):
     return(qso)
 
 
+def create_qso_like_catalog(catalog_name):
+    void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
+    void.name = f"""{void.name.split(".fits")[0]}_qso_like.fits"""
+    void.convert_to_cross_corr_radec()
+    void.write(qso_like=True)
+
 
 #############################################################################
 #############################################################################
