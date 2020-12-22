@@ -375,17 +375,17 @@ class DistanceMap(TomographicMap):
         x,y,z = pixel.repack_by_los()
         pixels = [[[x[i],y[i]],z[i]] for i in range(len(x))]
         indice = np.transpose(np.indices(tomographic_map.shape),axes=(1,2,3,0))
-        global dist_map
+        global dist_map,shared_arr
         dist_map = indice * tomographic_map.mpc_per_pixel
         del indice
         cls.log.add("Number LOS to treat : {}".format(len(pixels)))
         cls.log.add("Launching of Pool with shared array initialization")
-        DistanceMap.init_shared_array(tomographic_map.shape)
+        shared_arr = utils.init_shared_array(tomographic_map.shape)
         pool = mp.Pool(nb_process)
         pool.map(cls.worker_create_distance_map, pixels,tomographic_map.shape)
         cls.log.add("End of Pool")
         cls.log.add("Getting the map from shared array")
-        distance_array = DistanceMap.mp_array_to_numpyarray(shared_arr).reshape(tomographic_map.shape)
+        distance_array = utils.mp_array_to_numpyarray(shared_arr).reshape(tomographic_map.shape)
         cls.log.add("Writing of the map")
         return(distance_array)
 
@@ -399,7 +399,7 @@ class DistanceMap(TomographicMap):
         cls.log.add("Dist map for one LOS created")
         with shared_arr.get_lock():
             cls.log.add("Lock obtained for a worker")
-            LOS_range_min = DistanceMap.mp_array_to_numpyarray(shared_arr).reshape(shape)
+            LOS_range_min = utils.mp_array_to_numpyarray(shared_arr).reshape(shape)
             LOS_range_min[:,:,:] = np.minimum(LOS_range,LOS_range_min)
             del LOS_range_min
         cls.log.add("Lock released for a worker")
@@ -407,16 +407,7 @@ class DistanceMap(TomographicMap):
         del LOS_range
 
 
-    @staticmethod
-    def init_shared_array(shape):
-        global shared_arr
-        distance_array = np.full(shape,np.inf)
-        shared_arr = mp.Array('d', distance_array.flatten())
-        del distance_array
 
-    @staticmethod
-    def mp_array_to_numpyarray(mp_arr):
-        return np.frombuffer(mp_arr.get_obj())
 
     def get_mask_distance(self,distance):
         return(self.map_array > distance)

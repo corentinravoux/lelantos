@@ -27,7 +27,7 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy import interpolate
 from scipy.ndimage import map_coordinates
 from scipy.optimize import leastsq
-
+import multiprocessing as mp
 
 #############################################################################
 #############################################################################
@@ -256,7 +256,14 @@ def cut_sky_catalog(ra,dec,z,ramin=None,ramax=None,decmin=None,decmax=None,zmin=
         mask &= z < zmax
     return(mask)
 
+def init_shared_array(shape):
+    distance_array = np.full(shape,np.inf)
+    shared_arr = mp.Array('d', distance_array.flatten())
+    del distance_array
+    return(shared_arr)
 
+def mp_array_to_numpyarray(mp_arr):
+    return np.frombuffer(mp_arr.get_obj())
 
 
 def bin_ndarray(ndarray, new_shape, operation='mean'):

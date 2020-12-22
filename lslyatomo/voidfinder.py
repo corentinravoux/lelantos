@@ -23,7 +23,7 @@ Tested on irene and cobalt (CCRT)
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from multiprocessing import Pool
+import multiprocessing as mp
 from scipy.stats import ks_2samp
 from functools import partial
 from lslyatomo import tomographic_objects,utils
@@ -128,35 +128,32 @@ class VoidFinder(object):
 
 
     def find_voids_map_split(self):
-        Chunks = self.split_map_in_chunks()
+        self.split_map_in_chunks()
+        global Chunks, list_index_map_chunks
+        list_index_map_chunks = [f'{i:03d}' + f'{j:03d}' for j in range(self.split_map[1]) for i in range(self.split_map[0])]
         if(self.params_void_finder["method"] == "WATERSHED"):
             if(self.number_core > 1):
-                list_chunks = list(Chunks.items())
-                list_map_chunks = [tomographic_objects.TomographicMap.init_classic(name=Chunks[str(i) + str(j)]["map_name"],shape=Chunks[str(i) + str(j)]["map_shape"],size=Chunks[str(i) + str(j)]["map_size"],map_array=Chunks[str(i) + str(j)]["map"]) for i in range(self.split_map[0]) for j in range(self.split_map[1])]
-                pool = Pool(self.number_core)
-                map_output = pool.map(self.find_voids_watershed,list_map_chunks)
-                for i in range(len(list_chunks)):
-                    Chunks[list_chunks[i][0]]["radius"],Chunks[list_chunks[i][0]]["coord_Mpc"],Chunks[list_chunks[i][0]]["other_arrays"],Chunks[list_chunks[i][0]]["other_array_names"]= map_output[i]
-                del list_chunks,map_output
+                pool = mp.Pool(self.number_core)
+                out_map = pool.map(self.find_voids_watershed_split_mp,list_index_map_chunks)
+                for i in range(len(list_index_map_chunks)):
+                    Chunks[list_index_map_chunks[i]]["radius"],Chunks[list_index_map_chunks[i]]["coord_Mpc"],Chunks[list_index_map_chunks[i]]["other_arrays"],Chunks[list_index_map_chunks[i]]["other_array_names"] = out_map[i]
             else:
-                for i in range(self.split_map[0]):
-                    for j in range(self.split_map[1]):
-                        map_chunks = tomographic_objects.TomographicMap.init_classic(name=Chunks[str(i) + str(j)]["map_name"],shape=Chunks[str(i) + str(j)]["map_shape"],size=Chunks[str(i) + str(j)]["map_size"],map_array=Chunks[str(i) + str(j)]["map"])
-                        Chunks[str(i) + str(j)]["radius"],Chunks[str(i) + str(j)]["coord_Mpc"],Chunks[str(i) + str(j)]["other_arrays"],Chunks[str(i) + str(j)]["other_array_names"]  = self.find_voids_watershed(map_chunks)
+                for i in range(len(list_index_map_chunks)):
+                    self.find_voids_watershed_split(list_index_map_chunks[i])
         elif(self.params_void_finder["method"] == "SPHERICAL"):
-            for i in range(self.split_map[0]):
-                for j in range(self.split_map[1]):
-                    map_chunks = tomographic_objects.TomographicMap.init_classic(name=Chunks[str(i) + str(j)]["map_name"],shape=Chunks[str(i) + str(j)]["map_shape"],size=Chunks[str(i) + str(j)]["map_size"],map_array=Chunks[str(i) + str(j)]["map"])
-                    Chunks[str(i) + str(j)]["radius"],Chunks[str(i) + str(j)]["coord_Mpc"],Chunks[str(i) + str(j)]["other_arrays"],Chunks[str(i) + str(j)]["other_array_names"] = self.find_voids_sphere(map_chunks)
+            for i in range(len(list_index_map_chunks)):
+                self.find_voids_sphere_split(list_index_map_chunks[i])
         else :
             raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
-        (radius, coord_Mpc,other_arrays,other_array_names) = self.merge_chunks(Chunks)
+        (radius, coord_Mpc,other_arrays,other_array_names) = self.merge_chunks()
+        del Chunks,list_index_map_chunks
         new_coord_Mpc, new_radius, new_other_arrays = self.delete_voids(self.tomographic_map,radius,coord_Mpc,other_arrays=other_arrays,mpc=True)
         self.save_voids(new_radius, new_coord_Mpc,new_other_arrays,other_array_names,self.tomographic_map.coordinate_transform,self.tomographic_map.Omega_m,self.tomographic_map.boundary_cartesian_coord,self.tomographic_map.boundary_sky_coord)
         return(new_radius, new_coord_Mpc)
 
 
     def split_map_in_chunks(self):
+        global Chunks
         map_3D = self.tomographic_map.map_array
         number_Mpc_per_pixels = self.tomographic_map.mpc_per_pixel
         pixels_x = self.tomographic_map.shape[0]
@@ -171,7 +168,7 @@ class VoidFinder(object):
         Chunks = {}
         for i in range(self.split_map[0]):
             for j in range(self.split_map[1]):
-                Chunks[str(i) + str(j)]={}
+                Chunks[f'{i:03d}' + f'{j:03d}']={}
                 if((i==self.split_map[0]-1)&(i==0)):
                     pixel_x_interval = [i*subIntervalx, (i+1)*subIntervalx]
                 elif i == 0 :
@@ -190,22 +187,21 @@ class VoidFinder(object):
                     pixel_y_interval = [  j*subIntervaly -overlaping_y, (j+1)*subIntervaly + overlaping_y]
                 size_x_interval = np.array(pixel_x_interval)*number_Mpc_per_pixels[0]
                 size_y_interval = np.array(pixel_y_interval)*number_Mpc_per_pixels[1]
-                Chunks[str(i) + str(j)]["map"]=map_3D[pixel_x_interval[0]:pixel_x_interval[1],pixel_y_interval[0]:pixel_y_interval[1],:]
-                Chunks[str(i) + str(j)]["map_size"]=(size_x_interval[1]-size_x_interval[0],size_y_interval[1]-size_y_interval[0],self.tomographic_map.size[2])
-                Chunks[str(i) + str(j)]["map_min"]=(size_x_interval[0],size_y_interval[0],0)
-                Chunks[str(i) + str(j)]["map_shape"]=(pixel_x_interval[1]-pixel_x_interval[0],pixel_y_interval[1]-pixel_y_interval[0],self.tomographic_map.shape[2])
-                Chunks[str(i) + str(j)]["map_name"]="{}_{}_{}".format(self.map_name,i,j)
-        return(Chunks)
+                Chunks[f'{i:03d}' + f'{j:03d}']["map"]=map_3D[pixel_x_interval[0]:pixel_x_interval[1],pixel_y_interval[0]:pixel_y_interval[1],:]
+                Chunks[f'{i:03d}' + f'{j:03d}']["map_size"]=(size_x_interval[1]-size_x_interval[0],size_y_interval[1]-size_y_interval[0],self.tomographic_map.size[2])
+                Chunks[f'{i:03d}' + f'{j:03d}']["map_min"]=(size_x_interval[0],size_y_interval[0],0)
+                Chunks[f'{i:03d}' + f'{j:03d}']["map_shape"]=(pixel_x_interval[1]-pixel_x_interval[0],pixel_y_interval[1]-pixel_y_interval[0],self.tomographic_map.shape[2])
+                Chunks[f'{i:03d}' + f'{j:03d}']["map_name"]="{}_{}_{}".format(self.map_name,i,j)
 
 
-    def merge_chunks(self,Chunks):
+    def merge_chunks(self):
         radius_to_contatenate = []
         coord_Mpc_to_contatenate = []
         other_array_names = Chunks[list(Chunks.keys())[0]]["other_array_names"]
         other_arrays_to_contatenate = [[] for i in range(len(other_array_names))]
         for i in range(self.split_map[0]):
             for j in range(self.split_map[1]):
-                coord_mpc = Chunks[str(i) + str(j)]["coord_Mpc"]
+                coord_mpc = Chunks[f'{i:03d}' + f'{j:03d}']["coord_Mpc"]
                 if(coord_mpc.shape[0] !=0):
                     if(self.split_overlap is not None):
                         if((i==self.split_map[0]-1)&(i==0)):
@@ -225,15 +221,15 @@ class VoidFinder(object):
                         else:
                             pixel_y_interval = [ self.split_overlap,self.split_overlap]
                         mask = (coord_mpc[:,0] > pixel_x_interval[0])
-                        mask &= (coord_mpc[:,0] < Chunks[str(i) + str(j)]["map_size"][0] - pixel_x_interval[1])
+                        mask &= (coord_mpc[:,0] < Chunks[f'{i:03d}' + f'{j:03d}']["map_size"][0] - pixel_x_interval[1])
                         mask &= (coord_mpc[:,1] > pixel_y_interval[0])
-                        mask &= (coord_mpc[:,1] < Chunks[str(i) + str(j)]["map_size"][1] - pixel_y_interval[1])
+                        mask &= (coord_mpc[:,1] < Chunks[f'{i:03d}' + f'{j:03d}']["map_size"][1] - pixel_y_interval[1])
                     else:
                         mask = np.full(coord_mpc.shape[0],True)
-                    radius_to_contatenate.append(Chunks[str(i) + str(j)]["radius"][mask])
+                    radius_to_contatenate.append(Chunks[f'{i:03d}' + f'{j:03d}']["radius"][mask])
                     for k in range(len(other_array_names)):
-                        other_arrays_to_contatenate[k].append(np.array(Chunks[str(i) + str(j)]["other_arrays"][k])[mask])
-                    coord_Mpc_to_contatenate.append((Chunks[str(i) + str(j)]["coord_Mpc"] + np.array(Chunks[str(i) + str(j)]["map_min"]))[mask])
+                        other_arrays_to_contatenate[k].append(np.array(Chunks[f'{i:03d}' + f'{j:03d}']["other_arrays"][k])[mask])
+                    coord_Mpc_to_contatenate.append((Chunks[f'{i:03d}' + f'{j:03d}']["coord_Mpc"] + np.array(Chunks[f'{i:03d}' + f'{j:03d}']["map_min"]))[mask])
         if(len(radius_to_contatenate) == 0):
             radius = np.empty(0)
             coord_Mpc = np.empty(0)
@@ -245,6 +241,23 @@ class VoidFinder(object):
         return(radius, coord_Mpc,other_arrays_to_contatenate,other_array_names)
 
 
+    def find_voids_watershed_split_mp(self,map_index):
+        global Chunks
+        chunk = tomographic_objects.TomographicMap.init_classic(name=Chunks[map_index]["map_name"],
+                                                                shape=Chunks[map_index]["map_shape"],
+                                                                size=Chunks[map_index]["map_size"],
+                                                                map_array=Chunks[map_index]["map"])
+        return(self.find_voids_watershed(chunk))
+
+
+
+    def find_voids_watershed_split(self,map_index):
+        global Chunks
+        chunk = tomographic_objects.TomographicMap.init_classic(name=Chunks[map_index]["map_name"],
+                                                                shape=Chunks[map_index]["map_shape"],
+                                                                size=Chunks[map_index]["map_size"],
+                                                                map_array=Chunks[map_index]["map"])
+        Chunks[map_index]["radius"],Chunks[map_index]["coord_Mpc"],Chunks[map_index]["other_arrays"],Chunks[map_index]["other_array_names"] = self.find_voids_watershed(chunk)
 
     def find_voids_watershed(self,tomographic_map):
         self.log.add("Beginning of the Watershed finding for the map {}".format(tomographic_map.name))
@@ -338,6 +351,13 @@ class VoidFinder(object):
         return(cluster_map,clusters)
 
 
+    def find_voids_sphere_split(self,map_index):
+        global Chunks
+        chunk = tomographic_objects.TomographicMap.init_classic(name=Chunks[map_index]["map_name"],
+                                                                shape=Chunks[map_index]["map_shape"],
+                                                                size=Chunks[map_index]["map_size"],
+                                                                map_array=Chunks[map_index]["map"])
+        Chunks[map_index]["radius"],Chunks[map_index]["coord_Mpc"],Chunks[map_index]["other_arrays"],Chunks[map_index]["other_array_names"] = self.find_voids_sphere(chunk)
 
 
     def find_voids_sphere(self,tomographic_map):
@@ -368,7 +388,7 @@ class VoidFinder(object):
                 func = partial(self.find_the_sphere_cluster,number_Mpc_per_pixels,number_pixel_maximal_radius)
             else:
                 func = partial(self.find_the_sphere,number_Mpc_per_pixels,number_pixel_maximal_radius)
-            pool = Pool(self.number_core)
+            pool = mp.Pool(self.number_core)
             out_pool = np.array(pool.map(func,coord_to_compute))
             if(len(out_pool) !=0): radius_to_compute , mean_value = out_pool[:,0], out_pool[:,1]
             else: radius_to_compute , mean_value = np.array([]),np.array([])
