@@ -265,7 +265,7 @@ class TomographyManager(object):
 
 
     def init_machine(self,machine,**kwargs):
-        ### CR - Deal with the kwargs
+        # CR - Deal with the kwargs
         if(machine.lower() == "irene"):
             return(Irene())
         if(machine.lower() == "nersc"):

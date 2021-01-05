@@ -814,7 +814,7 @@ class Pixel(object):
 
 
 
-   ### To modify in merge pixels (by an initialization) ###
+   # CR - To modify in merge pixels (by an initialization) 
 
     def merge_maps_and_pixels(self,extremum_list,name_map_out,name_pixel_out,size_maps,mask_maps=None,criteria_mask=None,qso_files=None,name_qso_out=None):
         map_out = []

@@ -67,7 +67,7 @@ def pixel_to_3d(pixel_name,new_name):
     pixel.writetxt(new_name)
 
 
-
+# CR - map split to program if needed
 
 # def split_map(map_name,property_file,split,split_prop_name,map_split_name):
 #     map_class = tomographic_objects.TomographicMap.init_from_property_files(property_file,name=map_name)

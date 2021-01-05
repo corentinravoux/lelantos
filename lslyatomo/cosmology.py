@@ -535,7 +535,7 @@ class DeltaConverter():
         pickle.dump([filename,Dachshundparams,number_chunks,overlaping],open("data_launch_dachshund.pickle","wb"))
 
 
-    ### Modification : dissociate map properties and launcher properties
+    # CR - Modification : dissociate map properties and launcher properties
 
     #### Main routine
 
