@@ -553,8 +553,7 @@ class DeltaConverter():
             raise KeyError("Please choose a mode between serial and parallel")
         self.create_additional_catalogs(cartesian_qso_catalog,cartesian_dla_catalog,sky_qso_catalog,sky_dla_catalog,properties_map_pixels)
         if(self.plot_pixel_properties):
-            pixel = tomographic_objects.Pixel.init_from_property_files(property_file_name,pixel_array=cartesian_deltas,name=properties["name_pixel"])
-            pixel_analyzer = PixelAnalizer(self.pwd,pixel=pixel)
+            pixel_analyzer = PixelAnalizer(self.pwd,pixel=properties["name_pixel"],property_file=property_file_name)
             pixel_analyzer.analyze_pixels(False,True,name_dperp=nameout,coupled_plot=True)
 
     def create_additional_catalogs(self,cartesian_qso_catalog,cartesian_dla_catalog,sky_qso_catalog,sky_dla_catalog,properties_map_pixels):
@@ -579,11 +578,16 @@ class DeltaConverter():
 
 class PixelAnalizer(object):
 
-    def __init__(self,pwd,pixel=None):
+    def __init__(self,pwd,pixel=None,property_file=None):
 
         self.pwd = pwd
         os.chdir(pwd)
-        self.pixel = pixel
+        if(type(pixel) == str):
+            pixel_class = tomographic_objects.Pixel.init_from_property_files(property_file,name=pixel)
+            pixel_class.read()
+        else:
+            pixel_class = pixel
+        self.pixel = pixel_class
 
 
 
@@ -1072,7 +1076,7 @@ class DeltaModifier(object):
             delta_tomo.read()
             for j in range(1,len(delta_tomo.delta_file)):
                 delta = delta_tomo.read_line(j)
-                if(self.center_ra_to_zero):
+                if(self.center_ra):
                     if(delta.ra *180 /np.pi  > 180):
                         ra =((delta.ra * 180 / np.pi)-360)
                     else:
@@ -1086,7 +1090,7 @@ class DeltaModifier(object):
                     for cut in range(number_cut):
                         interval_ra =  ((cut)/(number_cut))*(self.ra_cut_max-self.ra_cut_min) + self.ra_cut_min  , ((cut + 1)/(number_cut))*(self.ra_cut_max-self.ra_cut_min) + self.ra_cut_min
                         if((ra>interval_ra[0])&(ra<=interval_ra[1])):
-                            if(self.center_ra_to_zero):
+                            if(self.center_ra):
                                 delta.ra = delta.ra - 2*np.pi
                             deltas[cut].append(delta)
             delta_tomo.close()

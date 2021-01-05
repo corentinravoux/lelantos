@@ -47,9 +47,36 @@ def create_distance_map(map_name,pixel_file,property_file,nb_process=1,radius_lo
     distance_map = tomographic_objects.DistanceMap.init_by_computing(pixel,tomographic_map,map_name,nb_process=nb_process,radius_local=radius_local)
     distance_map.write()
 
+def convert_to_vtk(map_name,property_file,new_name):
+    map_class = tomographic_objects.TomographicMap.init_from_property_files(property_file,name=map_name)
+    map_class.read()
+    map_class.name = new_name
+    map_class.write_in_vtk()
+
+def mask_map_to_3d(map_name,property_file,new_name,distance_map,distance):
+    map_class = tomographic_objects.TomographicMap.init_from_property_files(property_file,name=map_name)
+    map_class.read()
+    map_class.name = new_name
+    map_class.mask_map(distance_map,distance)
+    map_class.write()
+
+
+def pixel_to_3d(pixel_name,new_name):
+    pixel = tomographic_objects.Pixel(name=pixel_name)
+    pixel.read()
+    pixel.writetxt(new_name)
 
 
 
+
+# def split_map(map_name,property_file,split,split_prop_name,map_split_name):
+#     map_class = tomographic_objects.TomographicMap.init_from_property_files(property_file,name=map_name)
+#     map_class.read()
+#     splitted_maps = map_class.split_map(split)
+#     for i in range(len(splitted_maps)):
+#         splitted_maps[i].name = new_name
+#         splitted_maps[i].write_property_file(new_prop_name)
+#         splitted_maps[i].write()
 
 #############################################################################
 #############################################################################

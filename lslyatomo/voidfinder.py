@@ -70,6 +70,13 @@ def create_qso_like_catalog(catalog_name):
     void.convert_to_cross_corr_radec()
     void.write(qso_like=True)
 
+def qso_to_3d(catalog_name,new_name,moveaxis=None):
+    qso = tomographic_objects.QSOCatalog.init_from_fits(catalog_name)
+    qso.writetxt(new_name,moveaxis=moveaxis)
+
+def void_to_3d(catalog_name,new_name,moveaxis=None):
+    void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
+    void.writetxt(new_name,moveaxis=moveaxis)
 
 #############################################################################
 #############################################################################
@@ -291,7 +298,7 @@ class VoidFinder(object):
         self.log.add("Masking of low radius done for the map {}".format(tomographic_map.name))
         new_coord, new_radius, new_other_arrays = self.delete_voids(tomographic_map,radius,coord,other_arrays=[delta_max,delta_mean])
         other_array_names =["VALUE","MEAN"]
-        self.convert_to_Mpc(tomographic_map,new_coord)
+        new_coord = self.convert_to_Mpc(tomographic_map,new_coord)
         del map_3D,mask,mask_clust,mask_radius,cluster_map,clusters,map_under_density,centers,index_under_density,radius_shed
         self.log.add("End of the Watershed finding for the map {}".format(tomographic_map.name))
         return(new_radius, new_coord,new_other_arrays,other_array_names)
@@ -398,7 +405,7 @@ class VoidFinder(object):
         new_coord, new_radius, new_other_arrays = self.delete_voids(tomographic_map,radius,coord,other_arrays=[mean_value])
         nearest_coord = np.round(new_coord,0).astype(int)
         new_other_arrays.append(map_3D[nearest_coord[:,0],nearest_coord[:,1],nearest_coord[:,2]])
-        self.convert_to_Mpc(tomographic_map,new_coord)
+        new_coord = self.convert_to_Mpc(tomographic_map,new_coord)
         other_array_names=["MEAN","VALUE"]
         del indice,coord,map_3D,mask,radius,nearest_coord
         self.log.add("End of the Simple spherical finding for the map {}".format(tomographic_map.name))
@@ -407,6 +414,7 @@ class VoidFinder(object):
 
     def find_the_sphere(self,number_Mpc_per_pixels,number_pixel_maximal_radius,index):
         global radius_shared, mean_value_shared
+        global map_3D,indice
         coord = coord_to_compute[index]
         map_local = map_3D[max(coord[0]-number_pixel_maximal_radius[0],0):min(map_3D.shape[0],coord[0]+number_pixel_maximal_radius[0]),
                            max(coord[1]-number_pixel_maximal_radius[1],0):min(map_3D.shape[1],coord[1]+number_pixel_maximal_radius[1]),
@@ -627,7 +635,7 @@ class VoidFinder(object):
         number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
         if(coord.shape[0] != 0):
             coord = coord * np.array(number_Mpc_per_pixels)
-
+        return(coord)
 
 
     def save_voids(self,radius,coord,other_arrays,other_array_names,coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord):

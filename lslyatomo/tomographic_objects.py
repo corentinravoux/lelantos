@@ -171,6 +171,25 @@ class TomographicMap(object):
         listmap=np.ravel(self.map_array)
         listmap.tofile(self.name)
 
+    def write_in_vtk(self):
+        from pyevtk.hl import gridToVTK
+        nx,ny,nz = self.shape
+        lx,ly,lz = self.size
+        X = np.linspace(0,lx,nx, dtype='float64')
+        Y = np.linspace(0,ly,ny, dtype='float64')
+        Z = np.linspace(0,lz,nz, dtype='float64')
+        x = np.zeros((nx, ny, nz))
+        y = np.zeros((nx, ny, nz))
+        z = np.zeros((nx, ny, nz))
+        for i in range(nx):
+            for j in range(ny):
+                for k in range(nz):
+                    x[i,j,k] = X[i]
+                    y[i,j,k] = Y[j]
+                    z[i,j,k] = Z[k]
+        gridToVTK(self.name, x, y, z, pointData = {"DeltaF" : self.map_array})
+
+
     def write_property_file(self,property_file_name):
         property_file = MapPixelProperty(name=property_file_name,size=self.size,
                                          shape=self.shape,
@@ -191,13 +210,11 @@ class TomographicMap(object):
 
 
 
-    def mask_map_to_3D(self,mapin,distance_name,distance):
-        mapout = self.map_array.copy()
+    def mask_map(self,distance_name,distance):
         distance_map = DistanceMap.init_from_tomographic_map(self,name=distance_name)
         distance_map.read()
         mask = distance_map.get_mask_distance(distance)
-        mapout[mask] = 0
-        return(mapout)
+        self.map_array[mask] = 0
 
 
     def mask_map_from_name(self,distance_map_name,distance):
@@ -209,7 +226,9 @@ class TomographicMap(object):
         self.map_array = np.ma.masked_where(mask,self.map_array)
 
 
-
+    # def split_map(self,split):
+    #     maps = self.map_array
+    #     return(maps)
 
 
     def compute_pk3d(self,kmin,kmax,n_k,distance_map=None,criteria_distance_mask=None,log=False):
@@ -706,6 +725,11 @@ class Pixel(object):
             raise ValueError("No")
         listpixel=np.ravel(self.pixel_array)
         listpixel.tofile(self.name)
+
+    def writetxt(self,name_out):
+        x,y,z = self.repack_by_los()
+        coord = np.array([[x[i],y[i],z[i][0],z[i][-1]] for i in range(len(x))])
+        np.savetxt(name_out,coord)
 
 
     def repack_by_los(self):
@@ -1321,7 +1345,9 @@ class Catalog(object):
             self.coord[:,0] = np.degrees(self.coord[:,0])
             self.coord[:,1] = np.degrees(self.coord[:,1])
 
-
+    def move_axis(self,moveaxis):
+        for i in range(len(moveaxis)):
+            self.coord[:,i] = self.coord[:,i] - moveaxis[i]
 
     @property
     def redshift(self):
@@ -1462,7 +1488,10 @@ class QSOCatalog(Catalog):
         fits.write(h)
         fits.close()
 
-
+    def writetxt(self,name_out,moveaxis=None):
+        if(moveaxis is not None):
+            self.move_axis(moveaxis)
+        np.savetxt(name_out,self.coord)
 
     def cut_write_catalog(self,name_out,coord_min,coord_max):
         self.read_from_fits()
@@ -1720,6 +1749,11 @@ class VoidCatalog(Catalog):
         return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
 
 
+    def writetxt(self,name_out,moveaxis=None):
+        if(moveaxis is not None):
+            self.move_axis(moveaxis)
+        coord = np.transpose(np.stack([self.coord[:,0],self.coord[:,1],self.coord[:,2],self.radius]))
+        np.savetxt(name_out,coord)
 
 
     def write(self,qso_like=False):
