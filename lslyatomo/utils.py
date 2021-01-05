@@ -28,6 +28,7 @@ from scipy import interpolate
 from scipy.ndimage import map_coordinates
 from scipy.optimize import leastsq
 import multiprocessing as mp
+from multiprocessing.reduction import ForkingPickler, AbstractReducer
 
 #############################################################################
 #############################################################################
@@ -256,8 +257,8 @@ def cut_sky_catalog(ra,dec,z,ramin=None,ramax=None,decmin=None,decmax=None,zmin=
         mask &= z < zmax
     return(mask)
 
-def init_shared_array(shape):
-    distance_array = np.full(shape,np.inf)
+def init_shared_array(shape,full_value=np.inf):
+    distance_array = np.full(shape,full_value)
     shared_arr = mp.Array('d', distance_array.flatten())
     del distance_array
     return(shared_arr)
@@ -524,3 +525,32 @@ def latex_float(float_input,decimals_input="{0:.2g}"):
 
 def return_key(dictionary,string,default_value):
     return(dictionary[string] if string in dictionary.keys() else default_value)
+
+
+
+### https://stackoverflow.com/questions/51562221/python-multiprocessing-overflowerrorcannot-serialize-a-bytes-object-larger-t/51568084
+### Solve the pickle issue OverflowError('cannot serialize a bytes object larger than 4GiB')
+### When too large array are considered in multiprocessing
+
+
+class ForkingPickler4(ForkingPickler):
+    def __init__(self, *args):
+        if len(args) > 1:
+            args[1] = 2
+        else:
+            args.append(2)
+        super().__init__(*args)
+
+    @classmethod
+    def dumps(cls, obj, protocol=4):
+        return ForkingPickler.dumps(obj, protocol)
+
+
+def dump(obj, file, protocol=4):
+    ForkingPickler4(file, protocol).dump(obj)
+
+
+class Pickle4Reducer(AbstractReducer):
+    ForkingPickler = ForkingPickler4
+    register = ForkingPickler4.register
+    dump = dump
