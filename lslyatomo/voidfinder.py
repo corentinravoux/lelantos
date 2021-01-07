@@ -88,12 +88,11 @@ def void_to_3d(catalog_name,new_name,moveaxis=None):
 
 class VoidFinder(object):
 
-    def __init__(self,pwd,map_name,params_void_finder,map_shape=None,map_size=None,property_file=None,number_core=1,restart=False,find_cluster=False,split_map=None,split_overlap=None,delete_option="CLUSTERS"):
+    def __init__(self,pwd,map_name,params_void_finder,map_shape=None,map_size=None,property_file=None,number_core=1,find_cluster=False,split_map=None,split_overlap=None,delete_option="CLUSTERS"):
         self.pwd = pwd
         self.map_name = map_name
         self.params_void_finder = params_void_finder
         self.number_core = number_core
-        self.restart = restart
         self.find_cluster=find_cluster
         self.split_map = split_map
         self.split_overlap = split_overlap
@@ -127,13 +126,12 @@ class VoidFinder(object):
 
 
     def find_voids_map_split(self):
-        self.split_map_in_chunks()
-        global Chunks, list_index_map_chunks
+        Chunks = self.split_map_in_chunks()
         list_index_map_chunks = [f'{i:03d}' + f'{j:03d}' for j in range(self.split_map[1]) for i in range(self.split_map[0])]
         if(self.params_void_finder["method"] == "WATERSHED"):
             if(self.number_core > 1):
                 pool = mp.Pool(self.number_core)
-                out_map = pool.map(self.find_voids_watershed_split_mp,list_index_map_chunks)
+                out_map = pool.map(self.find_voids_watershed,list_index_map_chunks)
                 for i in range(len(list_index_map_chunks)):
                     Chunks[list_index_map_chunks[i]]["radius"],Chunks[list_index_map_chunks[i]]["coord_Mpc"],Chunks[list_index_map_chunks[i]]["other_arrays"],Chunks[list_index_map_chunks[i]]["other_array_names"] = out_map[i]
             else:
@@ -141,10 +139,14 @@ class VoidFinder(object):
                     self.find_voids_watershed_split(list_index_map_chunks[i])
         elif(self.params_void_finder["method"] == "SPHERICAL"):
             for i in range(len(list_index_map_chunks)):
-                self.find_voids_sphere_split(list_index_map_chunks[i])
+                chunk = tomographic_objects.TomographicMap.init_classic(name=Chunks[list_index_map_chunks[i]]["map_name"],
+                                                                        shape=Chunks[list_index_map_chunks[i]]["map_shape"],
+                                                                        size=Chunks[list_index_map_chunks[i]]["map_size"],
+                                                                        map_array=Chunks[list_index_map_chunks[i]]["map"])
+                Chunks[list_index_map_chunks[i]]["radius"],Chunks[list_index_map_chunks[i]]["coord_Mpc"],Chunks[list_index_map_chunks[i]]["other_arrays"],Chunks[list_index_map_chunks[i]]["other_array_names"] = self.find_voids_sphere(chunk)
         else :
             raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
-        (radius, coord_Mpc,other_arrays,other_array_names) = self.merge_chunks()
+        (radius, coord_Mpc,other_arrays,other_array_names) = self.merge_chunks(Chunks)
         del Chunks,list_index_map_chunks
         new_coord_Mpc, new_radius, new_other_arrays = self.delete_voids(self.tomographic_map,radius,coord_Mpc,other_arrays=other_arrays,mpc=True)
         self.save_voids(new_radius, new_coord_Mpc,new_other_arrays,other_array_names,self.tomographic_map.coordinate_transform,self.tomographic_map.Omega_m,self.tomographic_map.boundary_cartesian_coord,self.tomographic_map.boundary_sky_coord)
@@ -152,7 +154,6 @@ class VoidFinder(object):
 
 
     def split_map_in_chunks(self):
-        global Chunks
         map_3D = self.tomographic_map.map_array
         number_Mpc_per_pixels = self.tomographic_map.mpc_per_pixel
         pixels_x = self.tomographic_map.shape[0]
@@ -191,9 +192,9 @@ class VoidFinder(object):
                 Chunks[f'{i:03d}' + f'{j:03d}']["map_min"]=(size_x_interval[0],size_y_interval[0],0)
                 Chunks[f'{i:03d}' + f'{j:03d}']["map_shape"]=(pixel_x_interval[1]-pixel_x_interval[0],pixel_y_interval[1]-pixel_y_interval[0],self.tomographic_map.shape[2])
                 Chunks[f'{i:03d}' + f'{j:03d}']["map_name"]="{}_{}_{}".format(self.map_name,i,j)
+        return(Chunks)
 
-
-    def merge_chunks(self):
+    def merge_chunks(self,Chunks):
         radius_to_contatenate = []
         coord_Mpc_to_contatenate = []
         other_array_names = Chunks[list(Chunks.keys())[0]]["other_array_names"]
@@ -240,36 +241,18 @@ class VoidFinder(object):
         return(radius, coord_Mpc,other_arrays_to_contatenate,other_array_names)
 
 
-    def find_voids_watershed_split_mp(self,map_index):
-        global Chunks
-        chunk = tomographic_objects.TomographicMap.init_classic(name=Chunks[map_index]["map_name"],
-                                                                shape=Chunks[map_index]["map_shape"],
-                                                                size=Chunks[map_index]["map_size"],
-                                                                map_array=Chunks[map_index]["map"])
-        return(self.find_voids_watershed(chunk))
-
-
-
-    def find_voids_watershed_split(self,map_index):
-        global Chunks
-        chunk = tomographic_objects.TomographicMap.init_classic(name=Chunks[map_index]["map_name"],
-                                                                shape=Chunks[map_index]["map_shape"],
-                                                                size=Chunks[map_index]["map_size"],
-                                                                map_array=Chunks[map_index]["map"])
-        Chunks[map_index]["radius"],Chunks[map_index]["coord_Mpc"],Chunks[map_index]["other_arrays"],Chunks[map_index]["other_array_names"] = self.find_voids_watershed(chunk)
-
     def find_voids_watershed(self,tomographic_map):
         self.log.add("Beginning of the Watershed finding for the map {}".format(tomographic_map.name))
         number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
-        global map_3D
-        map_3D = tomographic_map.map_array
+        map_array = tomographic_map.map_array
         if(self.find_cluster):
-            mask = map_3D < self.params_void_finder["threshold"]
+            mask = map_array < self.params_void_finder["threshold"]
         else :
-            mask = map_3D > self.params_void_finder["threshold"]
+            mask = map_array > self.params_void_finder["threshold"]
         index_under_density = np.argwhere(mask)
         self.log.add("Number of pixels for the map {} = {}".format(tomographic_map.name,len(index_under_density)))
-        map_under_density = map_3D[mask]
+        map_under_density = map_array[mask]
+        del map_array
         cluster_map,clusters = self.create_watershed_clusters(index_under_density)
         self.log.add("Pixel clusters created for the map {}".format(tomographic_map.name))
         centers = np.zeros((len(clusters),3))
@@ -299,7 +282,7 @@ class VoidFinder(object):
         new_coord, new_radius, new_other_arrays = self.delete_voids(tomographic_map,radius,coord,other_arrays=[delta_max,delta_mean])
         other_array_names =["VALUE","MEAN"]
         new_coord = self.convert_to_Mpc(tomographic_map,new_coord)
-        del map_3D,mask,mask_clust,mask_radius,cluster_map,clusters,map_under_density,centers,index_under_density,radius_shed
+        del mask,mask_clust,mask_radius,cluster_map,clusters,map_under_density,centers,index_under_density,radius_shed
         self.log.add("End of the Watershed finding for the map {}".format(tomographic_map.name))
         return(new_radius, new_coord,new_other_arrays,other_array_names)
 
@@ -350,78 +333,70 @@ class VoidFinder(object):
         return(cluster_map,clusters)
 
 
-    def find_voids_sphere_split(self,map_index):
-        global Chunks
-        chunk = tomographic_objects.TomographicMap.init_classic(name=Chunks[map_index]["map_name"],
-                                                                shape=Chunks[map_index]["map_shape"],
-                                                                size=Chunks[map_index]["map_size"],
-                                                                map_array=Chunks[map_index]["map"])
-        Chunks[map_index]["radius"],Chunks[map_index]["coord_Mpc"],Chunks[map_index]["other_arrays"],Chunks[map_index]["other_array_names"] = self.find_voids_sphere(chunk)
-
 
     def find_voids_sphere(self,tomographic_map):
-        self.log.add("Beginning of the Simple spherical finding for the map {}".format(tomographic_map.name))
-        number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
-        number_pixel_maximal_radius = np.around(self.params_void_finder["maximal_radius"]/number_Mpc_per_pixels,decimals=0).astype(int)
-        global map_3D
-        map_3D = tomographic_map.map_array
+        self.log.add(f"Beginning of the Simple spherical finding for the map {tomographic_map.name}")
+        mpc_per_pixel = tomographic_map.mpc_per_pixel
+        maximal_radius = np.around(self.params_void_finder["maximal_radius"]/mpc_per_pixel,decimals=0).astype(int)
+        map_array = tomographic_map.map_array
+        indice = np.transpose(np.indices(map_array.shape),axes=(1,2,3,0))
+
         if(self.find_cluster):
-            mask = map_3D < self.params_void_finder["threshold"]
+            mask = map_array < self.params_void_finder["threshold"]
         else :
-            mask = map_3D > self.params_void_finder["threshold"]
+            mask = map_array > self.params_void_finder["threshold"]
         coord = np.argwhere(mask)
         del mask
-        global indice
-        indice = np.transpose(np.indices(map_3D.shape),axes=(1,2,3,0))
-        radius = np.full(len(coord),-1)
-        self.log.add("Number of pixels for the map {} = {}".format(tomographic_map.name,len(coord)))
-        if(self.restart):
-            radius = self.restart_calculation(radius,coord)
-        mask = radius < 0
-
-        global radius_shared, mean_value_shared, coord_to_compute
-        coord_to_compute = coord[mask]
-        indexes_to_compute = np.indices((coord_to_compute.shape[0],))[0]
-        radius_shared = utils.init_shared_array(coord_to_compute.shape[0],full_value=0)
-        mean_value_shared = utils.init_shared_array(coord_to_compute.shape[0],full_value=0)
+        self.log.add(f"Number of pixels for the map {tomographic_map.name} = {coord.shape[0]}")
 
         if(self.number_core > 1):
-            self.log.add("Start of pool for the map {}".format(tomographic_map.name))
-            func = partial(self.find_the_sphere,number_Mpc_per_pixels,number_pixel_maximal_radius)
-            pool = mp.Pool(self.number_core)
-            pool.map(func,indexes_to_compute)
-            self.log.add("End of pool for the map {}".format(tomographic_map.name))
+            self.log.add(f"{self.number_core} processes used, start of multiprocessing routines")
+            self.log.add(f"Start of pool for the map {tomographic_map.name}")
+            func = partial(self.find_the_sphere,mpc_per_pixel,
+                           maximal_radius,map_array,indice)
+            with mp.Pool(self.number_core) as pool:
+                pool_results = np.array(pool.map(func,coord))
+            if(pool_results.shape[0] !=0):
+                radius , mean_value = pool_results[:,0], pool_results[:,1]
+            else:
+                radius , mean_value = np.array([]),np.array([])
+            self.log.add(f"End of pool for the map {tomographic_map.name}")
         else :
-            for i in range(len(indexes_to_compute)):
-                self.find_the_sphere(number_Mpc_per_pixels,number_pixel_maximal_radius,indexes_to_compute[i])
-
-        radius[mask] = utils.mp_array_to_numpyarray(radius_shared)
-        mean_value = utils.mp_array_to_numpyarray(mean_value_shared)
-        del mask,radius_shared,mean_value_shared
+            self.log.add("Start of serial calculation")
+            radius = np.zeros(coord.shape[0])
+            mean_value = np.zeros(coord.shape[0])
+            for i in range(len(coord)):
+                radius[i],mean_value[i] = self.find_the_sphere(mpc_per_pixel,
+                                                               maximal_radius,
+                                                               coord[i],
+                                                               map_array,indice)
+        del indice
         mask = radius == 0
         coord = coord[~mask]
         radius = radius[~mask]
         mean_value = mean_value[~mask]
-        new_coord, new_radius, new_other_arrays = self.delete_voids(tomographic_map,radius,coord,other_arrays=[mean_value])
+        new_coord, new_radius, new_other_arrays = self.delete_voids(tomographic_map,
+                                                                    radius,coord,
+                                                                    other_arrays=[mean_value])
         nearest_coord = np.round(new_coord,0).astype(int)
-        new_other_arrays.append(map_3D[nearest_coord[:,0],nearest_coord[:,1],nearest_coord[:,2]])
+        new_other_arrays.append(map_array[nearest_coord[:,0],nearest_coord[:,1],nearest_coord[:,2]])
         new_coord = self.convert_to_Mpc(tomographic_map,new_coord)
+        del coord,map_array,mask,radius,nearest_coord
         other_array_names=["MEAN","VALUE"]
-        del indice,coord,map_3D,mask,radius,nearest_coord
-        self.log.add("End of the Simple spherical finding for the map {}".format(tomographic_map.name))
+        self.log.add(f"End of the Simple spherical finding for the map {tomographic_map.name}")
+        del tomographic_map
         return(new_radius, new_coord,new_other_arrays,other_array_names)
 
 
-    def find_the_sphere(self,number_Mpc_per_pixels,number_pixel_maximal_radius,index):
-        global radius_shared, mean_value_shared
-        global map_3D,indice
-        coord = coord_to_compute[index]
-        map_local = map_3D[max(coord[0]-number_pixel_maximal_radius[0],0):min(map_3D.shape[0],coord[0]+number_pixel_maximal_radius[0]),
-                           max(coord[1]-number_pixel_maximal_radius[1],0):min(map_3D.shape[1],coord[1]+number_pixel_maximal_radius[1]),
-                           max(coord[2]-number_pixel_maximal_radius[2],0):min(map_3D.shape[2],coord[2]+number_pixel_maximal_radius[2])]
-        indice_local = (indice[max(coord[0]-number_pixel_maximal_radius[0],0):min(map_3D.shape[0],coord[0]+number_pixel_maximal_radius[0]),
-                               max(coord[1]-number_pixel_maximal_radius[1],0):min(map_3D.shape[1],coord[1]+number_pixel_maximal_radius[1]),
-                               max(coord[2]-number_pixel_maximal_radius[2],0):min(map_3D.shape[2],coord[2]+number_pixel_maximal_radius[2])]- coord)*number_Mpc_per_pixels
+
+
+    def find_the_sphere(self,number_Mpc_per_pixels,number_pixel_maximal_radius,map_array,indice,coord):
+        map_local = map_array[max(coord[0]-number_pixel_maximal_radius[0],0):min(map_array.shape[0],coord[0]+number_pixel_maximal_radius[0]),
+                           max(coord[1]-number_pixel_maximal_radius[1],0):min(map_array.shape[1],coord[1]+number_pixel_maximal_radius[1]),
+                           max(coord[2]-number_pixel_maximal_radius[2],0):min(map_array.shape[2],coord[2]+number_pixel_maximal_radius[2])]
+        indice_local = (indice[max(coord[0]-number_pixel_maximal_radius[0],0):min(map_array.shape[0],coord[0]+number_pixel_maximal_radius[0]),
+                               max(coord[1]-number_pixel_maximal_radius[1],0):min(map_array.shape[1],coord[1]+number_pixel_maximal_radius[1]),
+                               max(coord[2]-number_pixel_maximal_radius[2],0):min(map_array.shape[2],coord[2]+number_pixel_maximal_radius[2])]- coord)*number_Mpc_per_pixels
         distance_map = np.sqrt(indice_local[:,:,:,0]**2 + indice_local[:,:,:,1]**2 + indice_local[:,:,:,2]**2)
         del indice_local
         radius = self.params_void_finder["minimal_radius"]
@@ -439,16 +414,9 @@ class VoidFinder(object):
         del distance_map,map_local,boolean
         if((radius>=self.params_void_finder["maximal_radius"])|(radius<=self.params_void_finder["minimal_radius"])):
             radius, mean_value= 0, 0
-        with(radius_shared.get_lock()):
-            radius_array = utils.mp_array_to_numpyarray(radius_shared)
-            radius_array[index] = radius
-        with(mean_value_shared.get_lock()):
-            mean_value_array = utils.mp_array_to_numpyarray(mean_value_shared)
-            mean_value_array[index] = mean_value
+        return(radius,mean_value)
 
 
-
-### Overlapper deletion algorithms
 
 
     def delete_voids(self,tomographic_map,radius,coord,other_arrays=None,mpc=False):
@@ -603,31 +571,6 @@ class VoidFinder(object):
             return(np.array(coord_cleaned),np.array(radius_cleaned),None)
 
 
-
-### Other algorithms
-
-
-
-    def restart_calculation(self,radius,coord):
-        file = open(self.restart,"r")
-        line_file = file.readlines()
-        file.close()
-        for i in range(len(line_file)):
-            line = line_file[i].strip().split()
-            coord_line = line_file[i].split('[')[-1].split(']')[0]
-            if((line[5]=="Sphere")&(line[6]=="found")):
-                index = np.array([int(coord_line.split()[0]),
-                                  int(coord_line.split()[1]),
-                                  int(coord_line.split()[2])])
-                mask = coord == index
-                arg = np.argwhere(mask)
-                del mask
-                radius[arg]=float(line[10].split(",")[0])
-        del line, line_file
-        self.log.add("restart coordinates")
-        mask = radius >= 0
-        self.log.add("Sphere found : R = " + str(radius[mask]) + ", Coord = " + str(coord[mask]))
-        return(radius)
 
 
 
