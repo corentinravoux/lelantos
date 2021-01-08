@@ -34,6 +34,8 @@ ctx = mp.get_context()
 ctx.reducer = utils.Pickle4Reducer()
 
 
+
+
 def create_merged_catalog(pwd,list_catalog_name,merged_catalog_name):
     void_merged = tomographic_objects.VoidCatalog.init_by_merging(list_catalog_name,name=os.path.join(pwd,merged_catalog_name))
     void_merged.write()
@@ -104,7 +106,8 @@ class VoidFinder(object):
         log_name = f"void_finder_report_{self.get_name_catalog()}.txt"
         self.log = utils.create_report_log(name=os.path.join(self.pwd,log_name))
 
-
+        # Solve Overflow pickle issue in multiprocessing
+        utils.patch_mp_connection_bpo_17560(log = self.log)
 
 
 
@@ -155,7 +158,6 @@ class VoidFinder(object):
 
     def split_map_in_chunks(self):
         map_3D = self.tomographic_map.map_array
-        number_Mpc_per_pixels = self.tomographic_map.mpc_per_pixel
         pixels_x = self.tomographic_map.shape[0]
         pixels_y = self.tomographic_map.shape[1]
         subIntervalx = pixels_x//self.split_map[0]
@@ -163,8 +165,8 @@ class VoidFinder(object):
         if(self.split_overlap is None):
             overlaping_x,overlaping_y = 0,0
         else :
-            overlaping_x = int(np.round(self.split_overlap/number_Mpc_per_pixels[0],0))
-            overlaping_y = int(np.round(self.split_overlap/number_Mpc_per_pixels[1],0))
+            overlaping_x = int(np.round(self.split_overlap/self.tomographic_map.mpc_per_pixel[0],0))
+            overlaping_y = int(np.round(self.split_overlap/self.tomographic_map.mpc_per_pixel[1],0))
         Chunks = {}
         for i in range(self.split_map[0]):
             for j in range(self.split_map[1]):
@@ -185,13 +187,13 @@ class VoidFinder(object):
                     pixel_y_interval = [ j*subIntervaly - overlaping_y , self.tomographic_map.shape[1]]
                 else:
                     pixel_y_interval = [  j*subIntervaly -overlaping_y, (j+1)*subIntervaly + overlaping_y]
-                size_x_interval = np.array(pixel_x_interval)*number_Mpc_per_pixels[0]
-                size_y_interval = np.array(pixel_y_interval)*number_Mpc_per_pixels[1]
+                size_x_interval = np.array(pixel_x_interval)*self.tomographic_map.mpc_per_pixel[0]
+                size_y_interval = np.array(pixel_y_interval)*self.tomographic_map.mpc_per_pixel[1]
                 Chunks[f'{i:03d}' + f'{j:03d}']["map"]=map_3D[pixel_x_interval[0]:pixel_x_interval[1],pixel_y_interval[0]:pixel_y_interval[1],:]
                 Chunks[f'{i:03d}' + f'{j:03d}']["map_size"]=(size_x_interval[1]-size_x_interval[0],size_y_interval[1]-size_y_interval[0],self.tomographic_map.size[2])
                 Chunks[f'{i:03d}' + f'{j:03d}']["map_min"]=(size_x_interval[0],size_y_interval[0],0)
                 Chunks[f'{i:03d}' + f'{j:03d}']["map_shape"]=(pixel_x_interval[1]-pixel_x_interval[0],pixel_y_interval[1]-pixel_y_interval[0],self.tomographic_map.shape[2])
-                Chunks[f'{i:03d}' + f'{j:03d}']["map_name"]="{}_{}_{}".format(self.map_name,i,j)
+                Chunks[f'{i:03d}' + f'{j:03d}']["map_name"]=f"{self.map_name}_{i:03d}{j:03d}"
         return(Chunks)
 
     def merge_chunks(self,Chunks):
@@ -241,25 +243,24 @@ class VoidFinder(object):
         return(radius, coord_Mpc,other_arrays_to_contatenate,other_array_names)
 
 
-    def find_voids_watershed(self,tomographic_map):
-        self.log.add("Beginning of the Watershed finding for the map {}".format(tomographic_map.name))
-        number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
-        map_array = tomographic_map.map_array
+    def find_voids_watershed(self,name,mpc_per_pixel,map_array):
+        self.log.add("Beginning of the Watershed finding for the map {}".format(name))
+        map_array = map_array
         if(self.find_cluster):
             mask = map_array < self.params_void_finder["threshold"]
         else :
             mask = map_array > self.params_void_finder["threshold"]
         index_under_density = np.argwhere(mask)
-        self.log.add("Number of pixels for the map {} = {}".format(tomographic_map.name,len(index_under_density)))
+        self.log.add("Number of pixels for the map {} = {}".format(name,len(index_under_density)))
         map_under_density = map_array[mask]
         del map_array
         cluster_map,clusters = self.create_watershed_clusters(index_under_density)
-        self.log.add("Pixel clusters created for the map {}".format(tomographic_map.name))
+        self.log.add("Pixel clusters created for the map {}".format(name))
         centers = np.zeros((len(clusters),3))
         radius_shed = np.zeros(len(clusters))
         delta_max = np.zeros((len(clusters)))
         delta_mean = np.zeros((len(clusters)))
-        volume_cell = number_Mpc_per_pixels[0]*number_Mpc_per_pixels[1]*number_Mpc_per_pixels[2]
+        volume_cell = mpc_per_pixel[0]*mpc_per_pixel[1]*mpc_per_pixel[2]
         mask_clust = None
         for i in range(len(clusters)):
             mask_clust = cluster_map == clusters[i]
@@ -272,18 +273,18 @@ class VoidFinder(object):
             centers[i] = index_under_density[mask_clust][arg_center]
             volume_shed = len(map_under_density[mask_clust]) * volume_cell
             radius_shed[i] = ((3 * volume_shed)/(4*np.pi))**(1/3)
-        self.log.add("Computation of radius and center finished for the map {}".format(tomographic_map.name))
+        self.log.add("Computation of radius and center finished for the map {}".format(name))
         mask_radius = radius_shed > self.params_void_finder["minimal_radius"]
         radius = radius_shed[mask_radius]
         coord = centers[mask_radius]
         delta_max = delta_max[mask_radius]
         delta_mean = delta_mean[mask_radius]
-        self.log.add("Masking of low radius done for the map {}".format(tomographic_map.name))
-        new_coord, new_radius, new_other_arrays = self.delete_voids(tomographic_map,radius,coord,other_arrays=[delta_max,delta_mean])
+        self.log.add("Masking of low radius done for the map {}".format(name))
+        new_coord, new_radius, new_other_arrays = self.delete_voids(mpc_per_pixel,radius,coord,other_arrays=[delta_max,delta_mean])
         other_array_names =["VALUE","MEAN"]
-        new_coord = self.convert_to_Mpc(tomographic_map,new_coord)
+        new_coord = self.convert_to_Mpc(mpc_per_pixel,new_coord)
         del mask,mask_clust,mask_radius,cluster_map,clusters,map_under_density,centers,index_under_density,radius_shed
-        self.log.add("End of the Watershed finding for the map {}".format(tomographic_map.name))
+        self.log.add("End of the Watershed finding for the map {}".format(name))
         return(new_radius, new_coord,new_other_arrays,other_array_names)
 
 
@@ -334,11 +335,12 @@ class VoidFinder(object):
 
 
 
-    def find_voids_sphere(self,tomographic_map):
-        self.log.add(f"Beginning of the Simple spherical finding for the map {tomographic_map.name}")
-        mpc_per_pixel = tomographic_map.mpc_per_pixel
+    def find_voids_sphere(self,name,mpc_per_pixel,map_array):
+        self.log.add(f"Beginning of the Simple spherical finding for the map {name}")
+        global indice
+        mpc_per_pixel = mpc_per_pixel
         maximal_radius = np.around(self.params_void_finder["maximal_radius"]/mpc_per_pixel,decimals=0).astype(int)
-        map_array = tomographic_map.map_array
+        map_array = map_array
         indice = np.transpose(np.indices(map_array.shape),axes=(1,2,3,0))
 
         if(self.find_cluster):
@@ -347,20 +349,26 @@ class VoidFinder(object):
             mask = map_array > self.params_void_finder["threshold"]
         coord = np.argwhere(mask)
         del mask
-        self.log.add(f"Number of pixels for the map {tomographic_map.name} = {coord.shape[0]}")
+        self.log.add(f"Number of pixels for the map {name} = {coord.shape[0]}")
+
+
+        self.log.add(f"shape of map_array {map_array.shape}")
+        self.log.add(f"shape of coord {coord.shape}")
+        self.log.add(f"shape of indice {indice.shape}")
+
 
         if(self.number_core > 1):
             self.log.add(f"{self.number_core} processes used, start of multiprocessing routines")
-            self.log.add(f"Start of pool for the map {tomographic_map.name}")
-            func = partial(self.find_the_sphere,mpc_per_pixel,
-                           maximal_radius,map_array,indice)
+            self.log.add(f"Start of pool for the map {name}")
+            func = partial(self.find_the_sphere,mpc_per_pixel,maximal_radius,map_array)
+            # mp.get_context('spawn')
             with mp.Pool(self.number_core) as pool:
                 pool_results = np.array(pool.map(func,coord))
             if(pool_results.shape[0] !=0):
                 radius , mean_value = pool_results[:,0], pool_results[:,1]
             else:
                 radius , mean_value = np.array([]),np.array([])
-            self.log.add(f"End of pool for the map {tomographic_map.name}")
+            self.log.add(f"End of pool for the map {name}")
         else :
             self.log.add("Start of serial calculation")
             radius = np.zeros(coord.shape[0])
@@ -368,35 +376,34 @@ class VoidFinder(object):
             for i in range(len(coord)):
                 radius[i],mean_value[i] = self.find_the_sphere(mpc_per_pixel,
                                                                maximal_radius,
-                                                               coord[i],
-                                                               map_array,indice)
-        del indice
+                                                               map_array,
+                                                               coord[i])
+        del indice,maximal_radius
         mask = radius == 0
         coord = coord[~mask]
         radius = radius[~mask]
         mean_value = mean_value[~mask]
-        new_coord, new_radius, new_other_arrays = self.delete_voids(tomographic_map,
+        new_coord, new_radius, new_other_arrays = self.delete_voids(mpc_per_pixel,
                                                                     radius,coord,
                                                                     other_arrays=[mean_value])
         nearest_coord = np.round(new_coord,0).astype(int)
         new_other_arrays.append(map_array[nearest_coord[:,0],nearest_coord[:,1],nearest_coord[:,2]])
-        new_coord = self.convert_to_Mpc(tomographic_map,new_coord)
-        del coord,map_array,mask,radius,nearest_coord
+        new_coord = self.convert_to_Mpc(mpc_per_pixel,new_coord)
+        del map_array,coord,mask,radius,nearest_coord,mpc_per_pixel
         other_array_names=["MEAN","VALUE"]
-        self.log.add(f"End of the Simple spherical finding for the map {tomographic_map.name}")
-        del tomographic_map
+        self.log.add(f"End of the Simple spherical finding for the map {name}")
         return(new_radius, new_coord,new_other_arrays,other_array_names)
 
 
 
 
-    def find_the_sphere(self,number_Mpc_per_pixels,number_pixel_maximal_radius,map_array,indice,coord):
-        map_local = map_array[max(coord[0]-number_pixel_maximal_radius[0],0):min(map_array.shape[0],coord[0]+number_pixel_maximal_radius[0]),
-                           max(coord[1]-number_pixel_maximal_radius[1],0):min(map_array.shape[1],coord[1]+number_pixel_maximal_radius[1]),
-                           max(coord[2]-number_pixel_maximal_radius[2],0):min(map_array.shape[2],coord[2]+number_pixel_maximal_radius[2])]
-        indice_local = (indice[max(coord[0]-number_pixel_maximal_radius[0],0):min(map_array.shape[0],coord[0]+number_pixel_maximal_radius[0]),
-                               max(coord[1]-number_pixel_maximal_radius[1],0):min(map_array.shape[1],coord[1]+number_pixel_maximal_radius[1]),
-                               max(coord[2]-number_pixel_maximal_radius[2],0):min(map_array.shape[2],coord[2]+number_pixel_maximal_radius[2])]- coord)*number_Mpc_per_pixels
+    def find_the_sphere(self,mpc_per_pixel,maximal_radius,map_array,coord):
+        map_local = map_array[max(coord[0]-maximal_radius[0],0):min(map_array.shape[0],coord[0]+maximal_radius[0]),
+                           max(coord[1]-maximal_radius[1],0):min(map_array.shape[1],coord[1]+maximal_radius[1]),
+                           max(coord[2]-maximal_radius[2],0):min(map_array.shape[2],coord[2]+maximal_radius[2])]
+        indice_local = (indice[max(coord[0]-maximal_radius[0],0):min(map_array.shape[0],coord[0]+maximal_radius[0]),
+                               max(coord[1]-maximal_radius[1],0):min(map_array.shape[1],coord[1]+maximal_radius[1]),
+                               max(coord[2]-maximal_radius[2],0):min(map_array.shape[2],coord[2]+maximal_radius[2])]- coord)*mpc_per_pixel
         distance_map = np.sqrt(indice_local[:,:,:,0]**2 + indice_local[:,:,:,1]**2 + indice_local[:,:,:,2]**2)
         del indice_local
         radius = self.params_void_finder["minimal_radius"]
@@ -419,11 +426,11 @@ class VoidFinder(object):
 
 
 
-    def delete_voids(self,tomographic_map,radius,coord,other_arrays=None,mpc=False):
+    def delete_voids(self,mpc_per_pixel,radius,coord,other_arrays=None,mpc=False):
         if(self.delete_option == "CLUSTERS"):
-            new_coord, new_radius, new_other_arrays = self.delete_overlapers_clusters(tomographic_map,radius,coord,other_arrays=other_arrays,mpc=mpc)
+            new_coord, new_radius, new_other_arrays = self.delete_overlapers_clusters(mpc_per_pixel,radius,coord,other_arrays=other_arrays,mpc=mpc)
         elif(self.delete_option == "ITERATION"):
-            new_coord, new_radius, new_other_arrays = self.iterate_overlap_deletion(tomographic_map,radius,coord,other_arrays=other_arrays,mpc=mpc)
+            new_coord, new_radius, new_other_arrays = self.iterate_overlap_deletion(mpc_per_pixel,radius,coord,other_arrays=other_arrays,mpc=mpc)
         elif(self.delete_option == "NONE"):
             True
         else:
@@ -434,7 +441,7 @@ class VoidFinder(object):
             return(new_coord, new_radius)
 
 
-    def iterate_overlap_deletion(self,tomographic_map,radius,coord,other_arrays=None,mpc=False):
+    def iterate_overlap_deletion(self,mpc_per_pixel,radius,coord,other_arrays=None,mpc=False):
         # CR - Weird, to optimize
         if other_arrays is not None:
             others_arrays_copies =[]
@@ -447,7 +454,7 @@ class VoidFinder(object):
         nb_voids_delete = len(coord)
         new_coord,new_radius,new_others_arrays = coord,radius,other_arrays
         while(nb_voids_delete>0):
-            new_coord,new_radius,nb_voids_delete,new_others_arrays = self.delete_overlapers(tomographic_map,radius_copy,coord_copy,other_arrays=others_arrays_copies,mpc=mpc)
+            new_coord,new_radius,nb_voids_delete,new_others_arrays = self.delete_overlapers(mpc_per_pixel,radius_copy,coord_copy,other_arrays=others_arrays_copies,mpc=mpc)
             coord_copy = new_coord
             radius_copy = new_radius
             others_arrays_copies = new_others_arrays
@@ -459,8 +466,7 @@ class VoidFinder(object):
 
 
 
-    def delete_overlapers(self,tomographic_map,radius,coord,other_arrays=None,mpc=False):
-        number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
+    def delete_overlapers(self,mpc_per_pixel,radius,coord,other_arrays=None,mpc=False):
         if(other_arrays is not None):
             other_arrays_clean = [[] for i in range(len(other_arrays))]
         else :
@@ -482,7 +488,7 @@ class VoidFinder(object):
             index = coord_left[0]
             sum_rad = (radius_left + rad)
             if(mpc):indice_normalized = (coord_left - index)
-            else:indice_normalized = (coord_left - index)*number_Mpc_per_pixels
+            else:indice_normalized = (coord_left - index)*mpc_per_pixel
             dist_rad = np.sqrt(indice_normalized[:,0]**2 + indice_normalized[:,1]**2 + indice_normalized[:,2]**2)
             mask2 = sum_rad >= dist_rad
             maxi = np.argwhere(radius_left[mask2] == np.amax(radius_left[mask2])).flatten().tolist()
@@ -502,11 +508,10 @@ class VoidFinder(object):
 
 
 
-    def find_overlapers(self,tomographic_map,index,rad,radius,coord,mpc=False):
-        number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
+    def find_overlapers(self,mpc_per_pixel,index,rad,radius,coord,mpc=False):
         sum_rad = (radius + rad)
         if(mpc):indice_normalized = (coord - index)
-        else:indice_normalized = (coord - index)*number_Mpc_per_pixels
+        else:indice_normalized = (coord - index)*mpc_per_pixel
         dist_rad = np.sqrt(indice_normalized[:,0]**2 + indice_normalized[:,1]**2 + indice_normalized[:,2]**2)
         overlapers_mask = sum_rad >= dist_rad
         del sum_rad,dist_rad,indice_normalized
@@ -514,7 +519,7 @@ class VoidFinder(object):
 
 
 
-    def create_overlaper_map(self,tomographic_map,radius,coord,mpc=False):
+    def create_overlaper_map(self,mpc_per_pixel,radius,coord,mpc=False):
         cluster_map = np.zeros(radius.shape,dtype = np.int64)
         mask_clusters = cluster_map == 0
         cluster_number = 0
@@ -522,7 +527,7 @@ class VoidFinder(object):
             arg = np.argwhere(mask_clusters)[0][0]
             rad = radius[arg]
             index = coord[arg]
-            overlapers_mask = self.find_overlapers(tomographic_map,index,rad,radius,coord,mpc=mpc)
+            overlapers_mask = self.find_overlapers(mpc_per_pixel,index,rad,radius,coord,mpc=mpc)
             clust = np.array(list(set(cluster_map[overlapers_mask])))
             clust = clust[clust!=0]
             if(len(clust)==0):
@@ -543,14 +548,14 @@ class VoidFinder(object):
 
 
 
-    def delete_overlapers_clusters(self,tomographic_map,radius,coord,other_arrays=None,mpc=False):
+    def delete_overlapers_clusters(self,mpc_per_pixel,radius,coord,other_arrays=None,mpc=False):
         if(other_arrays is not None):
             other_arrays_clean = [[] for i in range(len(other_arrays))]
         else :
             other_arrays_clean = None
         coord_cleaned = []
         radius_cleaned = []
-        (cluster_map,clusters)=self.create_overlaper_map(tomographic_map,radius,coord,mpc=mpc)
+        (cluster_map,clusters)=self.create_overlaper_map(mpc_per_pixel,radius,coord,mpc=mpc)
         for c in clusters :
             mask = cluster_map == c
             radius_cluster = radius[mask]
@@ -574,10 +579,9 @@ class VoidFinder(object):
 
 
 
-    def convert_to_Mpc(self,tomographic_map,coord):
-        number_Mpc_per_pixels = tomographic_map.mpc_per_pixel
+    def convert_to_Mpc(self,mpc_per_pixel,coord):
         if(coord.shape[0] != 0):
-            coord = coord * np.array(number_Mpc_per_pixels)
+            coord = coord * np.array(mpc_per_pixel)
         return(coord)
 
 
