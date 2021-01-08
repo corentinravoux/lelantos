@@ -814,7 +814,7 @@ class Pixel(object):
 
 
 
-   # CR - To modify in merge pixels (by an initialization) 
+   # CR - To modify in merge pixels (by an initialization)
 
     def merge_maps_and_pixels(self,extremum_list,name_map_out,name_pixel_out,size_maps,mask_maps=None,criteria_mask=None,qso_files=None,name_qso_out=None):
         map_out = []
@@ -1701,15 +1701,15 @@ class VoidCatalog(Catalog):
 
 
     @classmethod
-    def init_from_dictionary(cls,name,radius,coord,catalog_type,coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord,other_arrays=None,other_array_names = None):
+    def init_from_dictionary(cls,name,radius,coord,catalog_type,coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord,other_array=None,other_array_name = None):
         central_value, weights, filling_factor, primary_key, crossing_param, mean_value = None, None, None, None, None, None
-        if(other_array_names is not None):
-            if("VALUE" in other_array_names):central_value = other_arrays[np.argwhere("VALUE" == np.asarray(other_array_names))[0][0]]
-            if("MEAN" in other_array_names):mean_value = other_arrays[np.argwhere("MEAN" == np.asarray(other_array_names))[0][0]]
-            if("WEIGHT" in other_array_names):weights = other_arrays[np.argwhere("WEIGHT" == np.asarray(other_array_names))[0][0]]
-            if("FILLING_FACTOR" in other_array_names):filling_factor = other_arrays[np.argwhere("FILLING_FACTOR" == np.asarray(other_array_names))[0][0]]
-            if("THING_ID" in other_array_names):primary_key = other_arrays[np.argwhere("THING_ID" == np.asarray(other_array_names))[0][0]]
-            if("CROSSING" in other_array_names):crossing_param = other_arrays[np.argwhere("CROSSING" == np.asarray(other_array_names))[0][0]]
+        if(other_array_name is not None):
+            if("VALUE" in other_array_name):central_value = other_array[np.argwhere("VALUE" == np.asarray(other_array_name))[0][0]]
+            if("MEAN" in other_array_name):mean_value = other_array[np.argwhere("MEAN" == np.asarray(other_array_name))[0][0]]
+            if("WEIGHT" in other_array_name):weights = other_array[np.argwhere("WEIGHT" == np.asarray(other_array_name))[0][0]]
+            if("FILLING_FACTOR" in other_array_name):filling_factor = other_array[np.argwhere("FILLING_FACTOR" == np.asarray(other_array_name))[0][0]]
+            if("THING_ID" in other_array_name):primary_key = other_array[np.argwhere("THING_ID" == np.asarray(other_array_name))[0][0]]
+            if("CROSSING" in other_array_name):crossing_param = other_array[np.argwhere("CROSSING" == np.asarray(other_array_name))[0][0]]
         return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
 
 

@@ -532,6 +532,12 @@ def return_key(dictionary,string,default_value):
 ### https://stackoverflow.com/questions/47776486/python-struct-error-i-format-requires-2147483648-number-2147483647/47776649#47776649
 ### Solve the pickle issue OverflowError('cannot serialize a bytes object larger than 4GiB')
 ### When too large array are considered in multiprocessing
+### Add the following lines to you code:
+### ctx = mp.get_context()
+### ctx.reducer = utils.Pickle4Reducer()
+### utils.patch_mp_connection_bpo_17560(log = log)
+### You might want to change multiprocessing context with: mp.get_context('fork')
+
 
 
 class ForkingPickler4(ForkingPickler):
