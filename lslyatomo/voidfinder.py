@@ -311,6 +311,7 @@ class VoidFinder(object):
         delta_max = np.zeros((len(clusters)))
         delta_mean = np.zeros((len(clusters)))
         volume_cell = map_mpc_per_pixel[0]*map_mpc_per_pixel[1]*map_mpc_per_pixel[2]
+        mask_clust = None
         for i in range(len(clusters)):
             mask_clust = cluster_map == clusters[i]
             if(self.find_cluster):
