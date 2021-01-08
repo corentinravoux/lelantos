@@ -1944,6 +1944,19 @@ class VoidCatalog(Catalog):
         return(mask_cut)
 
 
+    def return_array_list(self,other_array_name):
+        other_array = []
+        if(other_array_name is not None):
+            for i in range(len(other_array_name)):
+                if(other_array_name[i] == "VALUE"):other_array.append(self.central_value)
+                elif(other_array_name[i] == "MEAN"):other_array.append(self.mean_value)
+                elif(other_array_name[i] == "WEIGHT"):other_array.append(self.weights)
+                elif(other_array_name[i] == "FILLING_FACTOR"):other_array.append(self.filling_factor)
+                elif(other_array_name[i] == "THING_ID"):other_array.append(self.primary_key)
+                elif(other_array_name[i] == "CROSSING"):other_array.append(self.crossing_param)
+                else: raise KeyError(f"{other_array_name[i]} not available for void catalog")
+        return(other_array)
+
     def compute_cross_corr_parameters(self):
         self.convert_to_sky()
         redshift = self.coord[:,2].copy()

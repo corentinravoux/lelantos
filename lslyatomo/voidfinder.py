@@ -88,7 +88,7 @@ def void_to_3d(catalog_name,new_name,moveaxis=None):
 
 class VoidFinder(object):
 
-    def __init__(self,pwd,map_name,params_void_finder,map_shape=None,map_size=None,map_property_file=None,number_core=1,find_cluster=False,split_map=None,split_overlap=None,delete_option="CLUSTERS"):
+    def __init__(self,pwd,map_name,params_void_finder,map_shape=None,map_size=None,map_property_file=None,number_core=1,find_cluster=False,split_map=None,split_overlap=None,restart=False,delete_option="CLUSTERS"):
         self.pwd = pwd
         self.params_void_finder = params_void_finder
         self.number_core = number_core
@@ -96,6 +96,7 @@ class VoidFinder(object):
         self.split_map = split_map
         self.split_overlap = split_overlap
         self.delete_option = delete_option
+        self.restart = restart
 
         self.map_name = map_name
         self.map_shape = map_shape
@@ -110,6 +111,9 @@ class VoidFinder(object):
         log_name = f"void_finder_report_{self.get_name_catalog()}.txt"
         self.log = utils.create_report_log(name=os.path.join(self.pwd,log_name))
 
+        self.list_map_name_treated = []
+        self.save_temporary_file = False
+        self.temporary_file_name = "{}" + f"_temporary_void_catalog_{self.get_name_catalog()}.fits"
 
     def initialize_finder(self):
         tomographic_map = tomographic_objects.TomographicMap.init_classic(name=self.map_name,
@@ -158,9 +162,14 @@ class VoidFinder(object):
 
 
     def find_voids_map_split(self,map_array):
+        self.save_temporary_file = True
         map_chunks = self.split_map_in_chunks(map_array)
         del map_array
         list_index_map_chunks = [f'{i:03d}' + f'{j:03d}' for j in range(self.split_map[1]) for i in range(self.split_map[0])]
+        if(self.restart):
+            other_array_name_restart =["VALUE","MEAN"] # CR - might change in the future the treatment of other_array_name variable
+            (map_chunks,list_index_map_chunks_restart) = self.restart_calculation(map_chunks,list_index_map_chunks,other_array_name_restart)
+            list_index_map_chunks = list_index_map_chunks_restart
         if(self.params_void_finder["method"] == "WATERSHED"):
             if(self.number_core > 1):
                 pool = mp.Pool(self.number_core)
@@ -201,6 +210,7 @@ class VoidFinder(object):
                         self.map_coordinate_transform,self.map_Omega_m,
                         self.map_boundary_cartesian_coord,
                         self.map_boundary_sky_coord)
+        self.delete_temporary_files()
         return(radius_clean, coord_clean)
 
 
@@ -335,6 +345,9 @@ class VoidFinder(object):
         coord_clean = self.convert_to_Mpc(map_mpc_per_pixel,coord_clean)
         del mask,mask_clust,mask_radius,cluster_map,clusters,map_under_density,centers,index_under_density,radius_shed
         self.log.add(f"End of the Watershed finding for the map {map_name}")
+        if(self.save_temporary_file):
+            self.save_temporary_catalog(map_name,radius_clean, coord_clean, other_array_clean, other_array_name)
+            self.list_map_name_treated.append(map_name)
         return(radius_clean, coord_clean, other_array_clean, other_array_name)
 
 
@@ -425,16 +438,19 @@ class VoidFinder(object):
         coord = coord[~mask]
         radius = radius[~mask]
         mean_value = mean_value[~mask]
-        new_coord, new_radius, new_other_array = self.delete_voids(map_mpc_per_pixel,
+        coord_clean, radius_clean, other_array_clean = self.delete_voids(map_mpc_per_pixel,
                                                                    radius,coord,
                                                                    other_array=[mean_value])
-        nearest_coord = np.round(new_coord,0).astype(int)
-        new_other_array.append(map_array_spherical_voidfinder[nearest_coord[:,0],nearest_coord[:,1],nearest_coord[:,2]])
-        new_coord = self.convert_to_Mpc(map_mpc_per_pixel,new_coord)
+        nearest_coord = np.round(coord_clean,0).astype(int)
+        other_array_clean.append(map_array_spherical_voidfinder[nearest_coord[:,0],nearest_coord[:,1],nearest_coord[:,2]])
+        coord_clean = self.convert_to_Mpc(map_mpc_per_pixel,coord_clean)
         del map_array_spherical_voidfinder,coord,mask,radius,nearest_coord,map_mpc_per_pixel
         other_array_name=["MEAN","VALUE"]
         self.log.add(f"End of the Simple spherical finding for the map {map_name}")
-        return(new_radius, new_coord,new_other_array,other_array_name)
+        if(self.save_temporary_file):
+            self.save_temporary_catalog(map_name,radius_clean, coord_clean, other_array_clean, other_array_name)
+            self.list_map_name_treated.append(map_name)
+        return(radius_clean, coord_clean,other_array_clean,other_array_name)
 
 
 
@@ -625,12 +641,52 @@ class VoidFinder(object):
         return(coord)
 
 
+    def save_temporary_catalog(self,map_name,radius, coord, other_array, other_array_name):
+        dict_void = {"R" : radius, "COORD" : coord}
+        for i in range(len(other_array)):
+            dict_void[other_array_name[i]] = other_array[i]
+        name = self.temporary_file_name.format(map_name)
+        void = tomographic_objects.VoidCatalog.init_from_dictionary(name,radius,coord,"cartesian",
+                                                                    self.map_coordinate_transform,
+                                                                    self.map_Omega_m,
+                                                                    self.map_boundary_cartesian_coord,
+                                                                    self.map_boundary_sky_coord,
+                                                                    other_array=other_array,
+                                                                    other_array_name = other_array_name)
+        void.write()
+
+    def delete_temporary_files(self):
+        for i in range(len(self.list_map_name_treated)):
+            file_name = self.temporary_file_name.format(self.list_map_name_treated[i])
+            if(os.path.isfile(file_name)):
+                os.remove(file_name)
+
+    def restart_calculation(self,map_chunks,list_index_map_chunks,other_array_name):
+        list_index_map_chunks_restart = []
+        for i in range(len(list_index_map_chunks)):
+            map_name = map_chunks[list_index_map_chunks[i]]["map_name"]
+            tmp_file_name = self.temporary_file_name.format(map_name)
+            if(os.path.isfile(tmp_file_name)):
+                tmp_catalog = tomographic_objects.VoidCatalog.init_from_fits(tmp_file_name)
+                map_chunks[list_index_map_chunks[i]]["radius"] = tmp_catalog.radius
+                map_chunks[list_index_map_chunks[i]]["coord"] = tmp_catalog.coord
+                map_chunks[list_index_map_chunks[i]]["other_array"] = tmp_catalog.return_array_list(other_array_name)
+                map_chunks[list_index_map_chunks[i]]["other_array_name"] = other_array_name
+            else:
+                list_index_map_chunks_restart.append(list_index_map_chunks[i])
+        return(map_chunks,list_index_map_chunks_restart)
+
     def save_voids(self,radius,coord,other_array,other_array_name,coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord):
         dict_void = {"R" : radius, "COORD" : coord}
         for i in range(len(other_array)):
             dict_void[other_array_name[i]] = other_array[i]
         name = os.path.join(self.pwd,f"Catalog_{self.get_name_catalog()}.fits")
-        void = tomographic_objects.VoidCatalog.init_from_dictionary(name,radius,coord,"cartesian",coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord,other_array=other_array,other_array_name = other_array_name)
+        void = tomographic_objects.VoidCatalog.init_from_dictionary(name,radius,coord,"cartesian",
+                                                                    coordinate_transform,
+                                                                    Omega_m,boundary_cartesian_coord,
+                                                                    boundary_sky_coord,
+                                                                    other_array=other_array,
+                                                                    other_array_name = other_array_name)
         void.write()
 
     def get_name_catalog(self):
