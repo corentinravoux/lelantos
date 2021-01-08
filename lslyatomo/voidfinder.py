@@ -311,7 +311,6 @@ class VoidFinder(object):
         delta_max = np.zeros((len(clusters)))
         delta_mean = np.zeros((len(clusters)))
         volume_cell = map_mpc_per_pixel[0]*map_mpc_per_pixel[1]*map_mpc_per_pixel[2]
-        mask_clust = None
         for i in range(len(clusters)):
             mask_clust = cluster_map == clusters[i]
             if(self.find_cluster):
@@ -330,12 +329,12 @@ class VoidFinder(object):
         delta_max = delta_max[mask_radius]
         delta_mean = delta_mean[mask_radius]
         self.log.add(f"Masking of low radius done for the map {map_name}")
-        new_coord, new_radius, new_other_array = self.delete_voids(map_mpc_per_pixel,radius,coord,other_array=[delta_max,delta_mean])
+        coord_clean, radius_clean, other_array_clean = self.delete_voids(map_mpc_per_pixel,radius,coord,other_array=[delta_max,delta_mean])
         other_array_name =["VALUE","MEAN"]
-        new_coord = self.convert_to_Mpc(map_mpc_per_pixel,new_coord)
+        coord_clean = self.convert_to_Mpc(map_mpc_per_pixel,coord_clean)
         del mask,mask_clust,mask_radius,cluster_map,clusters,map_under_density,centers,index_under_density,radius_shed
         self.log.add(f"End of the Watershed finding for the map {map_name}")
-        return(new_radius, new_coord,new_other_array,other_array_name)
+        return(radius_clean, coord_clean, other_array_clean, other_array_name)
 
 
 
