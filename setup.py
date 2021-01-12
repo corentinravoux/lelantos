@@ -116,7 +116,7 @@ setup(
     #    'console_scripts': ['mycli=mymodule:cli'],
     #},
 #    package_data={'lslyatomo' :}
-#    install_requires=REQUIRED,
+    install_requires=REQUIRED,
     extras_require=EXTRAS,
     package_data={'lslyatomo.exec': ['dachshund.exe']},
     include_package_data=True,
