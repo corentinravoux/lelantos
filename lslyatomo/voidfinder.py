@@ -111,7 +111,6 @@ class VoidFinder(object):
         log_name = f"void_finder_report_{self.get_name_catalog()}.txt"
         self.log = utils.create_report_log(name=os.path.join(self.pwd,log_name))
 
-        self.list_map_name_treated = []
         self.save_temporary_file = False
         self.temporary_file_name = "{}" + f"_temporary_void_catalog_{self.get_name_catalog()}.fits"
 
@@ -163,10 +162,13 @@ class VoidFinder(object):
 
     def find_voids_map_split(self,map_array):
         self.save_temporary_file = True
+        self.log.add(f"Splitting of the map in chunks: {self.split_map}")
+        self.log.add("Saving of temporary files activated")
         map_chunks = self.split_map_in_chunks(map_array)
         del map_array
         list_index_map_chunks = [f'{i:03d}' + f'{j:03d}' for j in range(self.split_map[1]) for i in range(self.split_map[0])]
         if(self.restart):
+            self.log.add("Restarting of the void finder, searching for temporary files...")
             other_array_name_restart =["VALUE","MEAN"] # CR - might change in the future the treatment of other_array_name variable
             (map_chunks,list_index_map_chunks_restart) = self.restart_calculation(map_chunks,list_index_map_chunks,other_array_name_restart)
             list_index_map_chunks = list_index_map_chunks_restart
@@ -203,14 +205,15 @@ class VoidFinder(object):
                 map_chunks[list_index_map_chunks[i]]["other_array_name"] = out_finder[3]
         else :
             raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
+        self.log.add("End of the split finding procedure. Merging catalogs")
         (radius, coord,other_array,other_array_name) = self.merge_chunks(map_chunks)
-        del map_chunks,list_index_map_chunks
         coord_clean, radius_clean, other_array_clean = self.delete_voids(self.map_mpc_per_pixel,radius,coord,other_array=other_array,mpc=True)
         self.save_voids(radius_clean, coord_clean,other_array_clean,other_array_name,
                         self.map_coordinate_transform,self.map_Omega_m,
                         self.map_boundary_cartesian_coord,
                         self.map_boundary_sky_coord)
-        self.delete_temporary_files()
+        self.delete_temporary_files(map_chunks,list_index_map_chunks)
+        del map_chunks,list_index_map_chunks
         return(radius_clean, coord_clean)
 
 
@@ -347,7 +350,6 @@ class VoidFinder(object):
         self.log.add(f"End of the Watershed finding for the map {map_name}")
         if(self.save_temporary_file):
             self.save_temporary_catalog(map_name,radius_clean, coord_clean, other_array_clean, other_array_name)
-            self.list_map_name_treated.append(map_name)
         return(radius_clean, coord_clean, other_array_clean, other_array_name)
 
 
@@ -449,7 +451,6 @@ class VoidFinder(object):
         self.log.add(f"End of the Simple spherical finding for the map {map_name}")
         if(self.save_temporary_file):
             self.save_temporary_catalog(map_name,radius_clean, coord_clean, other_array_clean, other_array_name)
-            self.list_map_name_treated.append(map_name)
         return(radius_clean, coord_clean,other_array_clean,other_array_name)
 
 
@@ -655,9 +656,10 @@ class VoidFinder(object):
                                                                     other_array_name = other_array_name)
         void.write()
 
-    def delete_temporary_files(self):
-        for i in range(len(self.list_map_name_treated)):
-            file_name = self.temporary_file_name.format(self.list_map_name_treated[i])
+    def delete_temporary_files(self,map_chunks,list_index_map_chunks):
+        for i in range(len(list_index_map_chunks)):
+            map_name = map_chunks[list_index_map_chunks[i]]["map_name"]
+            file_name = self.temporary_file_name.format(map_name)
             if(os.path.isfile(file_name)):
                 os.remove(file_name)
 
@@ -667,6 +669,7 @@ class VoidFinder(object):
             map_name = map_chunks[list_index_map_chunks[i]]["map_name"]
             tmp_file_name = self.temporary_file_name.format(map_name)
             if(os.path.isfile(tmp_file_name)):
+                self.log.add(f"Temporary file {tmp_file_name} found and added to the calculation")
                 tmp_catalog = tomographic_objects.VoidCatalog.init_from_fits(tmp_file_name)
                 map_chunks[list_index_map_chunks[i]]["radius"] = tmp_catalog.radius
                 map_chunks[list_index_map_chunks[i]]["coord"] = tmp_catalog.coord
