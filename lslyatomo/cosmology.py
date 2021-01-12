@@ -368,16 +368,30 @@ class DeltaConverter():
 
 
 
-    def create_input_files(self,coordinates_to_write,properties,name_pixel,sky_coordinates=None,create_launcher=None):
+    def create_input_files(self,coordinates_to_write,properties,name_pixel,create_launcher=None):
         if(self.software.lower() == "dachshund"):
-            self.create_dachshund_input_files(coordinates_to_write,properties,name_pixel,sky_coordinates=sky_coordinates,create_launcher=create_launcher)
+            self.create_dachshund_input_files(coordinates_to_write,properties,
+                                              name_pixel,
+                                              create_launcher=create_launcher)
 
 
-    def create_dachshund_input_files(self,coordinates_to_write,properties,name_pixel,sky_coordinates=None,create_launcher=None):
+    def create_dachshund_input_files(self,coordinates_to_write,properties,name_pixel,create_launcher=None):
         pixel = tomographic_objects.Pixel(name=name_pixel,pixel_array=coordinates_to_write)
         pixel.write()
         if(create_launcher is not None):
-            self.create_dachshund_launcher(np.max(coordinates_to_write[:,0]),np.max(coordinates_to_write[:,1]),np.max(coordinates_to_write[:,2]),len(coordinates_to_write),properties["shape"][0],properties["shape"][1],properties["shape"][2],properties["sigma_f"],properties["lperp"],properties["lpar"],properties["name_pixel"],properties["name_map"],create_launcher)
+            self.create_dachshund_launcher(np.max(coordinates_to_write[:,0]),
+                                           np.max(coordinates_to_write[:,1]),
+                                           np.max(coordinates_to_write[:,2]),
+                                           len(coordinates_to_write),
+                                           properties["shape"][0],
+                                           properties["shape"][1],
+                                           properties["shape"][2],
+                                           properties["sigma_f"],
+                                           properties["lperp"],
+                                           properties["lpar"],
+                                           properties["name_pixel"],
+                                           properties["name_map"],
+                                           create_launcher)
 
 
 
@@ -423,16 +437,15 @@ class DeltaConverter():
         boundary_cartesian_coord = ((properties_map_pixels["minx"],properties_map_pixels["miny"],properties_map_pixels["minz"]),(properties_map_pixels["maxx"],properties_map_pixels["maxy"],properties_map_pixels["maxz"]))
         boundary_sky_coord = ((properties_map_pixels["minra"],properties_map_pixels["mindec"],properties_map_pixels["minredshift"]),(properties_map_pixels["maxra"],properties_map_pixels["maxdec"],properties_map_pixels["maxredshift"]))
         property_file = tomographic_objects.MapPixelProperty(name=name_out,size=size,shape=shape,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,Omega_m=self.Omega_m)
-        property_file.write()
+        return(property_file)
 
 
 
-    def create_serial_input(self,nameout,properties,cartesian_deltas,sky_deltas,property_file_name,properties_map_pixels):
-        self.create_input_files(cartesian_deltas,properties,properties["name_pixel"],sky_deltas,create_launcher=nameout)
+    def create_serial_input(self,nameout,properties,cartesian_deltas,sky_deltas):
+        self.create_input_files(cartesian_deltas,properties,properties["name_pixel"],create_launcher=nameout)
         if(self.return_sky_catalogs):
-            self.create_input_files(sky_deltas,properties,"{}_sky_coordinates".format(properties["name_pixel"]),sky_deltas,create_launcher=None)
-        self.create_dachshund_map_pixel_property_file(property_file_name,cartesian_deltas,sky_deltas,properties["shape"],properties_map_pixels)
-
+            self.create_input_files(sky_deltas,properties,"{}_sky_coordinates".format(properties["name_pixel"]),create_launcher=None)
+        return(properties["shape"])
 
 
 
@@ -501,38 +514,73 @@ class DeltaConverter():
 
 
 
-    def create_parallel_input(self,nameout,properties,cartesian_deltas,sky_deltas,number_chunks,overlaping,shape_sub_map,property_file_name,properties_map_pixels):
-        self.create_input_files(cartesian_deltas,properties,properties["name_pixel"],sky_deltas,create_launcher=nameout)
+    def create_parallel_input(self,properties,cartesian_deltas,number_chunks,overlaping,shape_sub_map):
         chunks ,shape= self.cut_in_chunks(cartesian_deltas,number_chunks,overlaping,shape_sub_map)
-        self.create_dachshund_map_pixel_property_file(property_file_name,cartesian_deltas,sky_deltas,(shape[0],shape[1],shape_sub_map[2]),properties_map_pixels)
+        shape = (shape[0],shape[1],properties['shape'][2])
         filename = []
-        Dachshundparams = []
+        parallel_launcher_params = []
         for i in range(len(list(chunks.keys()))):
             key = list(chunks.keys())[i]
             if key != 'overlaping' :
                 filename.append(key)
-                self.create_input_files(chunks[key]["coord"],properties,"{}_{}".format(properties["name_pixel"],key))
-                Dachshundparams.append({})
-                Dachshundparams[i]["maxx"]=chunks[key]["limits"][1]
-                Dachshundparams[i]["minx"]=chunks[key]["limits"][0]
-                Dachshundparams[i]["maxy"]=chunks[key]["limits"][3]
-                Dachshundparams[i]["miny"]=chunks[key]["limits"][2]
-                Dachshundparams[i]["maxz"]=chunks[key]["limits"][5]
-                Dachshundparams[i]["minz"]=chunks[key]["limits"][4]
-                Dachshundparams[i]["lx"]=chunks[key]["limits"][1] - chunks[key]["limits"][0]
-                Dachshundparams[i]["ly"]=chunks[key]["limits"][3] - chunks[key]["limits"][2]
-                Dachshundparams[i]["lz"]=chunks[key]["limits"][5] - chunks[key]["limits"][4]
-                Dachshundparams[i]["npix"]=len(chunks[key]["coord"])
-                Dachshundparams[i]["nx"]=shape_sub_map[0]
-                Dachshundparams[i]["ny"]=shape_sub_map[1]
-                Dachshundparams[i]["nz"]=shape_sub_map[2]
-                Dachshundparams[i]["sigmaf"]=properties["sigma_f"]
-                Dachshundparams[i]["lperp"]=properties["lperp"]
-                Dachshundparams[i]["lpar"]=properties["lpar"]
-                Dachshundparams[i]["namepixel"]="{}_{}".format(properties["name_pixel"],key)
-                Dachshundparams[i]["namemap"]="map_{}_{}".format(properties["name_pixel"],key)
-                Dachshundparams[i]["nameinput"]= "input_{}.cfg".format(key)
-        pickle.dump([filename,Dachshundparams,number_chunks,overlaping],open("data_launch_dachshund.pickle","wb"))
+                parallel_launcher_params.append({})
+                parallel_launcher_params[i]["maxx"]=chunks[key]["limits"][1]
+                parallel_launcher_params[i]["minx"]=chunks[key]["limits"][0]
+                parallel_launcher_params[i]["maxy"]=chunks[key]["limits"][3]
+                parallel_launcher_params[i]["miny"]=chunks[key]["limits"][2]
+                parallel_launcher_params[i]["maxz"]=chunks[key]["limits"][5]
+                parallel_launcher_params[i]["minz"]=chunks[key]["limits"][4]
+                parallel_launcher_params[i]["lx"]=chunks[key]["limits"][1] - chunks[key]["limits"][0]
+                parallel_launcher_params[i]["ly"]=chunks[key]["limits"][3] - chunks[key]["limits"][2]
+                parallel_launcher_params[i]["lz"]=chunks[key]["limits"][5] - chunks[key]["limits"][4]
+                parallel_launcher_params[i]["npix"]=len(chunks[key]["coord"])
+                parallel_launcher_params[i]["nx"]=shape_sub_map[0]
+                parallel_launcher_params[i]["ny"]=shape_sub_map[1]
+                parallel_launcher_params[i]["nz"]=shape_sub_map[2]
+                parallel_launcher_params[i]["sigmaf"]=properties["sigma_f"]
+                parallel_launcher_params[i]["lperp"]=properties["lperp"]
+                parallel_launcher_params[i]["lpar"]=properties["lpar"]
+                parallel_launcher_params[i]["namepixel"]="{}_{}".format(properties["name_pixel"],key)
+                parallel_launcher_params[i]["namemap"]="map_{}_{}".format(properties["name_pixel"],key)
+                parallel_launcher_params[i]["nameinput"]= "input_{}.cfg".format(key)
+        return(parallel_launcher_params,filename,chunks,shape)
+
+    def write_parallel_input(self,cartesian_deltas,parallel_launcher_params,filename,chunks,properties,nameout,number_chunks,overlaping):
+        self.create_input_files(cartesian_deltas,properties,properties["name_pixel"],create_launcher=None)
+        for i in range(len(list(chunks.keys()))):
+            key = list(chunks.keys())[i]
+            if key != 'overlaping' :
+                self.create_input_files(chunks[key]["coord"],properties,"{}_{}".format(properties["name_pixel"],key),create_launcher=None)
+        pickle.dump([filename,parallel_launcher_params,number_chunks,overlaping],open(f"{nameout}.pickle","wb"))
+
+
+
+    def create_additional_catalogs(self,cartesian_qso_catalog,cartesian_dla_catalog,sky_qso_catalog,sky_dla_catalog,properties_map_pixels):
+        boundary_cartesian_coord = ((properties_map_pixels["minx"],properties_map_pixels["miny"],properties_map_pixels["minz"]),(properties_map_pixels["maxx"],properties_map_pixels["maxy"],properties_map_pixels["maxz"]))
+        boundary_sky_coord = ((properties_map_pixels["minra"],properties_map_pixels["mindec"],properties_map_pixels["minredshift"]),(properties_map_pixels["maxra"],properties_map_pixels["maxdec"],properties_map_pixels["maxredshift"]))
+        if(self.return_dla_catalog is not None):
+            dla_catalog_cartesian = tomographic_objects.DLACatalog.init_from_pixel_catalog(cartesian_dla_catalog,name=self.return_dla_catalog,coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
+            dla_catalog_cartesian.write()
+            if(self.return_sky_catalogs):
+                dla_catalog_sky = tomographic_objects.DLACatalog.init_from_pixel_catalog(sky_dla_catalog,name=f"{self.return_dla_catalog}_sky_coordinates",coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
+                dla_catalog_sky.write()
+        if(self.return_qso_catalog is not None):
+            quasar_catalog_cartesian = tomographic_objects.QSOCatalog.init_from_pixel_catalog(cartesian_qso_catalog,name=self.return_qso_catalog,coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
+            quasar_catalog_cartesian.write()
+            if(self.return_sky_catalogs):
+                quasar_catalog_sky = tomographic_objects.QSOCatalog.init_from_pixel_catalog(sky_qso_catalog,name=f"{self.return_qso_catalog}_sky_coordinates",coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
+                quasar_catalog_sky.write()
+
+    def write_additional_catalogs(self,dla_catalog_sky,dla_catalog_cartesian,quasar_catalog_sky,quasar_catalog_cartesian):
+        if(dla_catalog_sky is not None):
+            dla_catalog_sky.write()
+        if(dla_catalog_cartesian is not None):
+            dla_catalog_cartesian.write()
+        if(quasar_catalog_sky is not None):
+            quasar_catalog_sky.write()
+        if(quasar_catalog_cartesian is not None):
+            quasar_catalog_cartesian.write()
+
 
 
     # CR - Modification : dissociate map properties and launcher properties
@@ -543,34 +591,22 @@ class DeltaConverter():
 
 
 
-    def transform_delta(self,mode,nameout,properties,rebin=False,shuffle=None,sigma_min=None,sigma_max=None,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None,number_chunks=None,overlaping=None,shape_sub_map=None,property_file_name="property_file.pickle"):
+    def transform_delta(self,mode,nameout,properties,property_file_name,rebin=False,shuffle=None,sigma_min=None,sigma_max=None,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None,number_chunks=None,overlaping=None,shape_sub_map=None):
         (cartesian_deltas,cartesian_qso_catalog,cartesian_dla_catalog,sky_deltas,sky_qso_catalog,sky_dla_catalog,properties_map_pixels) = self.transform_delta_to_pixel_file(rebin=rebin,shuffle=shuffle,sigma_min=sigma_min,sigma_max=sigma_max,z_cut_min=z_cut_min,z_cut_max=z_cut_max,dec_cut_min=dec_cut_min,dec_cut_max=dec_cut_max,ra_cut_min=ra_cut_min,ra_cut_max=ra_cut_max)
         if(mode.lower() == "serial"):
-            self.create_serial_input(nameout,properties,cartesian_deltas,sky_deltas,property_file_name,properties_map_pixels)
+            shape = self.create_serial_input(nameout,properties,cartesian_deltas,sky_deltas)
         elif(mode.lower() == "parallel"):
-            self.create_parallel_input(nameout,properties,cartesian_deltas,sky_deltas,number_chunks,overlaping,shape_sub_map,property_file_name,properties_map_pixels)
+            (parallel_launcher_params,filename,chunks,shape) = self.create_parallel_input(properties,cartesian_deltas,number_chunks,overlaping,shape_sub_map)
+            self.write_parallel_input(cartesian_deltas,parallel_launcher_params,filename,chunks,properties,nameout,number_chunks,overlaping)
         else:
             raise KeyError("Please choose a mode between serial and parallel")
+        property_file = self.create_dachshund_map_pixel_property_file(property_file_name,cartesian_deltas,sky_deltas,shape,properties_map_pixels)
+        property_file.write()
         self.create_additional_catalogs(cartesian_qso_catalog,cartesian_dla_catalog,sky_qso_catalog,sky_dla_catalog,properties_map_pixels)
         if(self.plot_pixel_properties):
             pixel_analyzer = PixelAnalizer(self.pwd,pixel=properties["name_pixel"],property_file=property_file_name)
             pixel_analyzer.analyze_pixels(False,True,name_dperp=nameout,coupled_plot=True)
 
-    def create_additional_catalogs(self,cartesian_qso_catalog,cartesian_dla_catalog,sky_qso_catalog,sky_dla_catalog,properties_map_pixels):
-        boundary_cartesian_coord = ((properties_map_pixels["minx"],properties_map_pixels["miny"],properties_map_pixels["minz"]),(properties_map_pixels["maxx"],properties_map_pixels["maxy"],properties_map_pixels["maxz"]))
-        boundary_sky_coord = ((properties_map_pixels["minra"],properties_map_pixels["mindec"],properties_map_pixels["minredshift"]),(properties_map_pixels["maxra"],properties_map_pixels["maxdec"],properties_map_pixels["maxredshift"]))
-        if(self.return_dla_catalog is not None):
-            dla_catalog = tomographic_objects.DLACatalog.init_from_pixel_catalog(cartesian_dla_catalog,name=self.return_dla_catalog,coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
-            dla_catalog.write()
-            if(self.return_sky_catalogs):
-                dla_catalog = tomographic_objects.DLACatalog.init_from_pixel_catalog(sky_dla_catalog,name=f"{self.return_dla_catalog}_sky_coordinates",coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
-                dla_catalog.write()
-        if(self.return_qso_catalog is not None):
-            quasar_catalog = tomographic_objects.QSOCatalog.init_from_pixel_catalog(cartesian_qso_catalog,name=self.return_qso_catalog,coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
-            quasar_catalog.write()
-            if(self.return_sky_catalogs):
-                quasar_catalog = tomographic_objects.QSOCatalog.init_from_pixel_catalog(sky_qso_catalog,name=f"{self.return_qso_catalog}_sky_coordinates",coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
-                quasar_catalog.write()
 
 
 
