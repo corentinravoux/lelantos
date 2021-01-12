@@ -52,7 +52,7 @@ def get_cosmo_function(Omega_m,Omega_k=0.):
     try:
         from picca import constants
     except:
-        import lsstomo.picca.constants as constants
+        import lslyatomo.picca.constants as constants
         print("Picca might be updated, we suggest to install picca independently")
     try:
         Cosmo = constants.cosmo(Omega_m,Ok=Omega_k)
