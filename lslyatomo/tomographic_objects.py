@@ -516,12 +516,12 @@ class StackMap(TomographicMap):
             else:
                 coord_stack_local = coord_stack_local + coord[i]
             index_stack_local = coord_stack_local/tomographic_map.mpc_per_pixel
-            boolean = (np.max(coord_stack_local[:,:,:,0])>=tomographic_map.size[0])
-            boolean |=(np.min(coord_stack_local[:,:,:,0])<0)
-            boolean |=(np.max(coord_stack_local[:,:,:,1])>=tomographic_map.size[1])
-            boolean |=(np.min(coord_stack_local[:,:,:,1])<0)
-            boolean |=(np.max(coord_stack_local[:,:,:,2])>=tomographic_map.size[2])
-            boolean |=(np.min(coord_stack_local[:,:,:,2])<0)
+            boolean = (np.max(index_stack_local[:,:,:,0])>=tomographic_map.shape[0])
+            boolean |=(np.min(index_stack_local[:,:,:,0])<0)
+            boolean |=(np.max(index_stack_local[:,:,:,1])>=tomographic_map.shape[1])
+            boolean |=(np.min(index_stack_local[:,:,:,1])<0)
+            boolean |=(np.max(index_stack_local[:,:,:,2])>=tomographic_map.shape[2])
+            boolean |=(np.min(index_stack_local[:,:,:,2])<0)
             if(not(boolean)):
                 voids_list.append(coord[i])
                 local_maps.append(utils.interpolate_map(interpolation_method,
