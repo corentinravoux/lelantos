@@ -40,11 +40,11 @@ from lslyatomo import tomographic_objects
 
 
 
-def get_deltas(namefile,center_ra=True):
+def get_deltas(namefile,center_ra=True,pk1d_type=True):
     """ Extract delta properties """
     ras, decs, redshifts,redshift_qsos,ids, sigmas, deltas = [],[],[],[],[],[],[]
     for i in range(len(namefile)):
-        delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
+        delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=pk1d_type)
         delta_tomo.read()
         ra,dec,redshift,redshift_qso,id,sigma,delta = delta_tomo.return_params(center_ra=center_ra)
         ras.append(ra)
@@ -240,7 +240,7 @@ class DeltaConverter():
 
 
     def transform_delta_to_pixel_file(self,rebin=None,shuffle=None,sigma_min=None,sigma_max=None,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None):
-        namefile = glob.glob(os.path.join(self.delta_path,"delta-*"))
+        namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits*"))
         properties_map_pixels = {}
         (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(self.Omega_m)
         if(self.repeat):
@@ -790,7 +790,7 @@ class PixelAnalizer(object):
 
 class DeltaAnalyzer(object):
 
-    def __init__(self,pwd,delta_path,center_ra=True,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None,degree=True):
+    def __init__(self,pwd,delta_path,center_ra=True,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None,degree=True,pk1d_type=True):
         self.pwd = pwd
         os.chdir(pwd)
         self.delta_path = delta_path
@@ -802,12 +802,13 @@ class DeltaAnalyzer(object):
         self.ra_cut_min = ra_cut_min
         self.ra_cut_max = ra_cut_max
         self.degree=degree
+        self.pk1d_type = pk1d_type
 
 
     def get_ra_dec(self):
         """ Obtain arrays of RA and DEC coordinates from a list or a name of a delta file in pickle, fits or ascii format"""
-        namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits"))
-        (ra,dec,z,zqso,ids,sigmas,deltas)  = get_deltas(namefile,center_ra=self.center_ra)
+        namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits*"))
+        (ra,dec,z,zqso,ids,sigmas,deltas)  = get_deltas(namefile,center_ra=self.center_ra,pk1d_type=self.pk1d_type)
         pixel_coord = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j],zqso[i],ids[i]] for i in range(len(ra)) for j in range(len(z[i]))])
         pixel_coord = pixel_coord[utils.cut_sky_catalog(pixel_coord[:,0],pixel_coord[:,1],pixel_coord[:,2],ramin=self.ra_cut_min,ramax=self.ra_cut_max,decmin=self.dec_cut_min,decmax=self.dec_cut_max,zmin=self.z_cut_min,zmax=self.z_cut_max)]
         z,zqso,ids,sigmas,deltas = pixel_coord[:,2],pixel_coord[:,5],pixel_coord[:,6],pixel_coord[:,3],pixel_coord[:,4]
@@ -1101,7 +1102,7 @@ class DeltaModifier(object):
 
 
     def create_healpix(self,number_cut,random=None,return_len_ra=False):
-        namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits"))
+        namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits*"))
         deltas ={}
         ra_array = []
         dec_array = []
