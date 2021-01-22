@@ -516,7 +516,7 @@ class DeltaConverter():
 
     def create_parallel_input(self,properties,cartesian_deltas,number_chunks,overlaping,shape_sub_map):
         chunks ,shape= self.cut_in_chunks(cartesian_deltas,number_chunks,overlaping,shape_sub_map)
-        shape = (shape[0],shape[1],properties['shape'][2])
+        shape = (shape[0],shape[1],shape_sub_map[2])
         filename = []
         parallel_launcher_params = []
         for i in range(len(list(chunks.keys()))):
@@ -808,12 +808,23 @@ class DeltaAnalyzer(object):
     def get_ra_dec(self):
         """ Obtain arrays of RA and DEC coordinates from a list or a name of a delta file in pickle, fits or ascii format"""
         namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits*"))
-        (ra,dec,z,zqso,ids,sigmas,deltas)  = get_deltas(namefile,center_ra=self.center_ra,pk1d_type=self.pk1d_type)
-        pixel_coord = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j],zqso[i],ids[i]] for i in range(len(ra)) for j in range(len(z[i]))])
-        pixel_coord = pixel_coord[utils.cut_sky_catalog(pixel_coord[:,0],pixel_coord[:,1],pixel_coord[:,2],ramin=self.ra_cut_min,ramax=self.ra_cut_max,decmin=self.dec_cut_min,decmax=self.dec_cut_max,zmin=self.z_cut_min,zmax=self.z_cut_max)]
-        z,zqso,ids,sigmas,deltas = pixel_coord[:,2],pixel_coord[:,5],pixel_coord[:,6],pixel_coord[:,3],pixel_coord[:,4]
-        ra = np.array([pixel_coord[:,0][index] for index in sorted(np.unique(pixel_coord[:,0], return_index=True)[1])])
-        dec = np.array([pixel_coord[:,1][index] for index in sorted(np.unique(pixel_coord[:,1], return_index=True)[1])])
+        (ra,dec,z,zqso,ids,sigmas,deltas)  = get_deltas(namefile,center_ra=self.center_ra,
+                                                        pk1d_type=self.pk1d_type)
+        pixel_coord = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j],zqso[i],ids[i]]
+                                 for i in range(len(ra)) for j in range(len(z[i]))])
+        pixel_coord = pixel_coord[utils.cut_sky_catalog(pixel_coord[:,0],pixel_coord[:,1],
+                                                        pixel_coord[:,2],ramin=self.ra_cut_min,
+                                                        ramax=self.ra_cut_max,
+                                                        decmin=self.dec_cut_min,
+                                                        decmax=self.dec_cut_max,
+                                                        zmin=self.z_cut_min,
+                                                        zmax=self.z_cut_max)]
+        z,zqso,ids,sigmas,deltas = (pixel_coord[:,2],pixel_coord[:,5],
+                                    pixel_coord[:,6],pixel_coord[:,3],
+                                    pixel_coord[:,4])
+        unique_coord = np.unique(pixel_coord[:,0:2],axis=0)
+        ra = unique_coord[:,0]
+        dec = unique_coord[:,1]
         if(self.degree): ra,dec = np.degrees(ra),np.degrees(dec)
         return(ra,dec,z,zqso,ids,sigmas,deltas)
 
@@ -822,6 +833,7 @@ class DeltaAnalyzer(object):
 
     @staticmethod
     def plot_snr_diagram(sigmas,deltas,plot_name,nb_bin=100):
+        plt.figure()
         signal_noise = abs((deltas + 1)/sigmas)
         plt.hist(signal_noise,nb_bin,density=True)
         plt.xlabel("signal-to-noise ratio")
@@ -928,6 +940,13 @@ class DeltaAnalyzer(object):
         plt.savefig(f"delta_map_histo_{plot_name}.pdf",format="pdf")
 
 
+
+    @staticmethod
+    def plot_histogram_sigmas(sigmas,plot_name,nb_bins=200,sigma_min=0,sigma_max=5):
+        plt.figure()
+        data, bins , patches = plt.hist(sigmas,nb_bins)
+        plt.xlim([sigma_min,sigma_max])
+        plt.savefig(f"sigma_map_histo_{plot_name}.pdf",format="pdf")
 
 
 
@@ -1044,16 +1063,20 @@ class DeltaAnalyzer(object):
 
 
 
-    def analyze_deltas(self,plot_name,plot_ra_dec=False,plot_histo_ra_dec=False,plot_density_ra_dec=False,plot_histo_delta=False,plot_snr=False,plot_binned_delta=False,nb_cut_ra_dec=None,nb_interval_histo_ra_dec = 20,nb_interval_density_ra_dec = 20,nb_bins_histo_ra_dec = 20,different_sign_region = False,nb_bins_histo_delta=200,delta_min_histo_delta=-2,delta_max_histo_delta=2,nb_bins_snr=100, nb_bins_binned_stat=50,error_bar_binned_stat=True):
+    def analyze_deltas(self,plot_name,plot_ra_dec=False,plot_histo_ra_dec=False,
+                       plot_density_ra_dec=False,plot_histo_delta=False,
+                       plot_snr=False,plot_binned_delta=False,
+                       plot_histo_sigma=False,**kwargs):
         (ra,dec,z,zqso,ids,sigmas,deltas)=self.get_ra_dec()
 
-        if(plot_ra_dec):DeltaAnalyzer.plot_ra_dec_diagram(ra,dec,plot_name,nb_cut=nb_cut_ra_dec,deg=self.degree)
-        if(plot_density_ra_dec):DeltaAnalyzer.plot_los_density(ra,dec,plot_name,nb_interval=nb_interval_density_ra_dec,different_sign_region=different_sign_region)
-        if(plot_histo_ra_dec):DeltaAnalyzer.plot_los_histogram(ra,dec,plot_name,nb_bins=nb_bins_histo_ra_dec,different_sign_region=different_sign_region)
+        if(plot_ra_dec):DeltaAnalyzer.plot_ra_dec_diagram(ra,dec,plot_name,deg=self.degree,**kwargs)
+        if(plot_density_ra_dec):DeltaAnalyzer.plot_los_density(ra,dec,plot_name,**kwargs)
+        if(plot_histo_ra_dec):DeltaAnalyzer.plot_los_histogram(ra,dec,plot_name,**kwargs)
 
-        if(plot_histo_delta):DeltaAnalyzer.plot_histogram_deltas(deltas,plot_name,nb_bins=nb_bins_histo_delta,delta_min=delta_min_histo_delta,delta_max=delta_max_histo_delta)
-        if(plot_snr):DeltaAnalyzer.plot_snr_diagram(sigmas,deltas,plot_name,nb_bin=nb_bins_snr)
-        if(plot_binned_delta):DeltaAnalyzer.plot_delta_binned_stat(z,deltas,zqso,plot_name, nb_bins=nb_bins_binned_stat,error_bar=error_bar_binned_stat)
+        if(plot_histo_delta):DeltaAnalyzer.plot_histogram_deltas(deltas,plot_name,**kwargs)
+        if(plot_histo_sigma):DeltaAnalyzer.plot_histogram_sigmas(sigmas,plot_name,**kwargs)
+        if(plot_snr):DeltaAnalyzer.plot_snr_diagram(sigmas,deltas,plot_name,**kwargs)
+        if(plot_binned_delta):DeltaAnalyzer.plot_delta_binned_stat(z,deltas,zqso,plot_name,**kwargs)
 
 
 

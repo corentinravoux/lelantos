@@ -226,10 +226,6 @@ class TomographicMap(object):
         self.map_array = np.ma.masked_where(mask,self.map_array)
 
 
-    # def split_map(self,split):
-    #     maps = self.map_array
-    #     return(maps)
-
 
     def compute_pk3d(self,kmin,kmax,n_k,distance_map=None,criteria_distance_mask=None,log=False):
         if((distance_map is not None)&(criteria_distance_mask is not None)):
@@ -732,6 +728,25 @@ class Pixel(object):
         np.savetxt(name_out,coord)
 
 
+
+    def print_prop(self):
+        log = utils.create_log()
+        if(self.name is not None): log.add(f"Arguments of the property file {self.name}")
+        if(self.pixel_array is not None):
+            log.add_array_statistics(self.pixel_array[:,0],"X")
+            log.add_array_statistics(self.pixel_array[:,1],"Y")
+            log.add_array_statistics(self.pixel_array[:,2],"Z")
+            log.add_array_statistics(self.pixel_array[:,3],"sigma")
+            log.add_array_statistics(self.pixel_array[:,4],"delta")
+        if(self.boundary_sky_coord is not None): log.add(f"Sky boundaries of the associated map [radians]: {self.boundary_sky_coord}")
+        if(self.boundary_cartesian_coord is not None): log.add(f"Cartesian boundaries of the associated map [Mpc.h-1]: {self.boundary_cartesian_coord}")
+        if(self.coordinate_transform is not None): log.add(f"Coordinate transformation of the associated map: {self.coordinate_transform}")
+        if(self.Omega_m is not None): log.add(f"Value of Omega_m used: {self.Omega_m}")
+        log.close()
+
+
+
+
     def repack_by_los(self):
         coord = self.pixel_array
         unique_coord = np.unique(coord[:,0:2],axis=0)
@@ -932,8 +947,8 @@ class MapPixelProperty(object):
     def print_prop(self):
         log = utils.create_log()
         if(self.name is not None): log.add(f"Arguments of the property file {self.name}")
-        if(self.size is not None): log.add(f"Shape of the associated map: {self.shape}")
-        if(self.shape is not None): log.add(f"Size of the associated map: {self.size}")
+        if(self.shape is not None): log.add(f"Shape of the associated map: {self.shape}")
+        if(self.size is not None): log.add(f"Size of the associated map: {self.size}")
         if(self.boundary_sky_coord is not None): log.add(f"Sky boundaries of the associated map [radians]: {self.boundary_sky_coord}")
         if(self.boundary_cartesian_coord is not None): log.add(f"Cartesian boundaries of the associated map [Mpc.h-1]: {self.boundary_cartesian_coord}")
         if(self.coordinate_transform is not None): log.add(f"Coordinate transformation of the associated map: {self.coordinate_transform}")
