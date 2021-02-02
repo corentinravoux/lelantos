@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from lslyatomo import tomographic_objects
 import numpy as np
 
@@ -7,7 +8,7 @@ pix_size = 2.19
 size = tuple((np.array(shape)-1)*pix_size)
 
 Omega_m = 0.3147
-minx = 0.0  
+minx = 0.0
 miny = 0.0
 minredshift = 2.1
 name = "property_file.pickle"
