@@ -1500,7 +1500,6 @@ class QSOCatalog(Catalog):
             h['Z'] = self.coord[:,2]
             h['THING_ID'] =self.primary_key
         fits.write(h,header=head)
-        fits.write(h)
         fits.close()
 
     def writetxt(self,name_out,moveaxis=None):
