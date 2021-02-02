@@ -54,11 +54,17 @@ class Machine(object):
         return(False)
 
 
+    def load_cluster_optional_arguments(self):
+        N = utils.return_key(self.kwargs,"N",1)
+        n = utils.return_key(self.kwargs,"n",1)
+        c = utils.return_key(self.kwargs,"c",1)
+        return(N,n,c)
+
 
 
 class Nersc(Machine):
 
-    def __init__(self):
+    def __init__(self,**kwargs):
         ending_str = "Execution Sum Up"
         error_str = ["srun:"]
         wait_check = True
@@ -68,22 +74,27 @@ class Nersc(Machine):
         self.launcher_name = "Tomography_start.sl"
         self.out_file_name = "{}.out"
         self.error_file_name = "{}.err"
+        self.kwargs = kwargs
 
 
     def create_launcher(self,dir_path,software_command_line,software_name):
+        queue = utils.return_key(self.kwargs,"queue","regular")
+        partition = utils.return_key(self.kwargs,"partition","haswell")
+        (N,n,c) = self.load_cluster_optional_arguments()
+        time = utils.return_key(self.kwargs,"time","06:00:00")
         f = open(os.path.join(dir_path,self.launcher_name),"w")
         f.write("#!/bin/bash -l\n")
-        f.write("#SBATCH -N 1\n")
-        f.write("#SBATCH -C haswell\n")
-        f.write("#SBATCH -q regular \n")
-        f.write("#SBATCH -J {software_name}" + "\n")
-        f.write("#SBATCH -t 06:00:00 \n")
+        f.write(f"#SBATCH -N {N}" + "\n")
+        f.write(f"#SBATCH -C {partition}" + "\n")
+        f.write(f"#SBATCH -q {queue}" + "\n")
+        f.write(f"#SBATCH -J {software_name}" + "\n")
+        f.write(f"#SBATCH -t {time}" + "\n")
         f.write("#SBATCH -L project \n")
-        f.write("#SBATCH -A {self.project_name}" + "\n")
-        f.write("#SBATCH -n 1\n")
-        f.write("#SBATCH -c 1\n")
-        f.write(f"#SBATCH -o {self.out_file_name.format(software_name)}" + "\n")
-        f.write(f"#SBATCH -e {self.error_file_name.format(software_name)}" + "\n")
+        f.write(f"#SBATCH -A {self.project_name}" + "\n")
+        f.write(f"#SBATCH -n {n}" + "\n")
+        f.write(f"#SBATCH -c {c}" + "\n")
+        f.write(f"#SBATCH -o {os.path.join(dir_path,self.out_file_name.format(software_name))}" + "\n")
+        f.write(f"#SBATCH -e {os.path.join(dir_path,self.error_file_name.format(software_name))}" + "\n")
         f.write("\n")
         f.write(f"srun {software_command_line}" +"\n")
 
@@ -97,7 +108,7 @@ class Nersc(Machine):
 
 class Irene(Machine):
 
-    def __init__(self):
+    def __init__(self,**kwargs):
         ending_str = "Execution Sum Up"
         error_str = ["srun:"]
         wait_check = True
@@ -107,20 +118,25 @@ class Irene(Machine):
         self.launcher_name = "Tomography_start.sl"
         self.out_file_name = "{}.out"
         self.error_file_name = "{}.err"
+        self.kwargs = kwargs
 
 
     def create_launcher(self,dir_path,software_command_line,software_name):
         f = open(os.path.join(dir_path,self.launcher_name),"w")
+        (N,n,c) = self.load_cluster_optional_arguments()
+        partition = utils.return_key(self.kwargs,"partition","rome")
+        time = utils.return_key(self.kwargs,"time","60000")
         f.write("#!/bin/bash -l\n")
         f.write("\n")
         f.write(f"#MSUB -r {software_name}" + "\n")
-        f.write("#MSUB -T 60000  \n")
-        f.write("#MSUB -q rome \n")
+        f.write(f"#MSUB -T {time}" + "\n")
+        f.write(f"#MSUB -q {partition}" + "\n")
         f.write(f"#MSUB -o {os.path.join(dir_path,self.out_file_name.format(software_name))}" + "\n")
         f.write(f"#MSUB -e {os.path.join(dir_path,self.error_file_name.format(software_name))}" + "\n")
         f.write("#MSUB -m scratch,work  \n")
-        f.write("#MSUB -n 1\n")
-        f.write("#MSUB -c 2\n")
+        f.write(f"#MSUB -N {N}" + "\n")
+        f.write(f"#MSUB -n {n}" + "\n")
+        f.write(f"#MSUB -c {c}" + "\n")
         f.write(f"#MSUB -A {self.project_name}" + "\n")
         f.write("\n")
         f.write("export OMP_NUM_THREADS=2\n")
@@ -137,12 +153,13 @@ class Irene(Machine):
 
 class PersonalComputer(Machine):
 
-    def __init__(self,ending_str="",error_str=[]):
+    def __init__(self,ending_str="",error_str=[],**kwargs):
         wait_check = False
         super(PersonalComputer,self).__init__(ending_str,error_str,wait_check)
 
         self.out_file_name = "{}.out"
         self.error_file_name = "{}.err"
+        self.kwargs = kwargs
 
 
     def create_launcher(self,dir_path,command_line,software_name):
@@ -251,7 +268,7 @@ class TomographyManager(object):
 
         self.log = utils.create_report_log(name=os.path.join(self.pwd,"Python_Report"))
         self.software = self.init_sofware(software)
-        self.machine = self.init_machine(machine,kwargs=kwargs)
+        self.machine = self.init_machine(machine,**kwargs)
 
 
 
@@ -265,13 +282,12 @@ class TomographyManager(object):
 
 
     def init_machine(self,machine,**kwargs):
-        # CR - Deal with the kwargs
         if(machine.lower() == "irene"):
-            return(Irene())
+            return(Irene(**kwargs))
         if(machine.lower() == "nersc"):
-            return(Nersc())
+            return(Nersc(**kwargs))
         elif(machine.lower() == "pc"):
-            return(PersonalComputer())
+            return(PersonalComputer(**kwargs))
         else: return KeyError(f"The machine {machine} is not available, please choose in {TomographyManager.available_machine}")
 
 
