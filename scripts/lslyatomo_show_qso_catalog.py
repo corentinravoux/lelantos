@@ -11,11 +11,13 @@ parser.add_argument('-zname',
                     '--redshift-name', help='Pixel file name', default="Z",required=False)
 args = vars(parser.parse_args())
 
-catalog = tomographic_objects.QSOCatalog.init_from_fits(args.input,redshift_name=args.redshift_name)
+catalog = tomographic_objects.QSOCatalog.init_from_fits(args["input"],redshift_name=args["redshift_name"])
 
 RA = catalog.coord[:,0]
 RA[RA>180] = RA[RA>180] - 360
 
-plt.hist2d(RA,catalog[1]["DEC"][:],args.bins)
+
+DEC = catalog.coord[:,1]
+plt.hist2d(RA,DEC,int(args["bins"]))
 plt.colorbar()
 plt.show()

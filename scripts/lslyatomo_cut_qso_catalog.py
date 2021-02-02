@@ -22,14 +22,16 @@ args = vars(parser.parse_args())
 
 
 
-cat = tomographic_objects.QSOCatalog.init_from_fits(args.input,redshift_name=args.redshift_name)
+cat = tomographic_objects.QSOCatalog.init_from_fits(args["input"],redshift_name=args["redshift_name"])
 
 print("Number of quasars before cut", cat.coord.shape[0])
 
-mask = cat.cut_catalog(coord_min=(args.ramin,args.decmin,args.zmin),coord_max=(args.ramax,args.decmax,args.zmax))
+mask = cat.cut_catalog(coord_min=(float(args["ramin"]),float(args["decmin"]),float(args["zmin"])),
+                       coord_max=(float(args["ramax"]),float(args["decmax"]),float(args["zmax"])),
+                       center_x_coord=True)
 cat.apply_mask(mask)
 
 print("Number of quasars after cut", cat.coord.shape[0])
 
-cat.name = args.output
+cat.name = args["output"]
 cat.write()
