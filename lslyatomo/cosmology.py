@@ -639,12 +639,12 @@ class PixelAnalizer(object):
 
     @staticmethod
     def read_density_file(name):
-        a = pickle.dump(open(name,"wb"))
+        a = pickle.load(open(name,"rb"))
         return(a[0],a[1])
 
     @staticmethod
     def read_dperp_file(name):
-        a = pickle.load(open(name,"wb"))
+        a = pickle.load(open(name,"rb"))
         return(a[0],a[1])
 
 
