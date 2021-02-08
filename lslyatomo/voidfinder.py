@@ -726,8 +726,6 @@ class PlotVoid(object):
         plt.ylabel("Number of voids")
         plt.xlabel("Radius of the void in Mpc.h-1")
         plt.savefig(os.path.join(self.pwd,f"{name}_histo_radius.pdf"), format ="pdf")
-        plt.show()
-        plt.close()
 
 
     def plot_radius_redshift(self,name):
@@ -738,8 +736,6 @@ class PlotVoid(object):
         plt.ylabel("Radius size")
         plt.grid()
         plt.savefig(os.path.join(self.pwd,f"{name}_radius_redshift.pdf"), format ="pdf")
-        plt.show()
-        plt.close()
 
     def plot_meanradius_redshift(self,name):
         redshift_catalog = self.void.redshift
@@ -757,8 +753,6 @@ class PlotVoid(object):
         plt.ylabel("Radius size")
         plt.grid()
         plt.savefig(os.path.join(self.pwd,f"{name}_meanradius_redshift.pdf"), format ="pdf")
-        plt.show()
-        plt.close()
 
 
     def plot_histo_redshift(self,name):
@@ -769,8 +763,6 @@ class PlotVoid(object):
         plt.ylabel("Number of voids")
         plt.grid()
         plt.savefig(os.path.join(self.pwd,f"{name}_histo_redshift.pdf"), format ="pdf")
-        plt.show()
-        plt.close()
 
 
     def load_and_plot_comparison(self,catalog_name,name,legend,rmin,rmax,norm=False,log_scale=True,factor_add=None,expo_fit_rmin=None,other_catalogs=None):
@@ -819,6 +811,4 @@ class PlotVoid(object):
             plt.savefig(os.path.join(self.pwd,"histogram_voids_radius_"+ name + "log.pdf"),format="pdf")
         else :
             plt.savefig(os.path.join(self.pwd,"histogram_voids_radius_"+ name + "lin.pdf"),format="pdf")
-        plt.show()
-        plt.close()
         return(perr,perr2)
