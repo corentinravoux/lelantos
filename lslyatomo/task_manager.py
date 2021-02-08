@@ -77,12 +77,12 @@ class Nersc(Machine):
         self.kwargs = kwargs
 
 
-    def create_launcher(self,dir_path,software_command_line,software_name):
+    def create_launcher(self,pwd,dir_paths,software_command_lines,software_name):
         queue = utils.return_key(self.kwargs,"queue","regular")
-        partition = utils.return_key(self.kwargs,"partition","haswell")
+        partition = utils.return_key(self.kwargs,"partition","knl")
         (N,n,c) = self.load_cluster_optional_arguments()
         time = utils.return_key(self.kwargs,"time","06:00:00")
-        f = open(os.path.join(dir_path,self.launcher_name),"w")
+        f = open(os.path.join(pwd,self.launcher_name),"w")
         f.write("#!/bin/bash -l\n")
         f.write(f"#SBATCH -N {N}" + "\n")
         f.write(f"#SBATCH -C {partition}" + "\n")
@@ -91,17 +91,19 @@ class Nersc(Machine):
         f.write(f"#SBATCH -t {time}" + "\n")
         f.write("#SBATCH -L project \n")
         f.write(f"#SBATCH -A {self.project_name}" + "\n")
-        f.write(f"#SBATCH -n {n}" + "\n")
-        f.write(f"#SBATCH -c {c}" + "\n")
-        f.write(f"#SBATCH -o {os.path.join(dir_path,self.out_file_name.format(software_name))}" + "\n")
-        f.write(f"#SBATCH -e {os.path.join(dir_path,self.error_file_name.format(software_name))}" + "\n")
         f.write("\n")
-        f.write(f"srun {software_command_line}" +"\n")
+        for i in range(len(dir_paths)):
+            sign = " & \n \n" if i != (len(dir_paths) -1) else ""
+            f.write(f"""srun -n {n} -c {c}"""
+                    +f""" -o {os.path.join(dir_paths[i],self.out_file_name.format(software_name))}"""
+                    +f""" -e {os.path.join(dir_paths[i],self.error_file_name.format(software_name))}"""
+                    +f""" {software_command_lines[i]}"""
+                    +f"{sign}")
 
 
 
-    def launch(self,dir_path=None,software_command_line=None,software_name=None):
-        call(["sbatch",os.path.join(dir_path,self.launcher_name)])
+    def launch(self,dir_paths=None,pwd=None,software_command_lines=None,software_name=None):
+        call(["sbatch",os.path.join(pwd,self.launcher_name)])
 
 
 
@@ -109,7 +111,7 @@ class Nersc(Machine):
 class Irene(Machine):
 
     def __init__(self,**kwargs):
-        ending_str = "Execution Sum Up"
+        ending_str = ""
         error_str = ["srun:"]
         wait_check = True
         super(Irene,self).__init__(ending_str,error_str,wait_check)
@@ -121,33 +123,35 @@ class Irene(Machine):
         self.kwargs = kwargs
 
 
-    def create_launcher(self,dir_path,software_command_line,software_name):
-        f = open(os.path.join(dir_path,self.launcher_name),"w")
+    def create_launcher(self,pwd,dir_paths,software_command_lines,software_name):
         (N,n,c) = self.load_cluster_optional_arguments()
         partition = utils.return_key(self.kwargs,"partition","rome")
         time = utils.return_key(self.kwargs,"time","60000")
-        f.write("#!/bin/bash -l\n")
-        f.write("\n")
-        f.write(f"#MSUB -r {software_name}" + "\n")
-        f.write(f"#MSUB -T {time}" + "\n")
-        f.write(f"#MSUB -q {partition}" + "\n")
-        f.write(f"#MSUB -o {os.path.join(dir_path,self.out_file_name.format(software_name))}" + "\n")
-        f.write(f"#MSUB -e {os.path.join(dir_path,self.error_file_name.format(software_name))}" + "\n")
-        f.write("#MSUB -m scratch,work  \n")
-        f.write(f"#MSUB -N {N}" + "\n")
-        f.write(f"#MSUB -n {n}" + "\n")
-        f.write(f"#MSUB -c {c}" + "\n")
-        f.write(f"#MSUB -A {self.project_name}" + "\n")
-        f.write("\n")
-        f.write("export OMP_NUM_THREADS=2\n")
-        f.write("\n")
-        f.write(f"ccc_mprun {software_command_line}" +"\n")
-        f.close()
+        for i in range(len(dir_paths)):
+            f = open(os.path.join(dir_paths[i],self.launcher_name),"w")
+            f.write("#!/bin/bash -l\n")
+            f.write("\n")
+            f.write(f"#MSUB -r {software_name}" + "\n")
+            f.write(f"#MSUB -T {time}" + "\n")
+            f.write(f"#MSUB -q {partition}" + "\n")
+            f.write(f"#MSUB -o {os.path.join(dir_paths[i],self.out_file_name.format(software_name))}" + "\n")
+            f.write(f"#MSUB -e {os.path.join(dir_paths[i],self.error_file_name.format(software_name))}" + "\n")
+            f.write("#MSUB -m scratch,work  \n")
+            f.write(f"#MSUB -N {N}" + "\n")
+            f.write(f"#MSUB -n {n}" + "\n")
+            f.write(f"#MSUB -c {c}" + "\n")
+            f.write(f"#MSUB -A {self.project_name}" + "\n")
+            f.write("\n")
+            f.write("export OMP_NUM_THREADS=2\n")
+            f.write("\n")
+            f.write(f"ccc_mprun {software_command_lines[i]}" +"\n")
+            f.close()
 
 
 
-    def launch(self,dir_path=None,software_command_line=None,software_name=None):
-        call(["ccc_msub",os.path.join(dir_path,self.launcher_name)])
+    def launch(self,dir_paths=None,pwd=None,software_command_lines=None,software_name=None):
+        for i in range(len(dir_paths)):
+            call(["ccc_msub",os.path.join(dir_paths[i],self.launcher_name)])
 
 
 
@@ -162,14 +166,15 @@ class PersonalComputer(Machine):
         self.kwargs = kwargs
 
 
-    def create_launcher(self,dir_path,command_line,software_name):
+    def create_launcher(self,pwd,dir_path,command_line,software_name):
         return()
 
 
-    def launch(self,dir_path=None,software_command_line=None,software_name=None):
-        out_name = os.path.join(dir_path,self.out_file_name.format(software_name))
-        err_name = os.path.join(dir_path,self.error_file_name.format(software_name))
-        call(software_command_line.split(), stdout=open(out_name,'w'), stderr=open(err_name,'w'))
+    def launch(self,dir_paths=None,pwd=None,software_command_lines=None,software_name=None):
+        for i in range(len(dir_paths)):
+            out_name = os.path.join(dir_paths[i],self.out_file_name.format(software_name))
+            err_name = os.path.join(dir_paths[i],self.error_file_name.format(software_name))
+            call(software_command_lines[i].split(), stdout=open(out_name,'w'), stderr=open(err_name,'w'))
 
 
 
@@ -212,44 +217,56 @@ class Dachshund(TomographySoftware):
 
         super(Dachshund,self).__init__(exec_file)
         self.command_line = self.exec_file + " {}"
+        self.ending_str = "Total time"
 
 
 
-    def create_input(self,dir_path,launcher_params,name):
-        lx,ly,lz,npix,nx,ny,nz,sigmaf,lperp,lpar,namepixel,namemap = launcher_params["lx"],launcher_params["ly"],launcher_params["lz"],launcher_params["npix"],launcher_params["nx"],launcher_params["ny"],launcher_params["nz"],launcher_params["sigmaf"],launcher_params["lperp"],launcher_params["lpar"],launcher_params["namepixel"],launcher_params["namemap"]
-        f = open(name,"w")
-        f.write("#lx, ly, lz: the domain size in each direction.\n")
-        f.write("#num_pixels: the *total* number of pixels.\n")
-        f.write("#map_nx, map_ny, map_nz: the number of map points. The map points are arbitrary but for now these n's are used to setup a uniform grid across the domain given above.\n")
-        f.write("#corr_var_s: the signal cov prefactor sigma_f^2\n")
-        f.write("#corr_l_perp: the signal cov perp scale.\n")
-        f.write("#corr_l_para: the signal cov para scale.\n")
-        f.write("#pcg_max_iter: the PCG max number of iterations. 100 should be good.\n")
-        f.write("#pcg_tol: the PCG stopping tolerance. I found 1.0e-3 is good enough. Set it very small if you want the most accurate map.\n")
-        f.write("lx = {}\n".format(lx))
-        f.write("ly = {}\n".format(ly))
-        f.write("lz = {}\n".format(lz))
-        f.write("\n")
-        f.write("# From output of GEN_DACH_INPUT.PRO\n")
-        f.write("num_pixels = {}\n".format(npix))
-        f.write("\n")
-        f.write("map_nx = {}\n".format(nx))
-        f.write("map_ny = {}\n".format(ny))
-        f.write("map_nz = {}\n".format(nz))
-        f.write("\n")
-        f.write("corr_var_s = {}\n".format(sigmaf))
-        f.write("corr_l_perp = {}\n".format(lperp))
-        f.write("corr_l_para = {}\n".format(lpar))
-        f.write("\n")
-        f.write("pcg_max_iter = 500\n")
-        f.write("pcg_tol = 1.0e-3\n")
-        f.write("#pcg_step_r = 1\n")
-        f.write("\n")
-        f.write("option_map_covar = 0\n")
-        f.write("option_noise_covar = 0\n")
-        f.write("pixel_data_path = {}\n".format(os.path.join(dir_path,namepixel)))
-        f.write("map_path = {}\n".format(os.path.join(dir_path,namemap)))
-        f.close()
+    def create_input(self,dir_paths,launcher_params,launcher_names):
+        for i in range(len(dir_paths)):
+
+            name = os.path.join(dir_paths[i],launcher_names[i])
+            (lx,ly,lz,npix,
+             nx,ny,nz,sigmaf,
+             lperp,lpar,
+             namepixel,namemap) = (launcher_params[i]["lx"],launcher_params[i]["ly"],
+                                   launcher_params[i]["lz"],launcher_params[i]["npix"],
+                                   launcher_params[i]["nx"],launcher_params[i]["ny"],
+                                   launcher_params[i]["nz"],launcher_params[i]["sigmaf"],
+                                   launcher_params[i]["lperp"],launcher_params[i]["lpar"],
+                                   launcher_params[i]["namepixel"],launcher_params[i]["namemap"])
+            f = open(name,"w")
+            f.write("#lx, ly, lz: the domain size in each direction.\n")
+            f.write("#num_pixels: the *total* number of pixels.\n")
+            f.write("#map_nx, map_ny, map_nz: the number of map points. The map points are arbitrary but for now these n's are used to setup a uniform grid across the domain given above.\n")
+            f.write("#corr_var_s: the signal cov prefactor sigma_f^2\n")
+            f.write("#corr_l_perp: the signal cov perp scale.\n")
+            f.write("#corr_l_para: the signal cov para scale.\n")
+            f.write("#pcg_max_iter: the PCG max number of iterations. 100 should be good.\n")
+            f.write("#pcg_tol: the PCG stopping tolerance. I found 1.0e-3 is good enough. Set it very small if you want the most accurate map.\n")
+            f.write("lx = {}\n".format(lx))
+            f.write("ly = {}\n".format(ly))
+            f.write("lz = {}\n".format(lz))
+            f.write("\n")
+            f.write("# From output of GEN_DACH_INPUT.PRO\n")
+            f.write("num_pixels = {}\n".format(npix))
+            f.write("\n")
+            f.write("map_nx = {}\n".format(nx))
+            f.write("map_ny = {}\n".format(ny))
+            f.write("map_nz = {}\n".format(nz))
+            f.write("\n")
+            f.write("corr_var_s = {}\n".format(sigmaf))
+            f.write("corr_l_perp = {}\n".format(lperp))
+            f.write("corr_l_para = {}\n".format(lpar))
+            f.write("\n")
+            f.write("pcg_max_iter = 500\n")
+            f.write("pcg_tol = 1.0e-3\n")
+            f.write("#pcg_step_r = 1\n")
+            f.write("\n")
+            f.write("option_map_covar = 0\n")
+            f.write("option_noise_covar = 0\n")
+            f.write("pixel_data_path = {}\n".format(os.path.join(dir_paths[i],namepixel)))
+            f.write("map_path = {}\n".format(os.path.join(dir_paths[i],namemap)))
+            f.close()
 
 
 
@@ -269,6 +286,8 @@ class TomographyManager(object):
         self.log = utils.create_report_log(name=os.path.join(self.pwd,"Python_Report"))
         self.software = self.init_sofware(software)
         self.machine = self.init_machine(machine,**kwargs)
+        if(self.machine.ending_str == "")&(self.software.ending_str is not None):
+            self.machine.ending_str = self.software.ending_str
 
 
 
@@ -364,17 +383,21 @@ class TomographyManager(object):
         return(allFinished)
 
 
+    # CR - make it software dependent
+    def copy_files(self,dir_paths,listname):
+        for i in range(len(listname)):
+            call(["cp",os.path.join(self.pwd,f"{self.name_pixel}_{listname[i]}"),dir_paths[i]])
 
+    def create_machine_launcher(self,dir_paths,launcher_params):
+        launcher_names = [launcher_params[i]["nameinput"] for i in range(len(launcher_params))]
+        command_lines = [self.software.command_line.format(os.path.join(dir_paths[i],launcher_names[i])) for i in range(len(dir_paths))]
+        self.software.create_input(dir_paths,launcher_params,launcher_names)
+        self.machine.create_launcher(self.pwd,dir_paths,command_lines,self.software.name)
 
-
-    def create_launcher(self,dir_path,launcher_param):
-        launcher_name = launcher_param["nameinput"]
-        self.software.create_input(dir_path,launcher_param,os.path.join(dir_path,launcher_name))
-        self.machine.create_launcher(dir_path,self.software.command_line.format(os.path.join(dir_path,launcher_name)),self.software.name)
-
-    def launch(self,dir_path,launcher_param):
-        launcher_name = launcher_param["nameinput"]
-        self.machine.launch(dir_path = dir_path ,software_command_line= self.software.command_line.format(os.path.join(dir_path,launcher_name)),software_name=self.software.name)
+    def launch(self,dir_paths,launcher_params):
+        launcher_names = [launcher_params[i]["nameinput"] for i in range(len(launcher_params))]
+        command_lines = [self.software.command_line.format(os.path.join(dir_paths[i],launcher_names[i])) for i in range(len(dir_paths))]
+        self.machine.launch(dir_paths = dir_paths, pwd=self.pwd ,software_command_lines= command_lines,software_name=self.software.name)
 
 
     def treat_launch(self,pwd,listname):
@@ -394,11 +417,11 @@ class TomographyManager(object):
         listname,launcher_params = launching_file[0],launching_file[1]
         TomographyManager.create_python_dir(self.pwd)
         TomographyManager.create_dir(self.pwd,listname)
+        dir_paths= [os.path.join(self.pwd,"Tmp",listname[i]) for i in range(len(listname))]
+        self.copy_files(dir_paths,listname)
+        self.create_machine_launcher(dir_paths,launcher_params)
+        self.launch(dir_paths,launcher_params)
         for i in range(len(listname)):
-            dir_path = os.path.join(self.pwd,"Tmp",listname[i])
-            call(["cp",os.path.join(self.pwd,f"{self.name_pixel}_{listname[i]}"),dir_path])
-            self.create_launcher(dir_path,launcher_params[i])
-            self.launch(dir_path,launcher_params[i])
             self.log.add("Launch of the input " + str(launcher_params[i]["nameinput"]))
         time.sleep(5)
         self.treat_launch(self.pwd,listname)
