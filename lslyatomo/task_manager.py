@@ -74,10 +74,44 @@ class Nersc(Machine):
         self.launcher_name = "Tomography_start.sl"
         self.out_file_name = "{}.out"
         self.error_file_name = "{}.err"
+        self.mem_per_cpu = 1952
+        self.launch_mode = utils.return_key(kwargs,"mode","separated")
         self.kwargs = kwargs
 
 
     def create_launcher(self,pwd,dir_paths,software_command_lines,software_name):
+        if(self.launch_mode == "separated"):
+            self.create_launcher_separated(dir_paths,software_command_lines,software_name)
+        elif(self.launch_mode == "unified"):
+            self.create_launcher_unified(pwd,dir_paths,software_command_lines,software_name)
+
+
+
+    def create_launcher_separated(self,dir_paths,software_command_lines,software_name):
+        queue = utils.return_key(self.kwargs,"queue","regular")
+        partition = utils.return_key(self.kwargs,"partition","knl")
+        (N,n,c) = self.load_cluster_optional_arguments()
+        time = utils.return_key(self.kwargs,"time","06:00:00")
+        for i in range(len(dir_paths)):
+            f = open(os.path.join(dir_paths[i],self.launcher_name),"w")
+            f.write("#!/bin/bash -l\n")
+            f.write(f"#SBATCH -N {N}" + "\n")
+            f.write(f"#SBATCH -n {n}" + "\n")
+            f.write(f"#SBATCH -c {c}" + "\n")
+            f.write(f"#SBATCH -C {partition}" + "\n")
+            f.write(f"#SBATCH -q {queue}" + "\n")
+            f.write(f"#SBATCH -J {software_name}" + "\n")
+            f.write(f"#SBATCH -t {time}" + "\n")
+            f.write("#SBATCH -L project \n")
+            f.write(f"#SBATCH -A {self.project_name}" + "\n")
+            f.write(f"#SBATCH -o {os.path.join(dir_paths[i],self.out_file_name.format(software_name))}" + "\n")
+            f.write(f"#SBATCH -e {os.path.join(dir_paths[i],self.error_file_name.format(software_name))}" + "\n")
+            f.write("\n")
+            f.write(f"export OMP_NUM_THREADS={c}" + "\n")
+            f.write("\n")
+            f.write(f"""srun {software_command_lines[i]}"""+" \n")
+
+    def create_launcher_unified(self,pwd,dir_paths,software_command_lines,software_name):
         queue = utils.return_key(self.kwargs,"queue","regular")
         partition = utils.return_key(self.kwargs,"partition","knl")
         (N,n,c) = self.load_cluster_optional_arguments()
@@ -91,20 +125,31 @@ class Nersc(Machine):
         f.write(f"#SBATCH -t {time}" + "\n")
         f.write("#SBATCH -L project \n")
         f.write(f"#SBATCH -A {self.project_name}" + "\n")
+        f.write(f"#SBATCH -o {os.path.join(pwd,self.launcher_name)}.out" + "\n")
+        f.write(f"#SBATCH -e {os.path.join(pwd,self.launcher_name)}.err" + "\n")
         f.write("\n")
         for i in range(len(dir_paths)):
-            sign = " & \n \n" if i != (len(dir_paths) -1) else ""
-            f.write(f"""srun -n {n} -c {c}"""
+            f.write(f"""srun -n {n} -c {c} --mem {int(c*self.mem_per_cpu)}"""
                     +f""" -o {os.path.join(dir_paths[i],self.out_file_name.format(software_name))}"""
                     +f""" -e {os.path.join(dir_paths[i],self.error_file_name.format(software_name))}"""
                     +f""" {software_command_lines[i]}"""
-                    +f"{sign}")
+                    +" & \n \n")
+        f.write("wait")
 
+
+    def launch_unified(self,pwd):
+        call(["sbatch",os.path.join(pwd,self.launcher_name)])
+
+    def launch_separated(self,dir_paths):
+        for i in range(len(dir_paths)):
+            call(["sbatch",os.path.join(dir_paths[i],self.launcher_name)])
 
 
     def launch(self,dir_paths=None,pwd=None,software_command_lines=None,software_name=None):
-        call(["sbatch",os.path.join(pwd,self.launcher_name)])
-
+        if(self.launch_mode == "separated"):
+            self.launch_separated(dir_paths)
+        elif(self.launch_mode == "unified"):
+            self.launch_unified(pwd)
 
 
 
