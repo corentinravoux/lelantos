@@ -183,7 +183,7 @@ class BoxExtractor():
 
     def convert_to_matter_field(self,gaussian_array):
         sigma_l = np.std(gaussian_array)
-        density_matter = np.exp(gaussian_array - (sigma_l**2/2)) - 1
+        density_matter = np.exp((gaussian_array - (sigma_l**2/2)).astype(float)) - 1
         return(density_matter)
 
 
@@ -325,7 +325,8 @@ class BoxExtractor():
             for i in range(len(prop)):
                 prop_map_object = tomographic_objects.TomographicMap(map_array=prop_maps[i],name=f"{name}_{prop[i]}")
                 prop_map_object.write()
-        del prop_maps,prop_map_object
+            del prop_map_object
+        del prop_maps
 
 
 
