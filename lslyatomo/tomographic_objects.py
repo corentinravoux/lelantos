@@ -1391,7 +1391,14 @@ class Catalog(object):
             mask_select &= (x<coord_max[0])  & (y<coord_max[1]) & (z<coord_max[2])
         return(mask_select)
 
-
+    def cut_z_catalog(self,z_min=None,z_max=None):
+        z = self.coord.copy()
+        mask_select = np.full(self.coord.shape,True)
+        if(z_min is not None):
+            mask_select &= (z > z_min)
+        if(z_max is not None):
+            mask_select &= (z < z_max)
+        return(mask_select)
 
     def print_statistics(self,close=True):
         log = utils.create_log()
@@ -1533,22 +1540,24 @@ class DLACatalog(Catalog):
     def init_from_fits(cls,name):
         catalog = Catalog.load_from_fits(name)
         (coordinate_transform,boundary_cartesian_coord,boundary_sky_coord, Omega_m) = Catalog.load_header(catalog)
-        if("Z_DLA" in catalog["DLA_CAT"].get_colnames()):
-            coord_z = catalog["DLA_CAT"]["Z_DLA"][:]
-            z_qso = catalog["DLA_CAT"]["Z_QSO"][:]
-            coord = np.vstack([coord_z]).transpose()
-            primary_key = catalog["DLA_CAT"]["THING_ID"][:]
-            conf_dla = catalog["DLA_CAT"]["CONF_DLA"][:]
-            nhi_dla = catalog["DLA_CAT"]["NHI_DLA"][:]
+        if("THING_ID" in catalog["DLACAT"].get_colnames()):
+            coord = catalog["DLACAT"]["Z"][:]
+            primary_key = catalog["DLACAT"]["THING_ID"][:]
+            conf_dla = catalog["DLACAT"]["CONF_DLA"][:]
+            nhi_dla = catalog["DLACAT"]["NHI"][:]
             catalog_type = "sky"
+            if("Z_QSO" in catalog["DLACAT"].get_colnames()):
+                z_qso = catalog["DLACAT"]["Z_QSO"][:]
+            else:
+                z_qso = None
             Catalog.close(catalog)
-            return(cls(name=name,coord=coord,primary_key=primary_key,z_qso=z_qso,confidence=conf_dla,nhi=nhi_dla,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
+            return(cls(name=name,coord=coord,z_qso=z_qso,primary_key=primary_key,confidence=conf_dla,nhi=nhi_dla,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
         if("X" in catalog[1].get_colnames()):
-            coord_ra = catalog["DLA_CAT"]["X"][:]
-            coord_dec = catalog["DLA_CAT"]["Y"][:]
-            coord_z = catalog["DLA_CAT"]['Z'][:]
+            coord_ra = catalog["DLACAT"]["X"][:]
+            coord_dec = catalog["DLACAT"]["Y"][:]
+            coord_z = catalog["DLACAT"]['Z'][:]
             coord = np.vstack([coord_ra,coord_dec,coord_z]).transpose()
-            z_qso = catalog["DLA_CAT"]['Z_QSO'][:]
+            z_qso = catalog["DLACAT"]['Z_QSO'][:]
             catalog_type = "cartesian"
             Catalog.close(catalog)
             return(cls(name=name,coord=coord,z_qso=z_qso,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
@@ -1567,7 +1576,10 @@ class DLACatalog(Catalog):
 
 
     def cut_catalog_dla(self,coord_min=None,coord_max=None,confidence_min=None,nhi_min=None):
-        mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=True) & (self.coord[:,2]!=-1.0)
+        if(self.catalog_type == "sky"):
+            mask_select = self.cut_z_catalog(z_min=coord_min,z_max=coord_max)
+        if(self.catalog_type == "cartesian"):
+            mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=True) & (self.coord[:,2]!=-1.0)
         self.apply_mask(mask_select,confidence_min=confidence_min,nhi_min=nhi_min)
 
 
@@ -1591,24 +1603,51 @@ class DLACatalog(Catalog):
 
     def write(self):
         fits = fitsio.FITS(self.name,'rw',clobber=True)
-        nrows = len(self.coord_ra)
+        nrows = self.coord.shape[0]
         head = self.return_header()
         if(self.catalog_type == "sky"):
-            h = np.zeros(nrows, dtype=[('THING_ID','i8'),('Z_QSO','f8'),('Z_DLA','f8'),('CONF_DLA','f8'),('NHI_DLA','f8')])
+            if(self.z_qso is not None):
+                h = np.zeros(nrows, dtype=[('THING_ID','i8'),('Z','f8'),('CONF_DLA','f8'),('NHI','f8'),('Z_QSO','f8')])
+                h['Z_QSO'] =self.z_qso
+            else:
+                h = np.zeros(nrows, dtype=[('THING_ID','i8'),('Z','f8'),('CONF_DLA','f8'),('NHI','f8')])
             h['THING_ID'] =self.primary_key
-            h['Z_DLA'] = self.coord[:,0]
-            h['Z_QSO'] = self.z_qso
-            h['CONF_DLA'] = self.conf_dla
-            h['NHI_DLA'] = self.nhi_dla
+            h['Z'] = self.coord
+            h['CONF_DLA'] = self.confidence
+            h['NHI'] = self.nhi
         elif(self.catalog_type == "cartesian"):
             h = np.zeros(nrows, dtype=[('X','f8'),('Y','f8'),('Z','f8'),('Z_QSO','f8')])
             h['X'] = self.coord[:,1]
             h['Y'] = self.coord[:,2]
             h['Z'] = self.coord[:,3]
             h['Z_QSO'] = self.z_qso
-        fits.write(h,header=head)
+        fits.write(h,header=head,extname="DLACAT")
         fits.close()
 
+
+
+    @staticmethod
+    def convert_old_format_to_new(input,output):
+        file = fitsio.FITS(input)["DLA_CAT"]
+        thid = file["THING_ID"][:]
+        z = file["Z_DLA"][:]
+        nhi = file["NHI_DLA"][:]
+        conf = file["CONF_DLA"][:]
+        thid_out,z_out,nhi_out,conf_out = [],[],[],[]
+        for i in range(len(z)):
+            mask = z[i] != -1.
+            z_out.append(z[i][mask])
+            nhi_out.append(nhi[i][mask])
+            conf_out.append(conf[i][mask])
+            for j in range(len(z[i][mask])):
+                thid_out.append(thid[i])
+        dla_cat = DLACatalog(name=output,
+                             coord=np.concatenate(z_out),
+                             primary_key=np.array(thid_out),
+                             confidence=np.concatenate(conf_out),
+                             nhi=np.concatenate(nhi_out),
+                             catalog_type="sky")
+        dla_cat.write()
 
 
 class GalaxyCatalog(Catalog):
