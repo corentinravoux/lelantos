@@ -21,7 +21,7 @@ Tested on Cobalt and Irene clusters.
 import os,time,pickle,shutil
 from subprocess import call
 from lslyatomo import utils
-
+from distutils.dir_util import copy_tree
 
 #############################################################################
 #############################################################################
@@ -483,3 +483,7 @@ class TomographyManager(object):
 
     def remove_tmp(self):
         shutil.rmtree(os.path.join(self.pwd,"Tmp"), ignore_errors=True)
+
+    def displace_tomography_folder(self,out_folder):
+        copy_tree(self.pwd,out_folder)
+        shutil.rmtree(self.pwd, ignore_errors=True)
