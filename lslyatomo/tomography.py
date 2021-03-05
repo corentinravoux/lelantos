@@ -295,13 +295,16 @@ class TomographyPlot(object):
     def add_elements(map_slice,extentmap,deltamin,deltamax,x_index,y_index,pixel_in=None,pixel_bis_in=None,qso_in=None,qso_bis_in=None,void_in=None,void_bis_in=None,galaxy_in=None,**kwargs):
         im =plt.imshow(map_slice, interpolation='bilinear',cmap='jet_r',vmin = deltamin, vmax = deltamax,extent = extentmap)
         if(pixel_in is not None):
-            plt.scatter(pixel_in[:,x_index],pixel_in[:,y_index],linewidth=utils.return_key(kwargs,"linewidth_pixel",1),marker=utils.return_key(kwargs,"marker_pixel","s"),color="k")
+            plt.scatter(pixel_in[:,x_index],pixel_in[:,y_index],
+                        s=utils.return_key(kwargs,"marker_pixel_size",2),
+                        marker=utils.return_key(kwargs,"marker_pixel","s"),
+                        color="k")
         if(pixel_bis_in is not None):
-            plt.scatter(pixel_bis_in[:,x_index],pixel_bis_in[:,y_index]
-                        ,linewidth=0.5*utils.return_key(kwargs,"linewidth_pixel",1)
-                        ,marker=utils.return_key(kwargs,"marker_pixel",".")
-                        ,color=utils.return_key(kwargs,"grey_pixel","0.5")
-                        ,alpha=utils.return_key(kwargs,"transparency_pixel",0.5))
+            plt.scatter(pixel_bis_in[:,x_index],pixel_bis_in[:,y_index],
+                        s=utils.return_key(kwargs,"marker_pixel_size",2),
+                        marker=utils.return_key(kwargs,"marker_pixel","."),
+                        color=utils.return_key(kwargs,"grey_pixel","0.5"),
+                        alpha=utils.return_key(kwargs,"transparency_pixel",0.5))
         if(qso_in is not None):
             plt.plot(qso_in[:,x_index],qso_in[:,y_index], "k*",linewidth=1)
         if(qso_bis_in is not None):
