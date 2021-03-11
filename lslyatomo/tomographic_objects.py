@@ -988,7 +988,7 @@ class Delta(object):
             import lslyatomo.picca.data as data
             print("Picca might be updated, we suggest to install picca independently")
         if(self.delta_file is None):
-            self.read_from_fits()
+            self.read()
         try:
             delta = data.delta.from_fitsio(self.delta_file[number_line],Pk1D_type=self.pk1d_type)
         except:
@@ -1037,13 +1037,14 @@ class Delta(object):
             delta.append(Delta.delta(delta_line))
             id.append(Delta.thingid(delta_line))
             z.append(((10**Delta.log_lambda(delta_line) / utils.lambdaLy)-1))
+
         return(np.array(ra),
                np.array(dec),
-               np.asarray(z),
+               z,
                np.array(zqso),
                np.array(id),
-               np.asarray(sigma),
-               np.asarray(delta))
+               sigma,
+               delta)
 
     def return_id(self):
         id = []

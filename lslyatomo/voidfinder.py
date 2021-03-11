@@ -807,6 +807,7 @@ class PlotVoid(object):
             plt.yscale("log")
         plt.grid()
         plt.xlabel("Void radius in Mpc.h" + r"$^{-1}$")
+        plt.legend(legend)
         if(log_scale):
             plt.savefig(os.path.join(self.pwd,"histogram_voids_radius_"+ name + "log.pdf"),format="pdf")
         else :
