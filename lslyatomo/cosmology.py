@@ -49,19 +49,19 @@ def get_deltas(namefile,center_ra=True,pk1d_type=True):
         ra,dec,redshift,redshift_qso,id,sigma,delta = delta_tomo.return_params(center_ra=center_ra)
         ras.append(ra)
         decs.append(dec)
-        redshifts.append(redshift)
         redshift_qsos.append(redshift_qso)
         ids.append(id)
-        sigmas.append(sigma)
-        deltas.append(delta)
+        redshifts = redshifts + redshift
+        sigmas = sigmas + sigma
+        deltas = deltas + delta
         delta_tomo.close()
     return(np.concatenate(ras),
            np.concatenate(decs),
-           np.concatenate(redshifts),
+           redshifts,
            np.concatenate(redshift_qsos),
            np.concatenate(ids),
-           np.concatenate(sigmas),
-           np.concatenate(deltas))
+           sigmas,
+           deltas)
 
 
 
@@ -661,13 +661,13 @@ class PixelAnalizer(object):
     @staticmethod
     def plot_mean_distance_density(zpar,dperpz,densityz,nameout,coupled_plot=False,comparison=False,dperp_comparison=None,density_comparison=None,zpar_comparison=None,legend=None,dperp_other=None,density_other=None):
         if(coupled_plot):
-            PixelAnalizer.plot_mean_distance_density_coupled(zpar,dperpz,densityz,nameout,comparison=False,
+            PixelAnalizer.plot_mean_distance_density_coupled(zpar,dperpz,densityz,nameout,comparison=comparison,
                                                dperp_comparison=dperp_comparison,
                                                density_comparison=density_comparison,
                                                zpar_comparison=zpar_comparison,legend=legend,
                                                dperp_other=dperp_other,density_other=density_other)
         else:
-            PixelAnalizer.plot_mean_distance_density_not_coupled(zpar,dperpz,densityz,nameout,comparison=False,
+            PixelAnalizer.plot_mean_distance_density_not_coupled(zpar,dperpz,densityz,nameout,comparison=comparison,
                                                dperp_comparison=dperp_comparison,
                                                density_comparison=density_comparison,
                                                zpar_comparison=zpar_comparison,legend=legend,
@@ -756,8 +756,7 @@ class PixelAnalizer(object):
             zpar_comparison, dperp_comparison = np.mean([PixelAnalizer.read_dperp_file(dpername2[i]) for i in range(len(dpername2))],axis=0)
             zpar, density = np.mean([PixelAnalizer.read_density_file(densityname1[i]) for i in range(len(densityname1))],axis=0)
             zpar_comparison, density_comparison = np.mean([PixelAnalizer.read_density_file(densityname2[i]) for i in range(len(densityname2))],axis=0)
-        PixelAnalizer.plot_mean_distance_density(zpar,dperp,density,nameout,coupled_plot=False,comparison=True,dperp_comparison=dperp_comparison,density_comparison=density_comparison,zpar_comparison=zpar_comparison,legend=legend)
-
+        PixelAnalizer.plot_mean_distance_density(zpar,dperp,density,nameout,coupled_plot=coupled_plot,comparison=True,dperp_comparison=dperp_comparison,density_comparison=density_comparison,zpar_comparison=zpar_comparison,legend=legend)
 
 
     def compute_plot_histo_mean_distance(self,zpar,name_histo):
@@ -832,16 +831,21 @@ class DeltaAnalyzer(object):
 
 
     @staticmethod
-    def plot_snr_diagram(sigmas,deltas,plot_name,nb_bin=100):
+    def plot_snr_diagram(sigmas,deltas,plot_name,**kwargs):
+        nb_bins = utils.return_key(kwargs,"nb_bins",100)
+
         plt.figure()
         signal_noise = abs((deltas + 1)/sigmas)
-        plt.hist(signal_noise,nb_bin,density=True)
+        plt.hist(signal_noise,nb_bins,density=True)
         plt.xlabel("signal-to-noise ratio")
         plt.savefig(f"{plot_name}.pdf",format="pdf")
 
 
     @staticmethod
-    def plot_ra_dec_diagram(ra,dec,plot_name,nb_cut=None,deg=True):
+    def plot_ra_dec_diagram(ra,dec,plot_name,**kwargs):
+        nb_cut = utils.return_key(kwargs,"nb_cut",None)
+        deg = utils.return_key(kwargs,"deg",True)
+
         plt.figure(figsize=(7,3.5))
         plt.plot(ra,dec,'b.', markersize=1.5)
         if(nb_cut is not None):
@@ -866,7 +870,10 @@ class DeltaAnalyzer(object):
 
 
     @staticmethod
-    def plot_los_density(ra,dec,plot_name,nb_interval=20,different_sign_region=False):
+    def plot_los_density(ra,dec,plot_name,**kwargs):
+        nb_interval = utils.return_key(kwargs,"nb_interval",20)
+        different_sign_region = utils.return_key(kwargs,"different_sign_region",False)
+
         ra_interval = np.linspace(np.min(ra),np.max(ra),nb_interval)
         ra_size = abs((np.max(ra)-np.min(ra))/nb_interval)
         ra_array = []
@@ -903,7 +910,10 @@ class DeltaAnalyzer(object):
 
 
     @staticmethod
-    def plot_los_histogram(ra,dec,plot_name,nb_bins=20,different_sign_region=False):
+    def plot_los_histogram(ra,dec,plot_name,**kwargs):
+        nb_bins = utils.return_key(kwargs,"nb_bins",20)
+        different_sign_region = utils.return_key(kwargs,"different_sign_region",False)
+
         plt.figure()
         plt.hist(ra,nb_bins)
         plt.title("LOS histogram in function of RA")
@@ -924,35 +934,91 @@ class DeltaAnalyzer(object):
 
 
     @staticmethod
-    def plot_histogram_deltas(deltas,plot_name,nb_bins=200,delta_min=-2,delta_max=2):
-        plt.figure()
-        data, bins , patches = plt.hist(deltas,nb_bins)
+    def plot_histogram_deltas(deltas,plot_name=None,**kwargs):
+        new_fig = utils.return_key(kwargs,"new_fig",True)
+        gaussian_fit = utils.return_key(kwargs,"gaussian_fit",False)
+        nb_bins = utils.return_key(kwargs,"nb_bins",100)
+        delta_min = utils.return_key(kwargs,"delta_min",-2)
+        delta_max = utils.return_key(kwargs,"delta_max",2)
+        log_scale = utils.return_key(kwargs,"log_scale",False)
+        legend = utils.return_key(kwargs,"legend",None)
+        alpha = utils.return_key(kwargs,"alpha",1)
+        norm = utils.return_key(kwargs,"norm",False)
+
+        if(new_fig):
+            plt.figure()
+        data, bins , patches = plt.hist(deltas,nb_bins,log=log_scale,alpha=alpha,density=norm)
         plt.xlim([delta_min,delta_max])
-        bin_centers= np.array([0.5 * (bins[i] + bins[i+1]) for i in range(len(bins)-1)])
-        fit_function = lambda x, A, mu, sigma : A * np.exp(-1.0 * (x - mu)**2 / (2 * sigma**2))
-        popt, pcov = curve_fit(fit_function, xdata=bin_centers, ydata=data, p0=[1, 0.0, 0.1])
-        x = np.linspace(min(bins),max(bins),1000)
-        y = fit_function(x, *popt)
-        plt.plot(x,y,'r--',linewidth=2)
-        mu,sigma = popt[1],popt[2]
-        plt.text(0.8 ,2* np.max(data)/6,"mu = " +str(round(mu,8)))
-        plt.text(0.8,1.5* np.max(data)/6,"sigma = " + str(round(sigma,8)))
-        plt.savefig(f"delta_map_histo_{plot_name}.pdf",format="pdf")
+        if(gaussian_fit):
+            bin_centers= np.array([0.5 * (bins[i] + bins[i+1]) for i in range(len(bins)-1)])
+            fit_function = lambda x, A, mu, sigma : A * np.exp(-1.0 * (x - mu)**2 / (2 * sigma**2))
+            popt, pcov = curve_fit(fit_function, xdata=bin_centers, ydata=data, p0=[1, 0.0, 0.1])
+            x = np.linspace(min(bins),max(bins),1000)
+            y = fit_function(x, *popt)
+            plt.plot(x,y,'r--',linewidth=2)
+            mu,sigma = popt[1],popt[2]
+            plt.text(0.8 ,2* np.max(data)/6,"mu = " +str(round(mu,8)))
+            plt.text(0.8,1.5* np.max(data)/6,"sigma = " + str(round(sigma,8)))
+        if(plot_name is not None):
+            if(legend is not None):
+                plt.legend(legend)
+            if(log_scale):
+                plot_name = plot_name + "_log"
+            plt.savefig(f"delta_map_histo_{plot_name}.pdf",format="pdf")
+        return(bins)
 
 
 
     @staticmethod
-    def plot_histogram_sigmas(sigmas,plot_name,nb_bins=200,sigma_min=0,sigma_max=5):
-        plt.figure()
-        data, bins , patches = plt.hist(sigmas,nb_bins)
+    def plot_histogram_sigmas(sigmas,plot_name=None,**kwargs):
+        new_fig = utils.return_key(kwargs,"new_fig",True)
+        nb_bins = utils.return_key(kwargs,"nb_bins",100)
+        sigma_min = utils.return_key(kwargs,"sigma_min",0)
+        sigma_max = utils.return_key(kwargs,"sigma_max",5)
+        log_scale = utils.return_key(kwargs,"log_scale",False)
+        legend = utils.return_key(kwargs,"legend",None)
+        alpha = utils.return_key(kwargs,"alpha",1)
+        norm = utils.return_key(kwargs,"norm",False)
+
+        if(new_fig):
+            plt.figure()
+        data, bins , patches = plt.hist(sigmas,nb_bins,log=log_scale, alpha=alpha,density=norm)
         plt.xlim([sigma_min,sigma_max])
-        plt.savefig(f"sigma_map_histo_{plot_name}.pdf",format="pdf")
+        if(plot_name is not None):
+            if(legend is not None):
+                plt.legend(legend)
+            if(log_scale):
+                plot_name = plot_name + "_log"
+            plt.savefig(f"sigma_map_histo_{plot_name}.pdf",format="pdf")
+        return(bins)
+
+
+    @staticmethod
+    def plot_sigma_redshift(sigmas,redshift,plot_name=None,**kwargs):
+        new_fig = utils.return_key(kwargs,"new_fig",True)
+        nb_bins = utils.return_key(kwargs,"nb_bins",100)
+        legend = utils.return_key(kwargs,"legend",None)
+
+        if(new_fig):
+            plt.figure()
+        z = np.linspace(np.min(redshift),np.max(redshift),nb_bins)
+        sigma_mean = np.zeros(len(z)-1)
+        for i in range(len(z)-1):
+            mask2 = (redshift < z[i+1])&(redshift >= z[i])
+            sigma_mean[i]=np.mean(sigmas[mask2])
+        plt.plot(z[:-1],sigma_mean)
+        if(plot_name is not None):
+            if(legend is not None):
+                plt.legend(legend)
+            plt.savefig(f"sigmas_redshift_bin_{plot_name}.pdf",format="pdf")
 
 
 
 
     @staticmethod
-    def plot_delta_binned_stat(redshift,deltas,redshift_qso,plot_name, nb_bins=50,error_bar=True) :
+    def plot_delta_binned_stat(redshift,deltas,redshift_qso,plot_name,**kwargs) :
+        nb_bins = utils.return_key(kwargs,"nb_bins",50)
+        error_bar = utils.return_key(kwargs,"error_bar",True)
 
         list_RF = ((1 + redshift)/(1+ redshift_qso))*utils.lambdaLy
         list_lobs = (1 + redshift)*utils.lambdaLy
@@ -989,60 +1055,23 @@ class DeltaAnalyzer(object):
 
 
 
-    ### COMPARE TWO DELTAs FOLDER ###
+    #### MAIN ROUTINES ####
 
 
-    def compare_deltas(self,delta_path2,log_scale=False):
+    def compare_deltas(self,delta_path2,plot_name,**kwargs):
         " Print different properties of two pickled deltas files to compare them"
-
-
         (ra,dec,redshift,zqso,ids,sigmas,delta)  = self.get_ra_dec()
         comp = DeltaAnalyzer(self.pwd,delta_path2,center_ra=self.center_ra,z_cut_min=self.z_cut_min,z_cut_max=self.z_cut_max,dec_cut_min=self.dec_cut_min,dec_cut_max=self.dec_cut_max,ra_cut_min=self.ra_cut_min,ra_cut_max=self.ra_cut_max,degree=self.degree)
         (ra_comp,dec_comp,redshift_comp,zqso_comp,ids_comp,sigmas_comp,delta_comp)  = comp.get_ra_dec()
-
-        # Transform to list
-        sigmas = np.concatenate(sigmas)
-        sigmas_comp = np.concatenate(sigmas_comp)
-        delta = np.concatenate(delta)
-        delta_comp = np.concatenate(delta_comp)
-        redshift = np.concatenate(redshift)
-        redshift_comp = np.concatenate(redshift_comp)
-
-
-
         # Histogram of sigmas
-        plt.figure()
-        bins = np.linspace(np.min(sigmas),np.max(sigmas), 100)
-        plt.hist(sigmas, bins, alpha=0.5, label="mocks",density=True,log=log_scale)
-        plt.hist(sigmas_comp, bins, alpha=0.5, label="dataBOSS",density=True,log=log_scale)
-        plt.xlabel("Noise on flux contrast " +r"$\sigma_{\delta_{F}}$")
-        plt.legend(["Mocks","Stripe 82 data"])
-        plt.savefig("histogram_sigmas_normalized_cutz.pdf",format="pdf")
-
-
+        bins = DeltaAnalyzer.plot_histogram_sigmas(sigmas,plot_name=None,**kwargs)
+        DeltaAnalyzer.plot_histogram_sigmas(sigmas_comp,plot_name=plot_name,new_fig=False,nb_bins=bins,**kwargs)
         # Mean sigma in function of redshift
-        plt.figure()
-        z = np.linspace(np.min(redshift),np.max(redshift),50)
-        sigma_mean = np.zeros(len(z)-1)
-        sigma_mean_comp = np.zeros(len(z)-1)
-        for i in range(len(z)-1):
-            mask2 = (redshift < z[i+1])&(redshift >= z[i])
-            mask3 = (redshift_comp < z[i+1])&(redshift_comp >= z[i])
-            sigma_mean[i]=np.mean(sigmas[mask2])
-            sigma_mean_comp[i]=np.mean(sigmas_comp[mask3])
-        plt.plot(z[:-1],sigma_mean)
-        plt.plot(z[:-1],sigma_mean_comp)
-        plt.savefig("sigmas_redshift_bin_DR16_mocks.pdf",format="pdf")
-
+        DeltaAnalyzer.plot_sigma_redshift(sigmas,redshift,plot_name=None,**kwargs)
+        DeltaAnalyzer.plot_sigma_redshift(sigmas_comp,redshift_comp,plot_name=plot_name,new_fig=False,**kwargs)
         # Histogram of deltas
-        plt.figure()
-        bins = np.linspace(np.min(delta),np.max(delta), 100)
-        plt.hist(delta, bins, alpha=0.5, label="mocks",density=True,log=log_scale)
-        plt.hist(delta_comp, bins, alpha=0.5, label="dataBOSS",density=True,log=log_scale)
-        plt.legend(["mocks","dataBOSS"])
-        plt.savefig("histo_deltas_1D_mocks_DR16.pdf",format="pdf")
-
-
+        bins = DeltaAnalyzer.plot_histogram_deltas(delta,plot_name=None,**kwargs)
+        DeltaAnalyzer.plot_histogram_deltas(delta_comp,plot_name=plot_name,new_fig=False,nb_bins=bins,**kwargs)
         # Print scalar statistical data
         print("Redshift interval for 1 =",np.max(redshift),np.min(redshift))
         print("Redshift interval for 2 =",np.max(redshift_comp),np.min(redshift_comp))
@@ -1057,24 +1086,19 @@ class DeltaAnalyzer(object):
 
 
 
-
-
-    #### MAIN ROUTINES ####
-
-
-
     def analyze_deltas(self,plot_name,plot_ra_dec=False,plot_histo_ra_dec=False,
                        plot_density_ra_dec=False,plot_histo_delta=False,
                        plot_snr=False,plot_binned_delta=False,
-                       plot_histo_sigma=False,**kwargs):
+                       plot_histo_sigma=False,plot_sigma_redshift=False,**kwargs):
         (ra,dec,z,zqso,ids,sigmas,deltas)=self.get_ra_dec()
 
         if(plot_ra_dec):DeltaAnalyzer.plot_ra_dec_diagram(ra,dec,plot_name,deg=self.degree,**kwargs)
         if(plot_density_ra_dec):DeltaAnalyzer.plot_los_density(ra,dec,plot_name,**kwargs)
         if(plot_histo_ra_dec):DeltaAnalyzer.plot_los_histogram(ra,dec,plot_name,**kwargs)
 
-        if(plot_histo_delta):DeltaAnalyzer.plot_histogram_deltas(deltas,plot_name,**kwargs)
-        if(plot_histo_sigma):DeltaAnalyzer.plot_histogram_sigmas(sigmas,plot_name,**kwargs)
+        if(plot_histo_delta):DeltaAnalyzer.plot_histogram_deltas(deltas,plot_name=plot_name,**kwargs)
+        if(plot_histo_sigma):DeltaAnalyzer.plot_histogram_sigmas(sigmas,plot_name=plot_name,**kwargs)
+        if(plot_sigma_redshift):DeltaAnalyzer.plot_sigma_redshift(sigmas,z,plot_name=plot_name,**kwargs)
         if(plot_snr):DeltaAnalyzer.plot_snr_diagram(sigmas,deltas,plot_name,**kwargs)
         if(plot_binned_delta):DeltaAnalyzer.plot_delta_binned_stat(z,deltas,zqso,plot_name,**kwargs)
 
