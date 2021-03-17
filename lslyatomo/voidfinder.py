@@ -38,13 +38,23 @@ def create_merged_catalog(pwd,list_catalog_name,merged_catalog_name):
     void_merged = tomographic_objects.VoidCatalog.init_by_merging(list_catalog_name,name=os.path.join(pwd,merged_catalog_name))
     void_merged.write()
 
+
+def compute_additional_stats(catalog_name,pixel_name):
+    void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
+    void.compute_filling_factor()
+    void.compute_crossing_criteria(pixel_name)
+    void.compute_los_distance(pixel_name)
+    void.write()
+
+
+
 def cut_catalog(pwd,catalog_name,method_cut,cut_crossing_param=None,
-                pixel_name=None,cut_radius=None,distance_map_name=None,
+                cut_radius=None,distance_map_name=None,
                 distance_map_prop=None,distance_map_param=None,
                 distance_map_percent=None,cut_border_prop=None):
     void_cut = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
     cut_catalog_name = void_cut.cut_catalog_void(method_cut,cut_crossing_param=cut_crossing_param,
-                                                 pixel_name=pixel_name,cut_radius=cut_radius,
+                                                 cut_radius=cut_radius,
                                                  distance_map_name=distance_map_name,
                                                  distance_map_prop=distance_map_prop,
                                                  distance_map_param=distance_map_param,
@@ -53,10 +63,6 @@ def cut_catalog(pwd,catalog_name,method_cut,cut_crossing_param=None,
     void_cut.name = os.path.join(pwd,cut_catalog_name)
     void_cut.write()
 
-def compute_filling_factor(catalog_name,property_name):
-    void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
-    void.compute_filling_factor(property_name=property_name)
-    void.write()
 
 def get_crossing_qso(catalog_name,qso_name):
     void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)

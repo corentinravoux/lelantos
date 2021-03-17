@@ -1686,6 +1686,9 @@ class GalaxyCatalog(Catalog):
         self.apply_mask(mask_select,standard_deviation_max=standard_deviation_max,confidence_min=confidence_min,magnitude_max=magnitude_max)
 
 
+
+    # CR - change all apply_mask with a list of parameters & getattr(class,str)
+
     def apply_mask(self,mask,standard_deviation_max=None,confidence_min=None,magnitude_max=None):
         if(standard_deviation_max is not None):
             mask &= self.standard_deviation < standard_deviation_max
@@ -1711,16 +1714,18 @@ class VoidCatalog(Catalog):
 
     def __init__(self,name=None,coord=None,primary_key=None,radius=None,
                       weights=None,crossing_param=None,central_value=None,
-                      filling_factor=None,mean_value=None,catalog_type="sky",
+                      los_distance = None,filling_factor=None,
+                      mean_value=None,catalog_type="sky",
                       coordinate_transform=None,Omega_m=None,
                       boundary_cartesian_coord=None,boundary_sky_coord=None):
         super(VoidCatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
         self.radius = radius
         self.crossing_param = crossing_param
+        self.mean_value = mean_value
         self.central_value = central_value
+        self.los_distance = los_distance
         self.filling_factor = filling_factor
         self.weights = weights
-        self.mean_value = mean_value
         self.object_type = "void"
 
 
@@ -1744,19 +1749,27 @@ class VoidCatalog(Catalog):
         radius = catalog[1]["R"][:]
         primary_key = catalog[1]["THING_ID"][:]
         weights = catalog[1]["WEIGHT"][:]
-        crossing_param, central_value, mean_value, filling_factor = None, None, None, None
+        crossing_param, central_value, mean_value, filling_factor, los_distance = None, None, None, None, None
         if("CROSSING" in catalog[1].get_colnames()): crossing_param = catalog[1]["CROSSING"][:]
         if("VALUE" in catalog[1].get_colnames()): central_value = catalog[1]["VALUE"][:]
         if("MEAN" in catalog[1].get_colnames()): mean_value = catalog[1]["MEAN"][:]
+        if("LOS_DIST" in catalog[1].get_colnames()): los_distance = catalog[1]["LOS_DIST"][:]
         if("FILLING_FACTOR" in catalog[1].read_header()): filling_factor = catalog[1].read_header()["FILLING_FACTOR"]
 
         Catalog.close(catalog)
-        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
+        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,
+                   weights=weights,crossing_param=crossing_param,
+                   central_value=central_value,filling_factor=filling_factor,
+                   los_distance = los_distance,mean_value=mean_value,
+                   catalog_type=catalog_type,
+                   coordinate_transform=coordinate_transform,
+                   Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,
+                   boundary_cartesian_coord=boundary_cartesian_coord))
 
 
     @classmethod
     def init_from_dictionary(cls,name,radius,coord,catalog_type,coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord,other_array=None,other_array_name = None):
-        central_value, weights, filling_factor, primary_key, crossing_param, mean_value = None, None, None, None, None, None
+        central_value, weights, filling_factor, primary_key, crossing_param, mean_value,los_distance = None,None, None, None, None, None, None
         if(other_array_name is not None):
             if("VALUE" in other_array_name):central_value = other_array[np.argwhere("VALUE" == np.asarray(other_array_name))[0][0]]
             if("MEAN" in other_array_name):mean_value = other_array[np.argwhere("MEAN" == np.asarray(other_array_name))[0][0]]
@@ -1764,20 +1777,28 @@ class VoidCatalog(Catalog):
             if("FILLING_FACTOR" in other_array_name):filling_factor = other_array[np.argwhere("FILLING_FACTOR" == np.asarray(other_array_name))[0][0]]
             if("THING_ID" in other_array_name):primary_key = other_array[np.argwhere("THING_ID" == np.asarray(other_array_name))[0][0]]
             if("CROSSING" in other_array_name):crossing_param = other_array[np.argwhere("CROSSING" == np.asarray(other_array_name))[0][0]]
-        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
-
+            if("LOS_DIST" in other_array_name):los_distance = other_array[np.argwhere("LOS_DIST" == np.asarray(other_array_name))[0][0]]
+        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,
+                   weights=weights,crossing_param=crossing_param,
+                   central_value=central_value,filling_factor=filling_factor,
+                   los_distance = los_distance,mean_value=mean_value,
+                   catalog_type=catalog_type,
+                   coordinate_transform=coordinate_transform,
+                   Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,
+                   boundary_cartesian_coord=boundary_cartesian_coord))
 
     @classmethod
     def init_by_merging(cls,catalog_name,name=None):
         catalog = [VoidCatalog.init_from_fits(name) for name in catalog_name]
         catalog_type = catalog[0].catalog_type
-        radius,coord,primary_key,crossing_param,central_value,mean_value,weights,filling_factor = None,None,None,None,None,None,None,None
+        radius,coord,primary_key,crossing_param,central_value,mean_value,weights,filling_factor,los_distance = None,None,None,None,None,None,None,None,None
         if(catalog[0].radius is not None):radius = np.concatenate([cat.radius for cat in catalog])
         if(catalog[0].coord is not None):coord = np.concatenate([cat.coord for cat in catalog])
         if(catalog[0].primary_key is not None):primary_key = np.concatenate([cat.primary_key for cat in catalog])
         if(catalog[0].crossing_param is not None):crossing_param = np.concatenate([cat.crossing_param for cat in catalog])
         if(catalog[0].central_value is not None):central_value = np.concatenate([cat.central_value for cat in catalog])
         if(catalog[0].mean_value is not None):mean_value = np.concatenate([cat.mean_value for cat in catalog])
+        if(catalog[0].los_distance is not None):los_distance = np.concatenate([cat.los_distance for cat in catalog])
         if(catalog[0].weights is not None):weights = np.concatenate([cat.weights for cat in catalog])
         filling_factor_boolean = np.array([catalog[i].filling_factor is not None for i in range(len(catalog))])
         if(len(filling_factor_boolean[filling_factor_boolean==False])==0):
@@ -1800,7 +1821,14 @@ class VoidCatalog(Catalog):
             minz = np.min([cat.boundary_cartesian_coord[0][2] for cat in catalog])
             maxz = np.min([cat.boundary_cartesian_coord[1][2] for cat in catalog])
             boundary_cartesian_coord = ((minx,miny,minz),(maxx,maxy,maxz))
-        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,weights=weights,crossing_param=crossing_param,central_value=central_value,filling_factor=filling_factor,mean_value=mean_value,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
+        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,
+                   weights=weights,crossing_param=crossing_param,
+                   central_value=central_value,filling_factor=filling_factor,
+                   los_distance = los_distance,mean_value=mean_value,
+                   catalog_type=catalog_type,
+                   coordinate_transform=coordinate_transform,
+                   Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,
+                   boundary_cartesian_coord=boundary_cartesian_coord))
 
 
     def writetxt(self,name_out,moveaxis=None):
@@ -1852,6 +1880,8 @@ class VoidCatalog(Catalog):
             h["VALUE"] = np.array(self.central_value).astype("f8")
         if(self.mean_value is not None):
             h["MEAN"] = np.array(self.mean_value).astype("f8")
+        if(self.los_distance is not None):
+            h["LOS_DIST"] = np.array(self.los_distance).astype("f8")
         if(self.filling_factor is not None):
             head["FILLING_FACTOR"] = self.filling_factor
 
@@ -1867,6 +1897,8 @@ class VoidCatalog(Catalog):
             log.add_array_statistics(self.central_value,"void central value")
         if(self.mean_value is not None):
             log.add_array_statistics(self.mean_value,"void average value")
+        if(self.los_distance is not None):
+            log.add_array_statistics(self.los_distance,"void average min distance to los")
         if(self.weights is not None):
             log.add_array_statistics(self.weights,"void weights")
         if(self.filling_factor is not None):
@@ -1877,51 +1909,14 @@ class VoidCatalog(Catalog):
             log.add(f"Omega_m used for the void catalog: {self.Omega_m}")
 
 
-    def compute_filling_factor(self,size=None,property_name=None):
-        if(size is not None):
-            map_size = size
-        elif(property_name is not None):
-            prop = MapPixelProperty(name=property_name)
-            prop.read()
-            map_size = prop.size
-        volume_map = map_size[0]*map_size[1]*map_size[2]
-        volume_void = np.sum((4/3)*np.pi*(np.array(self.radius))**3)
-        self.filling_factor = volume_void/volume_map
-
-
-    def create_crossing_criteria(self,pixel_name):
-        if(self.crossing_param is not None):
-            return()
-        pixel = Pixel(name=pixel_name)
-        pixel.read()
-        coord_pixels = pixel.pixel_array[:,0:3]
-        separation_pixels = pixel.compute_mean_separation()
-        crossing_param = np.zeros(self.radius.shape)
-        for i in range(len(self.radius)):
-            diff_pixel = coord_pixels - self.coord[i]
-            distance_pixel = np.sqrt(diff_pixel[:,0]**2 + diff_pixel[:,1]**2 +diff_pixel[:,2]**2)
-            mask = distance_pixel < self.radius[i]
-            length = len(distance_pixel[mask])
-            crossing_param[i] = (length * separation_pixels)/self.radius[i]
-        self.crossing_param = crossing_param
-
-    def get_crossing_qso(self,qso_name):
-        qso = QSOCatalog.init_from_fits(qso_name)
-        coord_crossing_qso = []
-        for i in range(len(self.radius)):
-            diff_pixel = qso.coord - self.coord[i]
-            distance_pixel = np.sqrt(diff_pixel[:,0]**2 + diff_pixel[:,1]**2)
-            mask = distance_pixel < self.radius[i]
-            coord_crossing_qso.append(qso.coord[mask])
-        return(coord_crossing_qso)
 
 
 
     def cut_catalog_void(self,method_cut,coord_min=None,coord_max=None,
-                         cut_crossing_param=None,pixel_name=None,
+                         cut_crossing_param=None,
                          cut_radius=None,distance_map_name=None,
                          distance_map_prop=None,distance_map_param=None,
-                         distance_map_percent=None,cut_border_prop=None):
+                         distance_map_percent=None):
         mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=False)
         string_to_add = ""
         if type(method_cut) == str :
@@ -1931,8 +1926,7 @@ class VoidCatalog(Catalog):
                 method_cut = [method_cut]
 
         if("CROSSING" in method_cut):
-            if ((cut_crossing_param is None)|(pixel_name is None)) : raise KeyError("Give a crossing parameter and a Pixel file name")
-            self.create_crossing_criteria(pixel_name)
+            if (cut_crossing_param is None) : raise KeyError("Crossing parameteris not computed. Please do so with compute_additional_stats()")
             mask_select &= self.cut_crossing_parameter(cut_crossing_param)
             string_to_add = string_to_add + f"_crossing{cut_crossing_param}"
         if("RADIUS" in method_cut):
@@ -1940,8 +1934,7 @@ class VoidCatalog(Catalog):
             mask_select &= self.cut_radius(cut_radius)
             string_to_add = string_to_add + f"_cutradius_{cut_radius[0]}rmin_{cut_radius[1]}rmax"
         if("BORDER" in method_cut):
-            if cut_border_prop is None : raise KeyError("Give a property file for border cutting")
-            mask_select &= self.cut_border(cut_border_prop)
+            mask_select &= self.cut_border()
             string_to_add = string_to_add + "_cutborder"
         if("DIST" in method_cut):
             if ((distance_map_name is None)|(distance_map_prop is None)|(distance_map_param is None)|(distance_map_percent is None)) is None : raise KeyError("Give a dist map parameter, map and property file please")
@@ -1958,6 +1951,7 @@ class VoidCatalog(Catalog):
         if(self.primary_key is not None):self.primary_key = self.primary_key[mask]
         if(self.crossing_param is not None):self.crossing_param = self.crossing_param[mask]
         if(self.central_value is not None):self.central_value = self.central_value[mask]
+        if(self.los_distance is not None):self.los_distance = self.los_distance[mask]
         if(self.mean_value is not None):self.mean_value = self.mean_value[mask]
         if(self.weights is not None):self.weights = self.weights[mask]
 
@@ -1970,10 +1964,8 @@ class VoidCatalog(Catalog):
         mask = (self.radius >= cut_radius[0])&(self.radius < cut_radius[1])
         return(mask)
 
-    def cut_border(self,cut_border_prop):
-        prop = MapPixelProperty(name=cut_border_prop)
-        prop.read()
-        cut_border_size = prop.size
+    def cut_border(self):
+        cut_border_size = np.array(self.boundary_cartesian_coord[1]) - np.array(self.boundary_cartesian_coord[0])
         mask = (self.coord[:,0] - self.radius < 0)|(self.coord[:,0] + self.radius > cut_border_size[0])
         mask |= (self.coord[:,1] - self.radius < 0)|(self.coord[:,1] + self.radius > cut_border_size[1])
         mask |= (self.coord[:,2] - self.radius < 0)|(self.coord[:,2] + self.radius > cut_border_size[2])
@@ -1998,6 +1990,7 @@ class VoidCatalog(Catalog):
         return(mask_cut)
 
 
+
     def return_array_list(self,other_array_name):
         other_array = []
         if(other_array_name is not None):
@@ -2008,8 +2001,68 @@ class VoidCatalog(Catalog):
                 elif(other_array_name[i] == "FILLING_FACTOR"):other_array.append(self.filling_factor)
                 elif(other_array_name[i] == "THING_ID"):other_array.append(self.primary_key)
                 elif(other_array_name[i] == "CROSSING"):other_array.append(self.crossing_param)
+                elif(other_array_name[i] == "LOS_DIST"):other_array.append(self.los_distance)
                 else: raise KeyError(f"{other_array_name[i]} not available for void catalog")
         return(other_array)
+
+
+    ### Computing & specific functions ###
+
+
+
+
+    def compute_filling_factor(self):
+        if(self.filling_factor is not None):
+            return()
+        map_size = np.array(self.boundary_cartesian_coord[1]) - np.array(self.boundary_cartesian_coord[0])
+        volume_map = map_size[0]*map_size[1]*map_size[2]
+        volume_void = np.sum((4/3)*np.pi*(np.array(self.radius))**3)
+        self.filling_factor = volume_void/volume_map
+
+
+    def compute_crossing_criteria(self,pixel_name):
+        if(self.crossing_param is not None):
+            return()
+        pixel = Pixel(name=pixel_name)
+        pixel.read()
+        coord_pixels = pixel.pixel_array[:,0:3]
+        separation_pixels = pixel.compute_mean_separation()
+        crossing_param = np.zeros(self.radius.shape)
+        for i in range(len(self.radius)):
+            diff_pixel = coord_pixels - self.coord[i]
+            distance_pixel = np.sqrt(diff_pixel[:,0]**2 + diff_pixel[:,1]**2 +diff_pixel[:,2]**2)
+            mask = distance_pixel < self.radius[i]
+            length = len(distance_pixel[mask])
+            crossing_param[i] = (length * separation_pixels)/self.radius[i]
+        self.crossing_param = crossing_param
+
+
+    def compute_los_distance(self,pixel_name):
+        if(self.los_distance is not None):
+            return()
+        pixel = Pixel(name=pixel_name)
+        pixel.read()
+        coord_pixels = pixel.pixel_array[:,0:3]
+        los_distance = np.full(self.coord.shape[0],np.inf)
+        for i in range(len(self.coord)):
+            dist_to_pixel = coord_pixels - self.coord[i]
+            los_distance[i] = np.min(np.sqrt(dist_to_pixel[:,0]**2 + dist_to_pixel[:,1]**2 + dist_to_pixel[:,2]**2))
+        self.los_distance = los_distance
+
+
+
+    def get_crossing_qso(self,qso_name):
+        qso = QSOCatalog.init_from_fits(qso_name)
+        coord_crossing_qso = []
+        for i in range(len(self.radius)):
+            diff_pixel = qso.coord - self.coord[i]
+            distance_pixel = np.sqrt(diff_pixel[:,0]**2 + diff_pixel[:,1]**2)
+            mask = distance_pixel < self.radius[i]
+            coord_crossing_qso.append(qso.coord[mask])
+        return(coord_crossing_qso)
+
+
+
 
     def compute_cross_corr_parameters(self):
         self.convert_to_sky()
