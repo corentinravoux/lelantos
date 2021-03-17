@@ -29,6 +29,8 @@ from scipy.ndimage import map_coordinates
 from scipy.optimize import leastsq
 import multiprocessing as mp
 from multiprocessing.reduction import ForkingPickler, AbstractReducer
+import matplotlib.pyplot as plt
+from scipy.stats import binned_statistic
 
 #############################################################################
 #############################################################################
@@ -628,3 +630,120 @@ def patch_mp_connection_bpo_17560(log = None):
 
     if log is not None:
         log.add(patchname + " applied")
+
+
+
+#### PLOT ####
+
+
+def plot_histo(value,value_name,name,**kwargs):
+    nb_bins = return_key(kwargs,f"{value_name}_bins",50)
+    value_min = return_key(kwargs,f"{value_name}_min",None)
+    value_max = return_key(kwargs,f"{value_name}_max",None)
+    alpha = return_key(kwargs,f"{value_name}_alpha",1.0)
+    histtype=return_key(kwargs,f"{value_name}_histtype",'bar')
+    linestyle=return_key(kwargs,f"{value_name}_linestyle",None)
+    ec=return_key(kwargs,f"{value_name}_color",None)
+
+    norm = return_key(kwargs,f"{value_name}_norm",False)
+    cumulative = return_key(kwargs,f"{value_name}_cumulative",False)
+    cumulative = return_key(kwargs,f"{value_name}_log",False)
+
+    if(norm):
+        name = name + "_normalized"
+    if(cumulative):
+        name = name + "_cumulative"
+
+    if((value_min is None)|(value_min is None)):
+        bins = nb_bins
+    else:
+        bins = np.linspace(value_min,value_max, nb_bins)
+    (n, bins, patches) = plt.hist(value, bins, alpha=alpha,histtype=histtype,
+                                  linestyle=linestyle,ec=ec,
+                                  density=norm,cumulative=cumulative)
+    return(name, n, bins, patches)
+
+def save_histo(pwd,value,value_name,name,comparison=None,comparison_legend=None,**kwargs):
+    xlabel = return_key(kwargs,f"{value_name}_xlabel",value_name)
+    ylabel = return_key(kwargs,f"{value_name}_ylabel","#")
+
+    plt.figure()
+    name_out, n, bins, patches = plot_histo(value,value_name,name,**kwargs)
+    if(comparison is not None):
+        for i in range(len(comparison)):
+            plot_histo(comparison[i],value_name,name,**kwargs)
+        if(comparison_legend is not None):
+            plt.legend(comparison_legend)
+    plt.ylabel(ylabel)
+    plt.xlabel(xlabel)
+    plt.savefig(os.path.join(pwd,f"{name_out}_histo_{value_name}.pdf"), format ="pdf")
+
+
+
+
+
+def plot_mean_redshift_dependence(value,redshift,value_name,name,**kwargs):
+    nb_bins = return_key(kwargs,f"{value_name}_z_bins",50)
+    z_min = return_key(kwargs,f"{value_name}_zmin",np.min(redshift))
+    z_max = return_key(kwargs,f"{value_name}_zmax",np.max(redshift))
+    ls=return_key(kwargs,f"{value_name}_linestyle",None)
+    color=return_key(kwargs,f"{value_name}_color",None)
+
+    range_x = [z_min,z_max]
+    means_result = binned_statistic(redshift, value, bins=nb_bins, range=range_x, statistic='mean')
+    means = means_result.statistic
+    bin_edges = means_result.bin_edges
+    bin_centers = (bin_edges[:-1] + bin_edges[1:])/2.
+
+    plt.plot(bin_centers,means,color=color,ls=ls)
+    return(name)
+
+
+
+def save_mean_redshift_dependence(pwd,value,redshift,value_name,name,
+                                  comparison=None,
+                                  comparison_redshift=None,
+                                  comparison_legend=None,**kwargs):
+    ylabel = return_key(kwargs,f"{value_name}_xlabel",value_name)
+    xlabel = return_key(kwargs,f"{value_name}_ylabel","redshift")
+
+    plt.figure()
+    name_out = plot_mean_redshift_dependence(value,redshift,value_name,name,**kwargs)
+    if(comparison is not None):
+        for i in range(len(comparison)):
+            plot_mean_redshift_dependence(comparison[i],comparison_redshift[i],value_name,name,**kwargs)
+        if(comparison_legend is not None):
+            plt.legend(comparison_legend)
+    plt.ylabel(ylabel)
+    plt.xlabel(xlabel)
+    plt.savefig(os.path.join(pwd,f"{name_out}_mean_redshift_dependence_{value_name}.pdf"), format ="pdf")
+
+
+
+def plot_redshift_dependence(value,redshift,value_name,name,**kwargs):
+    z_min = return_key(kwargs,f"{value_name}_zmin",np.min(redshift))
+    z_max = return_key(kwargs,f"{value_name}_zmax",np.max(redshift))
+
+    mask = (redshift >= z_min)&(redshift < z_max)
+    plt.scatter(redshift[mask],value[mask])
+    return(name)
+
+
+
+def save_redshift_dependence(pwd,value,redshift,value_name,name,
+                             comparison=None,
+                             comparison_redshift=None,
+                             comparison_legend=None,**kwargs):
+    ylabel = return_key(kwargs,f"{value_name}_xlabel",value_name)
+    xlabel = return_key(kwargs,f"{value_name}_ylabel","redshift")
+
+    plt.figure()
+    name_out = plot_redshift_dependence(value,redshift,value_name,name,**kwargs)
+    if(comparison is not None):
+        for i in range(len(comparison)):
+            plot_redshift_dependence(comparison[i],comparison_redshift[i],value_name,name,**kwargs)
+        if(comparison_legend is not None):
+            plt.legend(comparison_legend)
+    plt.ylabel(ylabel)
+    plt.xlabel(xlabel)
+    plt.savefig(os.path.join(pwd,f"{name_out}_redshift_dependence_{value_name}.pdf"), format ="pdf")
