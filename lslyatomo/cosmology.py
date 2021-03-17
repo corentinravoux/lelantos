@@ -617,7 +617,6 @@ class PixelAnalizer(object):
     def __init__(self,pwd,pixel=None,property_file=None):
 
         self.pwd = pwd
-        os.chdir(pwd)
         if(type(pixel) == str):
             pixel_class = tomographic_objects.Pixel.init_from_property_files(property_file,name=pixel)
             pixel_class.read()
@@ -655,7 +654,7 @@ class PixelAnalizer(object):
         plt.figure()
         plt.hist(dmin,nb_bins)
         plt.xlabel("minimal distance histogram at Z={}".format(zpar))
-        plt.savefig("{}_at_Z{}.pdf".format(name_histo,zpar),format="pdf")
+        plt.savefig(f"{name_histo}_at_Z{zpar}.pdf",format="pdf")
 
 
     @staticmethod
@@ -791,7 +790,6 @@ class DeltaAnalyzer(object):
 
     def __init__(self,pwd,delta_path,center_ra=True,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None,degree=True,pk1d_type=True):
         self.pwd = pwd
-        os.chdir(pwd)
         self.delta_path = delta_path
         self.center_ra = center_ra
         self.z_cut_min = z_cut_min
@@ -804,9 +802,9 @@ class DeltaAnalyzer(object):
         self.pk1d_type = pk1d_type
 
 
-    def get_ra_dec(self):
+    def get_ra_dec(self,delta_path):
         """ Obtain arrays of RA and DEC coordinates from a list or a name of a delta file in pickle, fits or ascii format"""
-        namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits*"))
+        namefile = glob.glob(os.path.join(delta_path,"delta-*.fits*"))
         (ra,dec,z,zqso,ids,sigmas,deltas)  = get_deltas(namefile,center_ra=self.center_ra,
                                                         pk1d_type=self.pk1d_type)
         pixel_coord = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j],zqso[i],ids[i]]
@@ -825,7 +823,91 @@ class DeltaAnalyzer(object):
         ra = unique_coord[:,0]
         dec = unique_coord[:,1]
         if(self.degree): ra,dec = np.degrees(ra),np.degrees(dec)
-        return(ra,dec,z,zqso,ids,sigmas,deltas)
+        dict_value = {"ra" : ra,
+                      "dec" : dec,
+                      "redshift" : z,
+                      "redshift_qso" : zqso,
+                      "id" : ids,
+                      "sigma" : sigmas,
+                      "delta" : deltas}
+        return(dict_value)
+
+
+    def get_all_ra_dec(self,comparison=None):
+        return()
+
+    def load_deltas(self,comparison,value_name):
+        comparison_redshift,comparison_value = None,None
+        if(comparison is not None):
+            comparison_value = []
+            comparison_redshift = []
+            for i in range(len(comparison)):
+                catalog = tomographic_objects.Catalog.init_catalog_from_fits(comparison[i], "void")
+                comparison_value.append(getattr(catalog,value_name))
+                comparison_redshift.append(catalog.redshift)
+        value = getattr(self.void,value_name)
+        return(value,comparison_value,comparison_redshift)
+
+
+    def plot_histo(self,value,value_name,name,comparison=None,
+                   comparison_legend=None,
+                   **kwargs):
+        utils.save_histo(self.pwd,value,value_name,
+                         name,comparison=comparison,
+                         comparison_legend=comparison_legend,
+                         **kwargs)
+
+    def plot(self,value_names,name,
+             comparison=None,comparison_legend=None,
+             histo=True,mean_z_dependence=True,
+             z_dependence=True,
+             **kwargs):
+        (ra,dec,z,zqso,ids,sigmas,deltas)=self.get_ra_dec()
+        dict_value
+        for value_name in value_names:
+            if(histo):
+                utils.save_histo(self.pwd,value,value_name,
+                                 name,comparison=comparison,
+                                 comparison_legend=comparison_legend,
+                                 **kwargs)
+                self.plot_histo(value_name,name,
+                                comparison=comparison_value,
+                                comparison_legend=comparison_legend,
+                                loaded_value=value,
+                                **kwargs)
+            if(mean_z_dependence)&(value_name!="redshift"):
+                self.plot_mean_redshift_dependence(value_name,name,
+                                                   comparison=comparison_value,
+                                                   comparison_redshift=comparison_redshift,
+                                                   comparison_legend=comparison_legend,
+                                                   loaded_value=value,
+                                                   **kwargs)
+            if(z_dependence)&(value_name!="redshift"):
+                self.plot_redshift_dependence(value_name,name,
+                                              comparison=comparison_value,
+                                              comparison_redshift=comparison_redshift,
+                                              comparison_legend=comparison_legend,
+                                              loaded_value=value,
+                                              **kwargs)
+
+
+
+    def analyze_deltas(self,plot_name,plot_ra_dec=False,plot_histo_ra_dec=False,
+                       plot_density_ra_dec=False,plot_histo_delta=False,
+                       plot_snr=False,plot_binned_delta=False,
+                       plot_histo_sigma=False,plot_sigma_redshift=False,**kwargs):
+        (ra,dec,z,zqso,ids,sigmas,deltas)=self.get_ra_dec()
+
+        if(plot_ra_dec):DeltaAnalyzer.plot_ra_dec_diagram(ra,dec,plot_name,deg=self.degree,**kwargs)
+        if(plot_density_ra_dec):DeltaAnalyzer.plot_los_density(ra,dec,plot_name,**kwargs)
+        if(plot_histo_ra_dec):DeltaAnalyzer.plot_los_histogram(ra,dec,plot_name,**kwargs)
+
+        if(plot_histo_delta):DeltaAnalyzer.plot_histogram_deltas(deltas,plot_name=plot_name,**kwargs)
+        if(plot_histo_sigma):DeltaAnalyzer.plot_histogram_sigmas(sigmas,plot_name=plot_name,**kwargs)
+        if(plot_sigma_redshift):DeltaAnalyzer.plot_sigma_redshift(sigmas,z,plot_name=plot_name,**kwargs)
+        if(plot_snr):DeltaAnalyzer.plot_snr_diagram(sigmas,deltas,plot_name,**kwargs)
+        if(plot_binned_delta):DeltaAnalyzer.plot_delta_binned_stat(z,deltas,zqso,plot_name,**kwargs)
+
 
 
 
@@ -865,7 +947,7 @@ class DeltaAnalyzer(object):
             plt.xlabel("RA [rad] (J2000)")
             plt.ylabel("DEC [rad] (J2000)")
         plt.grid()
-        plt.savefig("RA-DEC_diagram_{}.pdf".format(plot_name),format = "pdf")
+        plt.savefig(f"{plot_name}_RA-DEC_diagram.pdf",format = "pdf")
 
 
 
@@ -894,18 +976,18 @@ class DeltaAnalyzer(object):
         plt.plot(ra_array,density_array/abs(ra_size*(maxdec-mindec)))
         plt.title("LOS density in function of RA")
         plt.grid()
-        plt.savefig(f"los_density_{plot_name}.pdf",format = "pdf")
+        plt.savefig(f"{plot_name}_los_density.pdf",format = "pdf")
         if(different_sign_region):
             plt.figure()
             plt.plot(ra_array,density_array_plus/abs(ra_size*maxdec))
             plt.title("LOS density in function of RA for DEC >= 0")
             plt.grid()
-            plt.savefig(f"los_density_dec_positive_{plot_name}.pdf",format = "pdf")
+            plt.savefig(f"{plot_name}_los_density_dec_positive.pdf",format = "pdf")
             plt.figure()
             plt.plot(ra_array,density_array_minus/abs(ra_size*mindec))
             plt.title("LOS density in function of RA for DEC < 0")
             plt.grid()
-            plt.savefig(f"los_density_dec_negative_{plot_name}.pdf",format = "pdf")
+            plt.savefig(f"{plot_name}_los_density_dec_negative.pdf",format = "pdf")
 
 
 
@@ -918,18 +1000,18 @@ class DeltaAnalyzer(object):
         plt.hist(ra,nb_bins)
         plt.title("LOS histogram in function of RA")
         plt.grid()
-        plt.savefig(f"los_histogram_{plot_name}.pdf",format = "pdf")
+        plt.savefig(f"{plot_name}_los_histogram.pdf",format = "pdf")
         if(different_sign_region):
             plt.figure()
             plt.hist(ra[dec >= 0],nb_bins)
             plt.title("LOS histogram in function of RA for DEC >= 0")
             plt.grid()
-            plt.savefig(f"los_histogram_dec_positive_{plot_name}.pdf",format = "pdf")
+            plt.savefig(f"{plot_name}_los_histogram_dec_positive.pdf",format = "pdf")
             plt.figure()
             plt.hist(ra[dec < 0],nb_bins)
             plt.title("LOS histogram in function of RA for DEC < 0")
             plt.grid()
-            plt.savefig(f"los_histogram_dec_negative_{plot_name}.pdf",format = "pdf")
+            plt.savefig(f"{plot_name}_los_histogram_dec_negative.pdf",format = "pdf")
 
 
 
@@ -964,8 +1046,9 @@ class DeltaAnalyzer(object):
                 plt.legend(legend)
             if(log_scale):
                 plot_name = plot_name + "_log"
-            plt.savefig(f"delta_map_histo_{plot_name}.pdf",format="pdf")
+            plt.savefig(f"{plot_name}_delta_map_histo.pdf",format="pdf")
         return(bins)
+
 
 
 
@@ -989,7 +1072,7 @@ class DeltaAnalyzer(object):
                 plt.legend(legend)
             if(log_scale):
                 plot_name = plot_name + "_log"
-            plt.savefig(f"sigma_map_histo_{plot_name}.pdf",format="pdf")
+            plt.savefig(f"{plot_name}_sigma_map_histo.pdf",format="pdf")
         return(bins)
 
 
@@ -1010,7 +1093,7 @@ class DeltaAnalyzer(object):
         if(plot_name is not None):
             if(legend is not None):
                 plt.legend(legend)
-            plt.savefig(f"sigmas_redshift_bin_{plot_name}.pdf",format="pdf")
+            plt.savefig(f"{plot_name}_sigmas_redshift_bin.pdf",format="pdf")
 
 
 
@@ -1029,7 +1112,7 @@ class DeltaAnalyzer(object):
         else :plt.plot(bin_centers, means, linestyle='none', marker='.',color='blue', label="dr8")
         plt.ylabel("flux contrast pixels")
         plt.xlabel("observed wavelength")
-        plt.savefig(f"delta_binned_statistics_obs_frame_{plot_name}.pdf",format="pdf")
+        plt.savefig(f"{plot_name}_delta_binned_statistics_obs_frame.pdf",format="pdf")
 
         plt.figure()
         bin_centers, means, errors = DeltaAnalyzer.hist_profile(list_RF,deltas,nb_bins, (np.min(list_RF),np.max(list_RF)), (np.min(deltas),np.max(deltas)))
@@ -1037,7 +1120,7 @@ class DeltaAnalyzer(object):
         else :plt.plot(bin_centers, means, linestyle='none', marker='.',color='blue', label="dr8")
         plt.ylabel("flux contrast pixels")
         plt.xlabel("rest frame wavelength")
-        plt.savefig(f"delta_binned_statistics_rest_frame_{plot_name}.pdf",format="pdf")
+        plt.savefig(f"{plot_name}_delta_binned_statistics_rest_frame.pdf",format="pdf")
 
 
 
@@ -1084,23 +1167,6 @@ class DeltaAnalyzer(object):
         print("Mean delta for 1 =",np.mean(delta))
         print("Mean delta for 1 =",np.mean(delta_comp))
 
-
-
-    def analyze_deltas(self,plot_name,plot_ra_dec=False,plot_histo_ra_dec=False,
-                       plot_density_ra_dec=False,plot_histo_delta=False,
-                       plot_snr=False,plot_binned_delta=False,
-                       plot_histo_sigma=False,plot_sigma_redshift=False,**kwargs):
-        (ra,dec,z,zqso,ids,sigmas,deltas)=self.get_ra_dec()
-
-        if(plot_ra_dec):DeltaAnalyzer.plot_ra_dec_diagram(ra,dec,plot_name,deg=self.degree,**kwargs)
-        if(plot_density_ra_dec):DeltaAnalyzer.plot_los_density(ra,dec,plot_name,**kwargs)
-        if(plot_histo_ra_dec):DeltaAnalyzer.plot_los_histogram(ra,dec,plot_name,**kwargs)
-
-        if(plot_histo_delta):DeltaAnalyzer.plot_histogram_deltas(deltas,plot_name=plot_name,**kwargs)
-        if(plot_histo_sigma):DeltaAnalyzer.plot_histogram_sigmas(sigmas,plot_name=plot_name,**kwargs)
-        if(plot_sigma_redshift):DeltaAnalyzer.plot_sigma_redshift(sigmas,z,plot_name=plot_name,**kwargs)
-        if(plot_snr):DeltaAnalyzer.plot_snr_diagram(sigmas,deltas,plot_name,**kwargs)
-        if(plot_binned_delta):DeltaAnalyzer.plot_delta_binned_stat(z,deltas,zqso,plot_name,**kwargs)
 
 
 
