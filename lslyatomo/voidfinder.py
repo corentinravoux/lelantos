@@ -711,105 +711,130 @@ class VoidFinder(object):
 
 class PlotVoid(object):
 
-    def __init__(self,pwd,void_catalog,nb_bins=30):
+    def __init__(self,pwd,void_catalog):
         self.pwd = pwd
         self.void = tomographic_objects.Catalog.init_catalog_from_fits(void_catalog, "void")
-        self.nb_bins = nb_bins
+
+    def load_catalog(self,comparison,value_name):
+        comparison_redshift,comparison_value = None,None
+        if(comparison is not None):
+            comparison_value = []
+            comparison_redshift = []
+            for i in range(len(comparison)):
+                catalog = tomographic_objects.Catalog.init_catalog_from_fits(comparison[i], "void")
+                comparison_value.append(getattr(catalog,value_name))
+                comparison_redshift.append(catalog.redshift)
+        value = getattr(self.void,value_name)
+        return(value,comparison_value,comparison_redshift)
 
 
-
-    def plot_histo_radius(self,rmin,rmax,name,norm=False):
-        plt.figure()
-        bins = np.linspace(rmin,rmax, self.nb_bins)
-        plt.hist(self.void.radius, bins, alpha=1, label='x',density=norm)
-        plt.grid()
-        plt.ylabel("Number of voids")
-        plt.xlabel("Radius of the void in Mpc.h-1")
-        plt.savefig(os.path.join(self.pwd,f"{name}_histo_radius.pdf"), format ="pdf")
-
-
-    def plot_radius_redshift(self,name):
-        redshift = self.void.redshift
-        plt.figure()
-        plt.plot(redshift,self.void.radius,"b.")
-        plt.xlabel("Redshift")
-        plt.ylabel("Radius size")
-        plt.grid()
-        plt.savefig(os.path.join(self.pwd,f"{name}_radius_redshift.pdf"), format ="pdf")
-
-    def plot_meanradius_redshift(self,name):
-        redshift_catalog = self.void.redshift
-        maxredshift = np.max(redshift_catalog)
-        minredshift = np.min(redshift_catalog)
-        redshift = np.linspace(minredshift,maxredshift,self.nb_bins)
-        mean_radius = []
-        for i in range(self.nb_bins):
-            mask = (redshift_catalog < minredshift + (i+1/self.nb_bins)*((maxredshift - minredshift)))
-            mask &= (redshift_catalog > minredshift + (i/self.nb_bins)*((maxredshift - minredshift)))
-            mean_radius.append(np.mean(self.void.radius[mask]))
-        plt.figure()
-        plt.plot(redshift,mean_radius,"b.")
-        plt.xlabel("Redshift")
-        plt.ylabel("Radius size")
-        plt.grid()
-        plt.savefig(os.path.join(self.pwd,f"{name}_meanradius_redshift.pdf"), format ="pdf")
-
-
-    def plot_histo_redshift(self,name):
-        redshift = self.void.redshift
-        plt.figure()
-        plt.hist(redshift,self.nb_bins)
-        plt.xlabel("Redshift")
-        plt.ylabel("Number of voids")
-        plt.grid()
-        plt.savefig(os.path.join(self.pwd,f"{name}_histo_redshift.pdf"), format ="pdf")
-
-
-    def load_and_plot_comparison(self,catalog_name,name,legend,rmin,rmax,norm=False,log_scale=True,factor_add=None,expo_fit_rmin=None,other_catalogs=None):
-        if(other_catalogs is not None):
-            other_radius = []
-            for i in range(len(other_catalogs)):
-                other_void = tomographic_objects.Catalog.init_catalog_from_fits(other_catalogs[i], "void")
-                if(factor_add is not None):
-                    other_radius.apped(other_void.radius*factor_add[i])
-                else:
-                    other_radius.apped(other_void.radius)
+    def plot_histo(self,value_name,name,comparison=None,
+                   comparison_legend=None,loaded_value=None,
+                   **kwargs):
+        if(loaded_value is None):
+            (value,comparison_value,comparison_redshift) = self.load_catalog(comparison,value_name)
         else:
-            other_radius = None
-        catalog = tomographic_objects.Catalog.init_catalog_from_fits(catalog_name, "void")
-        KS_stat, p_value = ks_2samp(self.void.radius,catalog.radius)
-        self.plot_void_histogram_comparison(catalog.radius,name,legend,rmin,rmax,norm=norm,log_scale=log_scale,expo_fit_rmin=expo_fit_rmin,other_radius=other_radius)
-        return(KS_stat, p_value)
+            value , comparison_value = loaded_value, comparison
+        utils.save_histo(self.pwd,value,value_name,
+                         name,comparison=comparison_value,
+                         comparison_legend=comparison_legend,
+                         **kwargs)
 
-
-    def plot_void_histogram_comparison(self,radius2,name,legend,rmin,rmax,norm=False,log_scale=True,expo_fit_rmin=None,other_radius=None):
-        plt.figure()
-        bins = np.linspace(rmin,rmax, self.nb_bins)
-        (n1, bins1, patches1)  = plt.hist(self.void.radius, bins, alpha=0.5, label=legend[0],density=norm)
-        (n2, bins2, patches2)  = plt.hist(radius2, bins, alpha=0.5, label=legend[0],density=norm)
-        if(other_radius is not None):
-            for i in range(len(other_radius)):
-                (n_other, bins_other, patches_other)  = plt.hist(other_radius[i], bins, label=legend[i+1],histtype='step',linestyle='dashed',ec="k")
-        if(expo_fit_rmin is not None):
-            bin_center = (bins1[1:] + bins1[0:-1]) / 2
-            mask = bin_center>expo_fit_rmin
-            n1,n2,bins_fit = n1[mask],n2[mask],bin_center[mask]
-            fit_function = lambda x,a,b : np.exp(a*x+b)
-            fit = curve_fit(fit_function,bins_fit,n1)
-            fit2 = curve_fit(fit_function,bins_fit,n2)
-            plt.plot(bins_fit,fit_function(bins_fit,*fit[0]),'r')
-            plt.plot(bins_fit,fit_function(bins_fit,*fit2[0]),'b')
-            perr = np.sqrt(np.diag(fit[1]))
-            perr2 = np.sqrt(np.diag(fit2[1]))
+    def plot_mean_redshift_dependence(self,value_name,name,
+                                      comparison=None,
+                                      comparison_redshift=None,
+                                      comparison_legend=None,
+                                      loaded_value=None,
+                                      **kwargs):
+        if(loaded_value is None):
+            (value,comparison_value,comparison_redshift) = self.load_catalog(comparison,value_name)
         else:
-            perr,perr2 = None,None
-        if(log_scale):
-            plt.yscale("log")
-        plt.grid()
-        plt.xlabel("Void radius in Mpc.h" + r"$^{-1}$")
-        plt.legend(legend)
-        if(log_scale):
-            plt.savefig(os.path.join(self.pwd,"histogram_voids_radius_"+ name + "log.pdf"),format="pdf")
-        else :
-            plt.savefig(os.path.join(self.pwd,"histogram_voids_radius_"+ name + "lin.pdf"),format="pdf")
-        return(perr,perr2)
+            value , comparison_value = loaded_value, comparison
+        redshift = self.void.redshift
+        utils.save_mean_redshift_dependence(self.pwd,value,redshift,
+                                            value_name,name,
+                                            comparison=comparison_value,
+                                            comparison_redshift=comparison_redshift,
+                                            comparison_legend=None,
+                                            **kwargs)
+
+    def plot_redshift_dependence(self,value_name,name,
+                                 comparison=None,
+                                 comparison_redshift=None,
+                                 comparison_legend=None,
+                                 loaded_value=None,
+                                 **kwargs):
+        if(loaded_value is None):
+            (value,comparison_value,comparison_redshift) = self.load_catalog(comparison,value_name)
+        else:
+            value , comparison_value = loaded_value, comparison
+        redshift = self.void.redshift
+        utils.save_redshift_dependence(self.pwd,value,redshift,
+                                            value_name,name,
+                                            comparison=comparison_value,
+                                            comparison_redshift=comparison_redshift,
+                                            comparison_legend=None,
+                                            **kwargs)
+
+
+
+    def plot(self,value_names,name,
+             comparison=None,comparison_legend=None,
+             histo=True,mean_z_dependence=True,
+             z_dependence=True,
+             **kwargs):
+        for value_name in value_names:
+            (value,comparison_value,comparison_redshift) = self.load_catalog(comparison,value_name)
+            if(histo):
+                self.plot_histo(value_name,name,
+                                comparison=comparison_value,
+                                comparison_legend=comparison_legend,
+                                loaded_value=value,
+                                **kwargs)
+            if(mean_z_dependence)&(value_name!="redshift"):
+                self.plot_mean_redshift_dependence(value_name,name,
+                                                   comparison=comparison_value,
+                                                   comparison_redshift=comparison_redshift,
+                                                   comparison_legend=comparison_legend,
+                                                   loaded_value=value,
+                                                   **kwargs)
+            if(z_dependence)&(value_name!="redshift"):
+                self.plot_redshift_dependence(value_name,name,
+                                              comparison=comparison_value,
+                                              comparison_redshift=comparison_redshift,
+                                              comparison_legend=comparison_legend,
+                                              loaded_value=value,
+                                              **kwargs)
+
+
+
+    def compute_ks_stat(self,comparison):
+        (radius,comparison) = self.load_catalog(comparison,"radius")
+        KS_stat, p_value = ks_2samp(radius,comparison[0])
+        return(KS_stat,p_value)
+
+
+
+    def plot_radius_histo_fit_expo(self,expo_fit_rmin=0,comparison=None,**kwargs):
+        fit_function = lambda x,a,b : np.exp(a*x+b)
+
+        (radius,comparison) = self.load_catalog(comparison,"radius")
+        (name, n, bins, patches) = utils.plot_histo(radius,"radius","",**kwargs)
+        bin_center = (bins[1:] + bins[0:-1]) / 2
+        mask = bin_center>expo_fit_rmin
+        n,bins_fit = n[mask],bin_center[mask]
+        fit = curve_fit(fit_function,bins_fit,n)
+        plt.plot(bins_fit,fit_function(bins_fit,*fit[0]),'r')
+        perr = np.sqrt(np.diag(fit[1]))
+
+        perr_comparison = []
+        if(comparison is not None):
+            for i in range(len(comparison)):
+                (name, n, bins, patches) = utils.plot_histo(comparison[i],"radius","",**kwargs)
+                bin_center = (bins[1:] + bins[0:-1]) / 2
+                mask = bin_center>expo_fit_rmin
+                n,bins_fit = n[mask],bin_center[mask]
+                fit = curve_fit(fit_function,bins_fit,n)
+                plt.plot(bins_fit,fit_function(bins_fit,*fit[0]),'b')
+                perr_comparison.append(np.sqrt(np.diag(fit[1])))
+        return(perr,perr_comparison)
