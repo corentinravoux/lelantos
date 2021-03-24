@@ -1392,6 +1392,8 @@ class Catalog(object):
             mask_select &= (x<coord_max[0])  & (y<coord_max[1]) & (z<coord_max[2])
         return(mask_select)
 
+
+
     def cut_z_catalog(self,z_min=None,z_max=None):
         z = self.coord.copy()
         mask_select = np.full(self.coord.shape,True)
@@ -1912,10 +1914,14 @@ class VoidCatalog(Catalog):
 
 
 
-    def cut_catalog_void(self,method_cut,coord_min=None,coord_max=None,
+    def cut_catalog_void(self,method_cut,
+                         coord_min=None,
+                         coord_max=None,
                          cut_crossing_param=None,
-                         cut_radius=None,distance_map_name=None,
-                         distance_map_prop=None,distance_map_param=None,
+                         cut_radius=None,
+                         distance_map_name=None,
+                         distance_map_prop=None,
+                         distance_map_param=None,
                          distance_map_percent=None):
         mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=False)
         string_to_add = ""
@@ -1926,7 +1932,7 @@ class VoidCatalog(Catalog):
                 method_cut = [method_cut]
 
         if("CROSSING" in method_cut):
-            if (cut_crossing_param is None) : raise KeyError("Crossing parameteris not computed. Please do so with compute_additional_stats()")
+            if (cut_crossing_param is None) : raise KeyError("Crossing parameter is not computed. Please do so with compute_additional_stats()")
             mask_select &= self.cut_crossing_parameter(cut_crossing_param)
             string_to_add = string_to_add + f"_crossing{cut_crossing_param}"
         if("RADIUS" in method_cut):

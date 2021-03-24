@@ -48,18 +48,25 @@ def compute_additional_stats(catalog_name,pixel_name):
 
 
 
-def cut_catalog(pwd,catalog_name,method_cut,cut_crossing_param=None,
-                cut_radius=None,distance_map_name=None,
-                distance_map_prop=None,distance_map_param=None,
-                distance_map_percent=None,cut_border_prop=None):
+def cut_catalog(pwd,catalog_name,method_cut,
+                coord_min=None,
+                coord_max=None,
+                cut_crossing_param=None,
+                cut_radius=None,
+                distance_map_name=None,
+                distance_map_prop=None,
+                distance_map_param=None,
+                distance_map_percent=None):
     void_cut = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
-    cut_catalog_name = void_cut.cut_catalog_void(method_cut,cut_crossing_param=cut_crossing_param,
+    cut_catalog_name = void_cut.cut_catalog_void(method_cut,
+                                                 coord_min=coord_min,
+                                                 coord_max=coord_max,
+                                                 cut_crossing_param=cut_crossing_param,
                                                  cut_radius=cut_radius,
                                                  distance_map_name=distance_map_name,
                                                  distance_map_prop=distance_map_prop,
                                                  distance_map_param=distance_map_param,
-                                                 distance_map_percent=distance_map_percent,
-                                                 cut_border_prop=cut_border_prop)
+                                                 distance_map_percent=distance_map_percent)
     void_cut.name = os.path.join(pwd,cut_catalog_name)
     void_cut.write()
 
