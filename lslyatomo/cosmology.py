@@ -64,9 +64,6 @@ def get_deltas(namefile,center_ra=True,pk1d_type=True):
            deltas)
 
 
-
-
-
 def get_merged_multiple_exposure_deltas(namefile):
     """ Merge deltas with repeated observation"""
     # Pack LOS by Id in the dict Deltas
@@ -216,6 +213,234 @@ def delete_missing_pixels(listz,listsigmas,listdelta):
 
 
 
+class DeltaModifier(object):
+
+    def __init__(self,pwd,delta_path,center_ra=True,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None):
+        self.pwd = pwd
+        self.delta_path = delta_path
+        self.center_ra = center_ra
+        self.dec_cut_min = dec_cut_min
+        self.dec_cut_max = dec_cut_max
+        self.ra_cut_min = ra_cut_min
+        self.ra_cut_max = ra_cut_max
+        self.z_cut_min = z_cut_min
+        self.z_cut_max = z_cut_max
+
+
+
+
+    # CR - not a proper shuffle, need to rethink the way Delta class is done at one point
+
+    def shuffle_deltas(self,name_out,other_delta_path=None,other_name_out=None):
+
+        namefile = np.sort(glob.glob(os.path.join(self.delta_path,"delta-*.fits*")))
+        namefile_other = None
+        if(other_delta_path is not None):
+            namefile_other = np.sort(glob.glob(os.path.join(other_delta_path,"delta-*.fits*")))
+
+        (delta,ivar,delta_other,weight_other) = self.get_delta_sigma_array(namefile,namefile_other=namefile_other)
+
+
+        seed = np.random.randint(10000000)
+        np.random.seed(seed)
+        ivar_rand = np.random.permutation(ivar)
+        delta_rand = np.random.permutation(delta)
+        if(other_delta_path is not None):
+            np.random.seed(seed)
+            weight_other_rand = np.random.permutation(weight_other)
+            delta_other_rand = np.random.permutation(delta_other)
+
+        ibegin = 0
+        for i in range(len(namefile)):
+            delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
+            delta_tomo.read()
+            delta_obj_list = []
+            for j in range(1,len(delta_tomo.delta_file)):
+                delta_line = delta_tomo.read_line(j)
+                delta_line.de  = delta_rand[ibegin:ibegin+len(delta_line.de)]
+                delta_line.iv  = ivar_rand[ibegin:ibegin+len(delta_line.iv)]
+                ibegin = ibegin + len(delta_line.de)
+                delta_obj_list.append(delta_line)
+            name_delta = os.path.join(self.delta_path,name_out + namefile[i].split("/")[-1].split("delta")[-1])
+            new_delta_tomo = tomographic_objects.Delta(name=name_delta,pk1d_type=True)
+            new_delta_tomo.delta_array = delta_obj_list
+            new_delta_tomo.write_from_delta_list()
+
+        if(other_delta_path is not None):
+            ibegin = 0
+            for i in range(len(namefile_other)):
+                delta_tomo_other = tomographic_objects.Delta(name=namefile_other[i],pk1d_type=False)
+                delta_tomo_other.read()
+                delta_obj_list = []
+                for j in range(1,len(delta_tomo.delta_file)):
+                    delta_line = delta_tomo_other.read_line(j)
+                    delta_line.de  = delta_other_rand[ibegin:ibegin+len(delta_line.de)]
+                    delta_line.we  = weight_other_rand[ibegin:ibegin+len(delta_line.we)]
+                    ibegin = ibegin + len(delta_line.de)
+                    delta_obj_list.append(delta_line)
+                name_delta = os.path.join(other_delta_path,other_name_out + namefile_other[i].split("/")[-1].split("delta")[-1])
+                new_delta_tomo = tomographic_objects.Delta(name=name_delta,pk1d_type=True)
+                new_delta_tomo.delta_array = delta_obj_list
+                new_delta_tomo.write_from_delta_list()
+
+
+
+
+    def get_delta_sigma_array(self,namefile,namefile_other=None):
+        weight_other,delta_other= None,None
+        if(namefile_other is not None):
+            weight_other,delta_other = [],[]
+        ivar,delta = [],[]
+        for i in range(len(namefile)):
+            delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
+            delta_tomo.read()
+            for j in range(1,len(delta_tomo.delta_file)):
+                delta_line = delta_tomo.read_line(j)
+                ivar.append(tomographic_objects.Delta.ivar(delta_line))
+                delta.append(tomographic_objects.Delta.delta(delta_line))
+            if(namefile_other is not None):
+                delta_tomo_other = tomographic_objects.Delta(name=namefile_other[i],pk1d_type=False)
+                delta_tomo_other.read()
+                for j in range(1,len(delta_tomo_other.delta_file)):
+                    delta_line = delta_tomo_other.read_line(j)
+                    weight_other.append(tomographic_objects.Delta.weights(delta_line))
+                    delta_other.append(tomographic_objects.Delta.delta(delta_line))
+        ivar = np.concatenate(ivar,axis=0)
+        delta = np.concatenate(delta,axis=0)
+        if(namefile_other is not None):
+            weight_other = np.concatenate(weight_other,axis=0)
+            delta_other = np.concatenate(delta_other,axis=0)
+        return(delta,ivar,delta_other,weight_other)
+
+
+    def subsample_deltas(self,name_out,number_cut,random_density_parameter=False,number_repeat=1,iterative_selection_parameters=None):
+        deltas = self.get_new_healpix(number_cut,random_density_parameter=random_density_parameter,number_repeat=number_repeat,iterative_selection_parameters=None)
+        self.save_deltas(deltas,name_out,number_cut)
+
+
+    def save_deltas(self,deltas,name_out,number_cut):
+        for cut in range(number_cut):
+            delta = tomographic_objects.Delta(name=f"{name_out}_{cut}.fits",delta_file=deltas[cut])
+            delta.write_from_delta_list()
+
+
+    def get_new_healpix(self,number_cut,random_density_parameter=None,number_repeat=1,iterative_selection_parameters=None):
+        if(random_density_parameter is None):
+            deltas = self.create_healpix(number_cut,random=None,return_len_ra=False)
+        else :
+            if (number_repeat == 1):
+                deltas = self.create_healpix(number_cut,random=random_density_parameter,return_len_ra=False)
+            else :
+                if(iterative_selection_parameters is None):return KeyError("Please dictionary parameter for the iterative selection")
+                deltas = self.iterate_healpix_creation(number_cut,random_density_parameter,number_repeat,iterative_selection_parameters)
+        return(deltas)
+
+
+    def create_healpix(self,number_cut,random=None,return_len_ra=False):
+        namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits*"))
+        deltas ={}
+        ra_array = []
+        dec_array = []
+        for cut in range(number_cut):
+            deltas[cut]=[]
+        for i in range(len(namefile)) :
+            delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
+            delta_tomo.read()
+            for j in range(1,len(delta_tomo.delta_file)):
+                delta = delta_tomo.read_line(j)
+                if(self.center_ra):
+                    if(delta.ra *180 /np.pi  > 180):
+                        ra =((delta.ra * 180 / np.pi)-360)
+                    else:
+                        ra = ((delta.ra * 180 / np.pi))
+                else :
+                    ra = ((delta.ra * 180 / np.pi))
+                dec = (delta.dec* 180 / np.pi)
+                if((ra>self.ra_cut_min)&(ra<self.ra_cut_max)&(dec>self.dec_cut_min)&(dec<self.dec_cut_max)):
+                    ra_array.append(ra)
+                    dec_array.append(dec)
+                    for cut in range(number_cut):
+                        interval_ra =  ((cut)/(number_cut))*(self.ra_cut_max-self.ra_cut_min) + self.ra_cut_min  , ((cut + 1)/(number_cut))*(self.ra_cut_max-self.ra_cut_min) + self.ra_cut_min
+                        if((ra>interval_ra[0])&(ra<=interval_ra[1])):
+                            if(self.center_ra):
+                                delta.ra = delta.ra - 2*np.pi
+                            deltas[cut].append(delta)
+            delta_tomo.close()
+        if (random is not None):
+            deltas = self.randomize_choice_of_los(deltas,random,number_cut,len(ra_array))
+        if(return_len_ra):
+            return(deltas,len(ra_array))
+        else :
+            return(deltas)
+
+
+    def randomize_choice_of_los(self,deltas_dict,random,number_cut,number_ra):
+        deltas = deltas_dict.copy()
+        density = number_ra/((self.ra_cut_max-self.ra_cut_min)*(self.dec_cut_max-self.dec_cut_min))
+        utils.Logger.add("density before random choice ="  + str(density))
+        random_cut = random/density
+        ra_random = []
+        dec_random = []
+        for cut in range(number_cut) :
+            number_of_delta_to_select = int(round(len(deltas[cut])*random_cut,0))
+            deltas[cut] = sample(deltas[cut],number_of_delta_to_select)
+            for i in range(len(deltas[cut])):
+                ra_random.append(deltas[cut][i].ra*180 /np.pi)
+                dec_random.append(deltas[cut][i].dec*180 /np.pi)
+        density = len(ra_random)/((self.ra_cut_max-self.ra_cut_min)*(self.dec_cut_max-self.dec_cut_min))
+        utils.Logger.add("density after random choice ="  + str(density))
+        return(deltas)
+
+
+
+    def iterate_healpix_creation(self,number_cut,random_density_parameter,number_repeat,iterative_selection_parameters,property_file_name):
+        """ To optimize & test"""
+        density_names = iterative_selection_parameters["density_names"]
+        dperp_names = iterative_selection_parameters["separation_names"]
+        Om = iterative_selection_parameters["Om"]
+        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(Om)
+        coordinate_transform = iterative_selection_parameters["coordinate_transform"]
+        suplementary_parameters = utils.return_suplementary_parameters(coordinate_transform,zmin=self.z_cut_min,zmax=self.z_cut_max)
+        density_ref ={}
+        dperp_ref = {}
+        for cut in range(number_cut):
+            density_ref[cut] = PixelAnalizer.read_density_file(density_names[cut])[1]
+            dperp_ref[cut] = PixelAnalizer.read_dperp_file(dperp_names[cut])[1]
+        min_density, min_dperp = np.inf,np.inf
+        delta_to_keep = {}
+        utils.Logger.add("Beginning of the random iteration selection")
+        deltas_dict,number_ra = self.create_healpix(number_cut,random=False,return_len_ra=True)
+        deltas_random={}
+        for i in range(number_repeat):
+            utils.Logger.add("repeat "+ str(i))
+            utils.Logger.add("deltas "+ str(i) + " computed")
+            diff_dperp , diff_density = [], []
+            deltas_random = self.randomize_choice_of_los(deltas_dict,random_density_parameter,number_cut,number_ra)
+            for cut in range(number_cut):
+                delta_file = tomographic_objects.Delta(delta_file=None,delta_array=deltas_random[cut],name="delta_" + str(cut) + "_to_test.pickle")
+                delta_file.write_from_delta_list()
+                namefile = "delta_" + str(cut) + "_to_test.pickle"
+                (ra,dec,z,zqso,ids,sigmas,deltas) = get_deltas(namefile)
+                sky_deltas = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j]] for i in range(len(ra)) for j in range(len(z[i]))])
+                sky_deltas = sky_deltas[utils.cut_sky_catalog(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],ramin=self.ra_cut_min,ramax=self.ra_cut_max,decmin=self.dec_cut_min,decmax=self.dec_cut_max,zmin=self.z_cut_min,zmax=self.z_cut_max)]
+                cartesian_deltas = np.zeros(sky_deltas.shape)
+                cartesian_deltas[:,0],cartesian_deltas[:,1],cartesian_deltas[:,2] = utils.convert_sky_to_cartesian(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],coordinate_transform,rcomov=rcomov,distang=distang,suplementary_parameters=suplementary_parameters)
+                pixel = tomographic_objects.Pixel.init_from_property_files(property_file_name,pixel_array=cartesian_deltas,name=None)
+                pixel_analyzer = PixelAnalizer(self.pwd,pixel=pixel)
+                (zpar,dperpz,densityz) = pixel_analyzer.compute_plot_mean_distance_density("",plot=False)
+                diff_dperp.append(np.mean(abs(np.array(dperpz) -np.array(dperp_ref[cut]))))
+                diff_density.append(np.mean(abs(np.array(densityz) -np.array(density_ref[cut]))))
+            utils.Logger.add("Mean difference in term LOS density : {}".format(np.mean(diff_density)))
+            utils.Logger.add("Mean difference in term of Mean LOS separation : {}".format(np.mean(diff_dperp)))
+            if((np.mean(diff_density)<min_density)&(np.mean(diff_dperp)<min_dperp)):
+                utils.Logger.add("Better at the repeat " + str(i))
+                min_density = np.mean(diff_density)
+                min_dperp = np.mean(diff_dperp)
+                delta_to_keep = deltas_random
+        for cut in range(number_cut):
+            os.remove("delta_" + str(cut) + "_to_test.pickle")
+        utils.Logger.add("End of the random iteration selection")
+        return(delta_to_keep)
 
 
 
@@ -816,143 +1041,136 @@ class DeltaAnalyzer(object):
                                                         decmax=self.dec_cut_max,
                                                         zmin=self.z_cut_min,
                                                         zmax=self.z_cut_max)]
-        z,zqso,ids,sigmas,deltas = (pixel_coord[:,2],pixel_coord[:,5],
-                                    pixel_coord[:,6],pixel_coord[:,3],
-                                    pixel_coord[:,4])
+        (redshift,
+         redshift_qso,
+         id,sigma,delta) = (pixel_coord[:,2],pixel_coord[:,5],
+                            pixel_coord[:,6],pixel_coord[:,3],
+                            pixel_coord[:,4])
         unique_coord = np.unique(pixel_coord[:,0:2],axis=0)
         ra = unique_coord[:,0]
         dec = unique_coord[:,1]
         if(self.degree): ra,dec = np.degrees(ra),np.degrees(dec)
-        dict_value = {"ra" : ra,
-                      "dec" : dec,
-                      "redshift" : z,
-                      "redshift_qso" : zqso,
-                      "id" : ids,
-                      "sigma" : sigmas,
-                      "delta" : deltas}
-        return(dict_value)
+        snr = np.abs((delta + 1)/sigma)
+        return(ra,dec,redshift,redshift_qso,id,sigma,delta,snr)
 
 
-    def get_all_ra_dec(self,comparison=None):
-        return()
+    def get_ra_dec_comparison(self,comparison):
+        if(comparison is None):
+            return(None,None,None,None,None,None,None,None)
+        (ra_comp,dec_comp,
+         redshift_comp,
+         redshift_qso_comp,
+         id_comp,
+         sigma_comp,
+         delta_comp,
+         snr_comp) = [],[],[],[],[],[],[],[]
+        for i in range(len(comparison)):
+            (ra,dec,redshift,redshift_qso,id,sigma,delta,snr) = self.get_ra_dec(comparison[i])
+            ra_comp.append(ra)
+            dec_comp.append(dec)
+            redshift_comp.append(redshift)
+            redshift_qso_comp.append(redshift_qso)
+            id_comp.append(id)
+            sigma_comp.append(sigma)
+            delta_comp.append(delta)
+            snr_comp.append(snr)
+        return(ra_comp,dec_comp,
+               redshift_comp,
+               redshift_qso_comp,
+               id_comp,
+               sigma_comp,
+               delta_comp,
+               snr_comp)
 
-    def load_deltas(self,comparison,value_name):
-        comparison_redshift,comparison_value = None,None
-        if(comparison is not None):
-            comparison_value = []
-            comparison_redshift = []
-            for i in range(len(comparison)):
-                catalog = tomographic_objects.Catalog.init_catalog_from_fits(comparison[i], "void")
-                comparison_value.append(getattr(catalog,value_name))
-                comparison_redshift.append(catalog.redshift)
-        value = getattr(self.void,value_name)
-        return(value,comparison_value,comparison_redshift)
-
-
-    def plot_histo(self,value,value_name,name,comparison=None,
-                   comparison_legend=None,
-                   **kwargs):
-        utils.save_histo(self.pwd,value,value_name,
-                         name,comparison=comparison,
-                         comparison_legend=comparison_legend,
-                         **kwargs)
 
     def plot(self,value_names,name,
              comparison=None,comparison_legend=None,
              histo=True,mean_z_dependence=True,
-             z_dependence=True,
+             z_dependence=True,ra_dec_plots=True,
+             print_stats=False,
              **kwargs):
-        (ra,dec,z,zqso,ids,sigmas,deltas)=self.get_ra_dec()
-        dict_value
+        (ra,dec,redshift,redshift_qso,
+         id,sigma,delta,snr)=self.get_ra_dec(self.delta_path)
+        (ra_comp,dec_comp,redshift_comp,
+         redshift_qso_comp,id_comp,
+         sigma_comp,delta_comp,
+         snr_comp)=self.get_ra_dec_comparison(comparison)
+
         for value_name in value_names:
+            value = locals()[value_name]
+            comparison_value = locals()[value_name +"_comp"]
+            lambda_rest=utils.return_key(kwargs,f"{value_name}_lambda_rest",False)
+            if(lambda_rest):
+                kwargs[f"{value_name}_redshift_qso"] = redshift_qso
             if(histo):
                 utils.save_histo(self.pwd,value,value_name,
-                                 name,comparison=comparison,
+                                 name,comparison=comparison_value,
                                  comparison_legend=comparison_legend,
                                  **kwargs)
-                self.plot_histo(value_name,name,
-                                comparison=comparison_value,
-                                comparison_legend=comparison_legend,
-                                loaded_value=value,
-                                **kwargs)
-            if(mean_z_dependence)&(value_name!="redshift"):
-                self.plot_mean_redshift_dependence(value_name,name,
-                                                   comparison=comparison_value,
-                                                   comparison_redshift=comparison_redshift,
-                                                   comparison_legend=comparison_legend,
-                                                   loaded_value=value,
-                                                   **kwargs)
-            if(z_dependence)&(value_name!="redshift"):
-                self.plot_redshift_dependence(value_name,name,
-                                              comparison=comparison_value,
-                                              comparison_redshift=comparison_redshift,
-                                              comparison_legend=comparison_legend,
-                                              loaded_value=value,
-                                              **kwargs)
+            if(mean_z_dependence)&(value_name not in ["redshift","ra","dec"]):
+                utils.save_mean_redshift_dependence(self.pwd,value,redshift,
+                                                    value_name,name,
+                                                    comparison=comparison_value,
+                                                    comparison_redshift=redshift_comp,
+                                                    comparison_legend=None,
+                                                    **kwargs)
 
-
-
-    def analyze_deltas(self,plot_name,plot_ra_dec=False,plot_histo_ra_dec=False,
-                       plot_density_ra_dec=False,plot_histo_delta=False,
-                       plot_snr=False,plot_binned_delta=False,
-                       plot_histo_sigma=False,plot_sigma_redshift=False,**kwargs):
-        (ra,dec,z,zqso,ids,sigmas,deltas)=self.get_ra_dec()
-
-        if(plot_ra_dec):DeltaAnalyzer.plot_ra_dec_diagram(ra,dec,plot_name,deg=self.degree,**kwargs)
-        if(plot_density_ra_dec):DeltaAnalyzer.plot_los_density(ra,dec,plot_name,**kwargs)
-        if(plot_histo_ra_dec):DeltaAnalyzer.plot_los_histogram(ra,dec,plot_name,**kwargs)
-
-        if(plot_histo_delta):DeltaAnalyzer.plot_histogram_deltas(deltas,plot_name=plot_name,**kwargs)
-        if(plot_histo_sigma):DeltaAnalyzer.plot_histogram_sigmas(sigmas,plot_name=plot_name,**kwargs)
-        if(plot_sigma_redshift):DeltaAnalyzer.plot_sigma_redshift(sigmas,z,plot_name=plot_name,**kwargs)
-        if(plot_snr):DeltaAnalyzer.plot_snr_diagram(sigmas,deltas,plot_name,**kwargs)
-        if(plot_binned_delta):DeltaAnalyzer.plot_delta_binned_stat(z,deltas,zqso,plot_name,**kwargs)
+            if(z_dependence)&(value_name not in ["redshift","ra","dec"]):
+                utils.save_redshift_dependence(self.pwd,value,redshift,
+                                                    value_name,name,
+                                                    comparison=comparison_value,
+                                                    comparison_redshift=redshift_comp,
+                                                    comparison_legend=None,
+                                                    **kwargs)
+        if(ra_dec_plots):
+            self.plot_ra_dec(ra,dec,name,
+                             comparison=None,comparison_legend=None,
+                             **kwargs)
+        if((comparison is not None)&(print_stats)):
+            self.stat_comparison(redshift,redshift_comp,sigma,sigma_comp,delta,delta_comp)
 
 
 
 
+    def plot_ra_dec(self,ra,dec,name,
+                    comparison_ra=None,
+                    comparison_dec=None,
+                    comparison_legend=None,
+                    **kwargs):
 
-    @staticmethod
-    def plot_snr_diagram(sigmas,deltas,plot_name,**kwargs):
-        nb_bins = utils.return_key(kwargs,"nb_bins",100)
+        utils.save_ra_dec(self.pwd,ra,dec,name,
+                          comparison_ra=comparison_ra,
+                          comparison_dec=comparison_dec,
+                          comparison_legend=comparison_legend,
+                          **kwargs)
 
-        plt.figure()
-        signal_noise = abs((deltas + 1)/sigmas)
-        plt.hist(signal_noise,nb_bins,density=True)
-        plt.xlabel("signal-to-noise ratio")
-        plt.savefig(f"{plot_name}.pdf",format="pdf")
+        DeltaAnalyzer.plot_los_density(self.pwd,ra,dec,name,**kwargs)
 
 
-    @staticmethod
-    def plot_ra_dec_diagram(ra,dec,plot_name,**kwargs):
-        nb_cut = utils.return_key(kwargs,"nb_cut",None)
-        deg = utils.return_key(kwargs,"deg",True)
 
-        plt.figure(figsize=(7,3.5))
-        plt.plot(ra,dec,'b.', markersize=1.5)
-        if(nb_cut is not None):
-            ramax,ramin,decmax,decmin = np.max(ra),np.min(ra),np.max(dec),np.min(dec)
-            interval_ra_array = []
-            for cut in range(nb_cut):
-                interval_ra_array.append([((cut)/(nb_cut))*(ramax-ramin) + ramin  , ((cut + 1)/(nb_cut))*(ramax-ramin) + ramin])
-            for i in range(len(interval_ra_array)):
-                plt.plot([interval_ra_array[i][0],interval_ra_array[i][1]],[decmin,decmin],color="orange", linewidth=2)
-                plt.plot([interval_ra_array[i][0],interval_ra_array[i][1]],[decmax,decmax],color="orange", linewidth=2)
-                plt.plot([interval_ra_array[i][0],interval_ra_array[i][0]],[decmin,decmax],color="orange", linewidth=2)
-                plt.plot([interval_ra_array[i][1],interval_ra_array[i][1]],[decmin,decmax],color="orange", linewidth=2)
-        if(deg):
-            plt.xlabel("RA [deg] (J2000)")
-            plt.ylabel("DEC [deg] (J2000)")
-        else:
-            plt.xlabel("RA [rad] (J2000)")
-            plt.ylabel("DEC [rad] (J2000)")
-        plt.grid()
-        plt.savefig(f"{plot_name}_RA-DEC_diagram.pdf",format = "pdf")
+
+
+    def stat_comparison(self,redshift,redshift_comp,sigma,sigma_comp,delta,delta_comp):
+        print("Redshift interval =",np.max(redshift),np.min(redshift))
+        for i in range(len(redshift_comp)):
+            print(f"Redshift interval for comp {i} =",np.max(redshift_comp[i]),np.min(redshift_comp[i]))
+        print("Maximal sigma =",np.max(sigma))
+        for i in range(len(sigma_comp)):
+            print(f"Maximal sigma for comp {i} =",np.max(sigma_comp[i]))
+        print("Mean sigma =",np.mean(sigma))
+        for i in range(len(sigma_comp)):
+            print(f"Mean sigma for comp {i} =",np.mean(sigma_comp[i]))
+        print("Median sigma =",np.median(sigma))
+        for i in range(len(sigma_comp)):
+            print(f"Median sigma for comp {i} =",np.median(sigma_comp[i]))
+        print("Mean delta =",np.mean(delta))
+        for i in range(len(delta_comp)):
+            print(f"Mean delta for comp {i} =",np.mean(delta_comp[i]))
 
 
 
     @staticmethod
-    def plot_los_density(ra,dec,plot_name,**kwargs):
+    def plot_los_density(pwd,ra,dec,plot_name,**kwargs):
         nb_interval = utils.return_key(kwargs,"nb_interval",20)
         different_sign_region = utils.return_key(kwargs,"different_sign_region",False)
 
@@ -987,335 +1205,22 @@ class DeltaAnalyzer(object):
             plt.plot(ra_array,density_array_minus/abs(ra_size*mindec))
             plt.title("LOS density in function of RA for DEC < 0")
             plt.grid()
-            plt.savefig(f"{plot_name}_los_density_dec_negative.pdf",format = "pdf")
-
-
-
-    @staticmethod
-    def plot_los_histogram(ra,dec,plot_name,**kwargs):
-        nb_bins = utils.return_key(kwargs,"nb_bins",20)
-        different_sign_region = utils.return_key(kwargs,"different_sign_region",False)
-
-        plt.figure()
-        plt.hist(ra,nb_bins)
-        plt.title("LOS histogram in function of RA")
-        plt.grid()
-        plt.savefig(f"{plot_name}_los_histogram.pdf",format = "pdf")
-        if(different_sign_region):
-            plt.figure()
-            plt.hist(ra[dec >= 0],nb_bins)
-            plt.title("LOS histogram in function of RA for DEC >= 0")
-            plt.grid()
-            plt.savefig(f"{plot_name}_los_histogram_dec_positive.pdf",format = "pdf")
-            plt.figure()
-            plt.hist(ra[dec < 0],nb_bins)
-            plt.title("LOS histogram in function of RA for DEC < 0")
-            plt.grid()
-            plt.savefig(f"{plot_name}_los_histogram_dec_negative.pdf",format = "pdf")
-
-
-
-    @staticmethod
-    def plot_histogram_deltas(deltas,plot_name=None,**kwargs):
-        new_fig = utils.return_key(kwargs,"new_fig",True)
-        gaussian_fit = utils.return_key(kwargs,"gaussian_fit",False)
-        nb_bins = utils.return_key(kwargs,"nb_bins",100)
-        delta_min = utils.return_key(kwargs,"delta_min",-2)
-        delta_max = utils.return_key(kwargs,"delta_max",2)
-        log_scale = utils.return_key(kwargs,"log_scale",False)
-        legend = utils.return_key(kwargs,"legend",None)
-        alpha = utils.return_key(kwargs,"alpha",1)
-        norm = utils.return_key(kwargs,"norm",False)
-
-        if(new_fig):
-            plt.figure()
-        data, bins , patches = plt.hist(deltas,nb_bins,log=log_scale,alpha=alpha,density=norm)
-        plt.xlim([delta_min,delta_max])
-        if(gaussian_fit):
-            bin_centers= np.array([0.5 * (bins[i] + bins[i+1]) for i in range(len(bins)-1)])
-            fit_function = lambda x, A, mu, sigma : A * np.exp(-1.0 * (x - mu)**2 / (2 * sigma**2))
-            popt, pcov = curve_fit(fit_function, xdata=bin_centers, ydata=data, p0=[1, 0.0, 0.1])
-            x = np.linspace(min(bins),max(bins),1000)
-            y = fit_function(x, *popt)
-            plt.plot(x,y,'r--',linewidth=2)
-            mu,sigma = popt[1],popt[2]
-            plt.text(0.8 ,2* np.max(data)/6,"mu = " +str(round(mu,8)))
-            plt.text(0.8,1.5* np.max(data)/6,"sigma = " + str(round(sigma,8)))
-        if(plot_name is not None):
-            if(legend is not None):
-                plt.legend(legend)
-            if(log_scale):
-                plot_name = plot_name + "_log"
-            plt.savefig(f"{plot_name}_delta_map_histo.pdf",format="pdf")
-        return(bins)
+            plt.savefig(os.path.join(pwd,f"{plot_name}_los_density_dec_negative.pdf"),format = "pdf")
 
 
 
 
     @staticmethod
-    def plot_histogram_sigmas(sigmas,plot_name=None,**kwargs):
-        new_fig = utils.return_key(kwargs,"new_fig",True)
-        nb_bins = utils.return_key(kwargs,"nb_bins",100)
-        sigma_min = utils.return_key(kwargs,"sigma_min",0)
-        sigma_max = utils.return_key(kwargs,"sigma_max",5)
-        log_scale = utils.return_key(kwargs,"log_scale",False)
-        legend = utils.return_key(kwargs,"legend",None)
-        alpha = utils.return_key(kwargs,"alpha",1)
-        norm = utils.return_key(kwargs,"norm",False)
+    def plot_delta_gaussian_fit(pwd,delta,plot_name,**kwargs):
+        (name, data, bins, patches) = utils.plot_histo(delta,"delta","",**kwargs)
+        bin_centers= np.array([0.5 * (bins[i] + bins[i+1]) for i in range(len(bins)-1)])
+        fit_function = lambda x, A, mu, sigma : A * np.exp(-1.0 * (x - mu)**2 / (2 * sigma**2))
+        popt, pcov = curve_fit(fit_function, xdata=bin_centers, ydata=data, p0=[1, 0.0, 0.1])
+        x = np.linspace(min(bins),max(bins),1000)
+        y = fit_function(x, *popt)
+        plt.plot(x,y,'r--',linewidth=2)
+        mu,sigma = popt[1],popt[2]
+        plt.text(0.8 ,2* np.max(data)/6,"mu = " +str(round(mu,8)))
+        plt.text(0.8,1.5* np.max(data)/6,"sigma = " + str(round(sigma,8)))
 
-        if(new_fig):
-            plt.figure()
-        data, bins , patches = plt.hist(sigmas,nb_bins,log=log_scale, alpha=alpha,density=norm)
-        plt.xlim([sigma_min,sigma_max])
-        if(plot_name is not None):
-            if(legend is not None):
-                plt.legend(legend)
-            if(log_scale):
-                plot_name = plot_name + "_log"
-            plt.savefig(f"{plot_name}_sigma_map_histo.pdf",format="pdf")
-        return(bins)
-
-
-    @staticmethod
-    def plot_sigma_redshift(sigmas,redshift,plot_name=None,**kwargs):
-        new_fig = utils.return_key(kwargs,"new_fig",True)
-        nb_bins = utils.return_key(kwargs,"nb_bins",100)
-        legend = utils.return_key(kwargs,"legend",None)
-
-        if(new_fig):
-            plt.figure()
-        z = np.linspace(np.min(redshift),np.max(redshift),nb_bins)
-        sigma_mean = np.zeros(len(z)-1)
-        for i in range(len(z)-1):
-            mask2 = (redshift < z[i+1])&(redshift >= z[i])
-            sigma_mean[i]=np.mean(sigmas[mask2])
-        plt.plot(z[:-1],sigma_mean)
-        if(plot_name is not None):
-            if(legend is not None):
-                plt.legend(legend)
-            plt.savefig(f"{plot_name}_sigmas_redshift_bin.pdf",format="pdf")
-
-
-
-
-    @staticmethod
-    def plot_delta_binned_stat(redshift,deltas,redshift_qso,plot_name,**kwargs) :
-        nb_bins = utils.return_key(kwargs,"nb_bins",50)
-        error_bar = utils.return_key(kwargs,"error_bar",True)
-
-        list_RF = ((1 + redshift)/(1+ redshift_qso))*utils.lambdaLy
-        list_lobs = (1 + redshift)*utils.lambdaLy
-
-        plt.figure()
-        bin_centers, means, errors = DeltaAnalyzer.hist_profile(list_lobs,deltas,nb_bins, (np.min(list_lobs),np.max(list_lobs)), (np.min(deltas),np.max(deltas)))
-        if(error_bar) :plt.errorbar(x=bin_centers, y=means, yerr=errors, linestyle='none', marker='.',color='blue', label="dr8")
-        else :plt.plot(bin_centers, means, linestyle='none', marker='.',color='blue', label="dr8")
-        plt.ylabel("flux contrast pixels")
-        plt.xlabel("observed wavelength")
-        plt.savefig(f"{plot_name}_delta_binned_statistics_obs_frame.pdf",format="pdf")
-
-        plt.figure()
-        bin_centers, means, errors = DeltaAnalyzer.hist_profile(list_RF,deltas,nb_bins, (np.min(list_RF),np.max(list_RF)), (np.min(deltas),np.max(deltas)))
-        if(error_bar) :plt.errorbar(x=bin_centers, y=means, yerr=errors, linestyle='none', marker='.',color='blue', label="dr8")
-        else :plt.plot(bin_centers, means, linestyle='none', marker='.',color='blue', label="dr8")
-        plt.ylabel("flux contrast pixels")
-        plt.xlabel("rest frame wavelength")
-        plt.savefig(f"{plot_name}_delta_binned_statistics_rest_frame.pdf",format="pdf")
-
-
-
-    @staticmethod
-    def hist_profile(x, y, bins, range_x, range_y) :
-        w = (y>range_y[0]) & (y<range_y[1])
-        means_result = binned_statistic(x[w], [y[w], y[w]**2], bins=bins, range=range_x, statistic='mean')
-        nb_entries_result = binned_statistic(x[w], y[w], bins=bins, range=range_x, statistic='count')
-        means, means2 = means_result.statistic
-        nb_entries = nb_entries_result.statistic
-        errors = np.sqrt(means2 - means**2)/np.sqrt(nb_entries)
-        bin_edges = means_result.bin_edges
-        bin_centers = (bin_edges[:-1] + bin_edges[1:])/2.
-        return bin_centers, means, errors
-
-
-
-    #### MAIN ROUTINES ####
-
-
-    def compare_deltas(self,delta_path2,plot_name,**kwargs):
-        " Print different properties of two pickled deltas files to compare them"
-        (ra,dec,redshift,zqso,ids,sigmas,delta)  = self.get_ra_dec()
-        comp = DeltaAnalyzer(self.pwd,delta_path2,center_ra=self.center_ra,z_cut_min=self.z_cut_min,z_cut_max=self.z_cut_max,dec_cut_min=self.dec_cut_min,dec_cut_max=self.dec_cut_max,ra_cut_min=self.ra_cut_min,ra_cut_max=self.ra_cut_max,degree=self.degree)
-        (ra_comp,dec_comp,redshift_comp,zqso_comp,ids_comp,sigmas_comp,delta_comp)  = comp.get_ra_dec()
-        # Histogram of sigmas
-        bins = DeltaAnalyzer.plot_histogram_sigmas(sigmas,plot_name=None,**kwargs)
-        DeltaAnalyzer.plot_histogram_sigmas(sigmas_comp,plot_name=plot_name,new_fig=False,nb_bins=bins,**kwargs)
-        # Mean sigma in function of redshift
-        DeltaAnalyzer.plot_sigma_redshift(sigmas,redshift,plot_name=None,**kwargs)
-        DeltaAnalyzer.plot_sigma_redshift(sigmas_comp,redshift_comp,plot_name=plot_name,new_fig=False,**kwargs)
-        # Histogram of deltas
-        bins = DeltaAnalyzer.plot_histogram_deltas(delta,plot_name=None,**kwargs)
-        DeltaAnalyzer.plot_histogram_deltas(delta_comp,plot_name=plot_name,new_fig=False,nb_bins=bins,**kwargs)
-        # Print scalar statistical data
-        print("Redshift interval for 1 =",np.max(redshift),np.min(redshift))
-        print("Redshift interval for 2 =",np.max(redshift_comp),np.min(redshift_comp))
-        print("Maximal sigma for 1 =",np.max(sigmas))
-        print("Maximal sigma for 2 =",np.max(sigmas_comp))
-        print("Mean sigma for 1 =",np.mean(sigmas))
-        print("Mean sigma for 2 =",np.mean(sigmas_comp))
-        print("Median sigma for 1 =",np.median(sigmas))
-        print("Median sigma for 2 =",np.median(sigmas_comp))
-        print("Mean delta for 1 =",np.mean(delta))
-        print("Mean delta for 1 =",np.mean(delta_comp))
-
-
-
-
-
-
-
-
-
-
-class DeltaModifier(object):
-
-    def __init__(self,pwd,delta_path,center_ra=True,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None):
-        self.pwd = pwd
-        os.chdir(pwd)
-        self.delta_path = delta_path
-        self.center_ra = center_ra
-        self.dec_cut_min = dec_cut_min
-        self.dec_cut_max = dec_cut_max
-        self.ra_cut_min = ra_cut_min
-        self.ra_cut_max = ra_cut_max
-        self.z_cut_min = z_cut_min
-        self.z_cut_max = z_cut_max
-
-
-    def modify_deltas(self,name_out,number_cut,random_density_parameter=False,number_repeat=1,iterative_selection_parameters=None):
-        deltas = self.get_new_healpix(number_cut,random_density_parameter=random_density_parameter,number_repeat=number_repeat,iterative_selection_parameters=None)
-        self.save_deltas(deltas,name_out,number_cut)
-
-
-    def save_deltas(self,deltas,name_out,number_cut):
-        for cut in range(number_cut):
-            delta = tomographic_objects.Delta(name=f"{name_out}_{cut}.fits",delta_file=deltas[cut])
-            delta.write_from_delta_list()
-
-
-    def get_new_healpix(self,number_cut,random_density_parameter=None,number_repeat=1,iterative_selection_parameters=None):
-        if(random_density_parameter is None):
-            deltas = self.create_healpix(number_cut,random=None,return_len_ra=False)
-        else :
-            if (number_repeat == 1):
-                deltas = self.create_healpix(number_cut,random=random_density_parameter,return_len_ra=False)
-            else :
-                if(iterative_selection_parameters is None):return KeyError("Please dictionary parameter for the iterative selection")
-                deltas = self.iterate_healpix_creation(number_cut,random_density_parameter,number_repeat,iterative_selection_parameters)
-        return(deltas)
-
-
-    def create_healpix(self,number_cut,random=None,return_len_ra=False):
-        namefile = glob.glob(os.path.join(self.delta_path,"delta-*.fits*"))
-        deltas ={}
-        ra_array = []
-        dec_array = []
-        for cut in range(number_cut):
-            deltas[cut]=[]
-        for i in range(len(namefile)) :
-            delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
-            delta_tomo.read()
-            for j in range(1,len(delta_tomo.delta_file)):
-                delta = delta_tomo.read_line(j)
-                if(self.center_ra):
-                    if(delta.ra *180 /np.pi  > 180):
-                        ra =((delta.ra * 180 / np.pi)-360)
-                    else:
-                        ra = ((delta.ra * 180 / np.pi))
-                else :
-                    ra = ((delta.ra * 180 / np.pi))
-                dec = (delta.dec* 180 / np.pi)
-                if((ra>self.ra_cut_min)&(ra<self.ra_cut_max)&(dec>self.dec_cut_min)&(dec<self.dec_cut_max)):
-                    ra_array.append(ra)
-                    dec_array.append(dec)
-                    for cut in range(number_cut):
-                        interval_ra =  ((cut)/(number_cut))*(self.ra_cut_max-self.ra_cut_min) + self.ra_cut_min  , ((cut + 1)/(number_cut))*(self.ra_cut_max-self.ra_cut_min) + self.ra_cut_min
-                        if((ra>interval_ra[0])&(ra<=interval_ra[1])):
-                            if(self.center_ra):
-                                delta.ra = delta.ra - 2*np.pi
-                            deltas[cut].append(delta)
-            delta_tomo.close()
-        if (random is not None):
-            deltas = self.randomize_choice_of_los(deltas,random,number_cut,len(ra_array))
-        if(return_len_ra):
-            return(deltas,len(ra_array))
-        else :
-            return(deltas)
-
-
-    def randomize_choice_of_los(self,deltas_dict,random,number_cut,number_ra):
-        deltas = deltas_dict.copy()
-        density = number_ra/((self.ra_cut_max-self.ra_cut_min)*(self.dec_cut_max-self.dec_cut_min))
-        utils.Logger.add("density before random choice ="  + str(density))
-        random_cut = random/density
-        ra_random = []
-        dec_random = []
-        for cut in range(number_cut) :
-            number_of_delta_to_select = int(round(len(deltas[cut])*random_cut,0))
-            deltas[cut] = sample(deltas[cut],number_of_delta_to_select)
-            for i in range(len(deltas[cut])):
-                ra_random.append(deltas[cut][i].ra*180 /np.pi)
-                dec_random.append(deltas[cut][i].dec*180 /np.pi)
-        density = len(ra_random)/((self.ra_cut_max-self.ra_cut_min)*(self.dec_cut_max-self.dec_cut_min))
-        utils.Logger.add("density after random choice ="  + str(density))
-        return(deltas)
-
-
-
-    def iterate_healpix_creation(self,number_cut,random_density_parameter,number_repeat,iterative_selection_parameters,property_file_name):
-        """ To optimize & test"""
-        density_names = iterative_selection_parameters["density_names"]
-        dperp_names = iterative_selection_parameters["separation_names"]
-        Om = iterative_selection_parameters["Om"]
-        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(Om)
-        coordinate_transform = iterative_selection_parameters["coordinate_transform"]
-        suplementary_parameters = utils.return_suplementary_parameters(coordinate_transform,zmin=self.z_cut_min,zmax=self.z_cut_max)
-        density_ref ={}
-        dperp_ref = {}
-        for cut in range(number_cut):
-            density_ref[cut] = PixelAnalizer.read_density_file(density_names[cut])[1]
-            dperp_ref[cut] = PixelAnalizer.read_dperp_file(dperp_names[cut])[1]
-        min_density, min_dperp = np.inf,np.inf
-        delta_to_keep = {}
-        utils.Logger.add("Beginning of the random iteration selection")
-        deltas_dict,number_ra = self.create_healpix(number_cut,random=False,return_len_ra=True)
-        deltas_random={}
-        for i in range(number_repeat):
-            utils.Logger.add("repeat "+ str(i))
-            utils.Logger.add("deltas "+ str(i) + " computed")
-            diff_dperp , diff_density = [], []
-            deltas_random = self.randomize_choice_of_los(deltas_dict,random_density_parameter,number_cut,number_ra)
-            for cut in range(number_cut):
-                delta_file = tomographic_objects.Delta(delta_file=None,delta_array=deltas_random[cut],name="delta_" + str(cut) + "_to_test.pickle")
-                delta_file.write_from_delta_list()
-                namefile = "delta_" + str(cut) + "_to_test.pickle"
-                (ra,dec,z,zqso,ids,sigmas,deltas) = get_deltas(namefile)
-                sky_deltas = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j]] for i in range(len(ra)) for j in range(len(z[i]))])
-                sky_deltas = sky_deltas[utils.cut_sky_catalog(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],ramin=self.ra_cut_min,ramax=self.ra_cut_max,decmin=self.dec_cut_min,decmax=self.dec_cut_max,zmin=self.z_cut_min,zmax=self.z_cut_max)]
-                cartesian_deltas = np.zeros(sky_deltas.shape)
-                cartesian_deltas[:,0],cartesian_deltas[:,1],cartesian_deltas[:,2] = utils.convert_sky_to_cartesian(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],coordinate_transform,rcomov=rcomov,distang=distang,suplementary_parameters=suplementary_parameters)
-                pixel = tomographic_objects.Pixel.init_from_property_files(property_file_name,pixel_array=cartesian_deltas,name=None)
-                pixel_analyzer = PixelAnalizer(self.pwd,pixel=pixel)
-                (zpar,dperpz,densityz) = pixel_analyzer.compute_plot_mean_distance_density("",plot=False)
-                diff_dperp.append(np.mean(abs(np.array(dperpz) -np.array(dperp_ref[cut]))))
-                diff_density.append(np.mean(abs(np.array(densityz) -np.array(density_ref[cut]))))
-            utils.Logger.add("Mean difference in term LOS density : {}".format(np.mean(diff_density)))
-            utils.Logger.add("Mean difference in term of Mean LOS separation : {}".format(np.mean(diff_dperp)))
-            if((np.mean(diff_density)<min_density)&(np.mean(diff_dperp)<min_dperp)):
-                utils.Logger.add("Better at the repeat " + str(i))
-                min_density = np.mean(diff_density)
-                min_dperp = np.mean(diff_dperp)
-                delta_to_keep = deltas_random
-        for cut in range(number_cut):
-            os.remove("delta_" + str(cut) + "_to_test.pickle")
-        utils.Logger.add("End of the random iteration selection")
-        return(delta_to_keep)
+        plt.savefig(os.path.join(pwd,f"{plot_name}_histo_delta_gaussian_fit.pdf"),format = "pdf")
