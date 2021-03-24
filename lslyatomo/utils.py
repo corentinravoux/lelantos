@@ -633,13 +633,40 @@ def patch_mp_connection_bpo_17560(log = None):
 
 
 
-#### PLOT ####
 
+
+def hist_profile(x, y, bins, range_x,range_y,outlier_insensitive=False):
+    w = (y>range_y[0]) & (y<range_y[1])
+    if(outlier_insensitive):
+        means_result = binned_statistic(x[w], y[w], bins=bins, range=range_x, statistic='median')
+        outlier_insensitive_std = lambda x : (np.nanpercentile(x,84.135,axis=0)-np.nanpercentile(x,15.865,axis=0))/2
+        std_result = binned_statistic(x[w], y[w], bins=bins, range=range_x, statistic=outlier_insensitive_std)
+        nb_entries_result = binned_statistic(x[w], y[w], bins=bins, range=range_x, statistic='count')
+
+    else:
+        means_result = binned_statistic(x[w], y[w], bins=bins, range=range_x, statistic='mean')
+        std_result = binned_statistic(x[w], y[w], bins=bins, range=range_x, statistic='std')
+        nb_entries_result = binned_statistic(x[w], y[w], bins=bins, range=range_x, statistic='count')
+
+
+    means = means_result.statistic
+    std = std_result.statistic
+    nb_entries = nb_entries_result.statistic
+
+    errors = std/np.sqrt(nb_entries)
+
+    bin_edges = means_result.bin_edges
+    bin_centers = (bin_edges[:-1] + bin_edges[1:])/2.
+    return(bin_centers, means, errors)
+
+
+
+#### PLOT ####
 
 def plot_histo(value,value_name,name,**kwargs):
     nb_bins = return_key(kwargs,f"{value_name}_bins",50)
-    value_min = return_key(kwargs,f"{value_name}_min",None)
-    value_max = return_key(kwargs,f"{value_name}_max",None)
+    value_min = return_key(kwargs,f"{value_name}_value_min",None)
+    value_max = return_key(kwargs,f"{value_name}_value_max",None)
     alpha = return_key(kwargs,f"{value_name}_alpha",1.0)
     histtype=return_key(kwargs,f"{value_name}_histtype",'bar')
     linestyle=return_key(kwargs,f"{value_name}_linestyle",None)
@@ -647,7 +674,7 @@ def plot_histo(value,value_name,name,**kwargs):
 
     norm = return_key(kwargs,f"{value_name}_norm",False)
     cumulative = return_key(kwargs,f"{value_name}_cumulative",False)
-    cumulative = return_key(kwargs,f"{value_name}_log",False)
+    log = return_key(kwargs,f"{value_name}_log",False)
 
     if(norm):
         name = name + "_normalized"
@@ -660,13 +687,16 @@ def plot_histo(value,value_name,name,**kwargs):
         bins = np.linspace(value_min,value_max, nb_bins)
     (n, bins, patches) = plt.hist(value, bins, alpha=alpha,histtype=histtype,
                                   linestyle=linestyle,ec=ec,
-                                  density=norm,cumulative=cumulative)
+                                  density=norm,cumulative=cumulative,
+                                  log=log)
+
     return(name, n, bins, patches)
 
 def save_histo(pwd,value,value_name,name,comparison=None,comparison_legend=None,**kwargs):
     xlabel = return_key(kwargs,f"{value_name}_xlabel",value_name)
     ylabel = return_key(kwargs,f"{value_name}_ylabel","#")
-
+    min_lim = return_key(kwargs,f"{value_name}_min_lim",None)
+    max_lim = return_key(kwargs,f"{value_name}_max_lim",None)
     plt.figure()
     name_out, n, bins, patches = plot_histo(value,value_name,name,**kwargs)
     if(comparison is not None):
@@ -676,6 +706,8 @@ def save_histo(pwd,value,value_name,name,comparison=None,comparison_legend=None,
             plt.legend(comparison_legend)
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
+    if((min_lim is not None)&(max_lim is not None)):
+        plt.xlim([min_lim,max_lim])
     plt.savefig(os.path.join(pwd,f"{name_out}_histo_{value_name}.pdf"), format ="pdf")
 
 
@@ -684,18 +716,38 @@ def save_histo(pwd,value,value_name,name,comparison=None,comparison_legend=None,
 
 def plot_mean_redshift_dependence(value,redshift,value_name,name,**kwargs):
     nb_bins = return_key(kwargs,f"{value_name}_z_bins",50)
-    z_min = return_key(kwargs,f"{value_name}_zmin",np.min(redshift))
-    z_max = return_key(kwargs,f"{value_name}_zmax",np.max(redshift))
     ls=return_key(kwargs,f"{value_name}_linestyle",None)
     color=return_key(kwargs,f"{value_name}_color",None)
+    marker=return_key(kwargs,f"{value_name}_marker",'.')
+    lambda_obs=return_key(kwargs,f"{value_name}_lambda_obs",False)
+    lambda_rest=return_key(kwargs,f"{value_name}_lambda_rest",False)
 
-    range_x = [z_min,z_max]
-    means_result = binned_statistic(redshift, value, bins=nb_bins, range=range_x, statistic='mean')
-    means = means_result.statistic
-    bin_edges = means_result.bin_edges
-    bin_centers = (bin_edges[:-1] + bin_edges[1:])/2.
+    outlier_insensitive = return_key(kwargs,f"{value_name}_outlier_insensitive",False)
 
-    plt.plot(bin_centers,means,color=color,ls=ls)
+    if(lambda_obs):
+        redshift = (1 + redshift)*lambdaLy
+
+    elif(lambda_rest):
+        redshift_qso=return_key(kwargs,f"{value_name}_redshift_qso",None)
+        if(redshift_qso is None):
+            raise ValueError("""You have chosen to convert your mean redshift
+                                dependence plot rest frame wavelength but no
+                                QSO redshift was provided""")
+        redshift = ((1 + redshift)/(1+ redshift_qso))*lambdaLy
+
+    z_min = return_key(kwargs,f"{value_name}_zmin",np.min(redshift))
+    z_max = return_key(kwargs,f"{value_name}_zmax",np.max(redshift))
+    range_x = np.array([z_min,z_max])
+
+    bin_centers, means, errors = hist_profile(redshift, value, nb_bins, range_x,
+                                              [np.min(value),np.max(value)],
+                                              outlier_insensitive=outlier_insensitive)
+
+    plt.errorbar(bin_centers,means, errors,color=color,ls=ls, marker=marker)
+
+    if(outlier_insensitive):
+        name = name + "_outlier_insensitive"
+        
     return(name)
 
 
@@ -705,7 +757,20 @@ def save_mean_redshift_dependence(pwd,value,redshift,value_name,name,
                                   comparison_redshift=None,
                                   comparison_legend=None,**kwargs):
     ylabel = return_key(kwargs,f"{value_name}_xlabel",value_name)
-    xlabel = return_key(kwargs,f"{value_name}_ylabel","redshift")
+    lambda_obs=return_key(kwargs,f"{value_name}_lambda_obs",False)
+    lambda_rest=return_key(kwargs,f"{value_name}_lambda_rest",False)
+    if((lambda_obs)&(lambda_rest)):
+        raise ValueError(f"""You have chosen to convert your mean redshift
+                             dependence plot to both rest frame and observed
+                             wavelength. Please choose {value_name}_lambda_obs
+                             or {value_name}_lambda_rest""")
+    if(lambda_obs):
+        default_xlabel = "observed wavelength"
+    elif(lambda_rest):
+        default_xlabel = "rest frame wavelength"
+    else:
+        default_xlabel = "redshift"
+    xlabel = return_key(kwargs,f"{value_name}_ylabel",default_xlabel)
 
     plt.figure()
     name_out = plot_mean_redshift_dependence(value,redshift,value_name,name,**kwargs)
@@ -747,3 +812,53 @@ def save_redshift_dependence(pwd,value,redshift,value_name,name,
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.savefig(os.path.join(pwd,f"{name_out}_redshift_dependence_{value_name}.pdf"), format ="pdf")
+
+
+
+def plot_ra_dec(ra,dec,name,**kwargs):
+
+    nb_cut = return_key(kwargs,"nb_cut",None)
+    plt.figure(figsize=(7,3.5))
+
+    if(nb_cut is not None):
+        ramax,ramin,decmax,decmin = np.max(ra),np.min(ra),np.max(dec),np.min(dec)
+        interval_ra_array = []
+        for cut in range(nb_cut):
+            interval_ra_array.append([((cut)/(nb_cut))*(ramax-ramin) + ramin  , ((cut + 1)/(nb_cut))*(ramax-ramin) + ramin])
+        for i in range(len(interval_ra_array)):
+            plt.plot([interval_ra_array[i][0],interval_ra_array[i][1]],[decmin,decmin],color="orange", linewidth=2)
+            plt.plot([interval_ra_array[i][0],interval_ra_array[i][1]],[decmax,decmax],color="orange", linewidth=2)
+            plt.plot([interval_ra_array[i][0],interval_ra_array[i][0]],[decmin,decmax],color="orange", linewidth=2)
+            plt.plot([interval_ra_array[i][1],interval_ra_array[i][1]],[decmin,decmax],color="orange", linewidth=2)
+
+    plt.plot(ra,dec,'b.', markersize=1.5)
+    return(name)
+
+
+def save_ra_dec(pwd,ra,dec,name,
+                comparison_ra=None,comparison_dec=None,
+                comparison_legend=None,**kwargs):
+    ra_min_lim = return_key(kwargs,"ra_dec_ra_min_lim",np.min(ra))
+    ra_max_lim = return_key(kwargs,"ra_dec_ra_max_lim",np.max(ra))
+    dec_min_lim = return_key(kwargs,"ra_dec_dec_min_lim",np.min(dec))
+    dec_max_lim = return_key(kwargs,"ra_dec_dec_max_lim",np.max(dec))
+    deg = return_key(kwargs,"deg",True)
+    if(deg):
+        label_angle = "deg"
+    else:
+        label_angle = "rad"
+    ylabel = return_key(kwargs,"ra_dec_xlabel",f"DEC [{label_angle}] (J2000)")
+    xlabel = return_key(kwargs,"ra_dec_ylabel",f"RA [{label_angle}] (J2000)")
+
+    name_out = plot_ra_dec(ra,dec,name,**kwargs)
+    if(comparison_ra is not None):
+        for i in range(len(comparison_ra)):
+            plot_redshift_dependence(comparison_ra[i],comparison_dec[i],name,**kwargs)
+        if(comparison_legend is not None):
+            plt.legend(comparison_legend)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.xlim([ra_min_lim,ra_max_lim])
+    plt.ylim([dec_min_lim,dec_max_lim])
+    plt.grid()
+    plt.savefig(os.path.join(pwd,f"{name_out}_RA-DEC_diagram.pdf"), format ="pdf")
