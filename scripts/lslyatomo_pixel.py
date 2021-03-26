@@ -4,7 +4,7 @@ import argparse
 
 
 parser = argparse.ArgumentParser(description='Print the pixel file')
-parser.add_argument('-f',
+parser.add_argument('-i',
                     '--file', help='Pixel file name', default=None,required=True)
 args = vars(parser.parse_args())
 

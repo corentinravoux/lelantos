@@ -4,7 +4,7 @@ import argparse
 
 
 parser = argparse.ArgumentParser(description='Print the statistics of a given void catalog')
-parser.add_argument('-f',
+parser.add_argument('-i',
                     '--file', help='Void catalog file name', default=None,required=True)
 args = vars(parser.parse_args())
 

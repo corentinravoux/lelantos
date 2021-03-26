@@ -4,9 +4,9 @@ import argparse
 import numpy as np
 
 parser = argparse.ArgumentParser(description='Cut the QSO catalog')
-parser.add_argument('-in',
+parser.add_argument('-i',
                     '--input', help='Input QSO catalog',required=True)
-parser.add_argument('-out',
+parser.add_argument('-o',
                     '--output', help='Output QSO catalog',required=True)
 parser.add_argument('-zname',
                     '--redshift-name', help='Pixel file name', default="Z",required=False)
@@ -29,7 +29,7 @@ print("Number of quasars before cut", cat.coord.shape[0])
 mask = cat.cut_catalog(coord_min=(float(args["ramin"]),float(args["decmin"]),float(args["zmin"])),
                        coord_max=(float(args["ramax"]),float(args["decmax"]),float(args["zmax"])),
                        center_x_coord=True)
-                       
+
 print("Number of quasars after cut", cat.coord.shape[0])
 
 cat.name = args["output"]

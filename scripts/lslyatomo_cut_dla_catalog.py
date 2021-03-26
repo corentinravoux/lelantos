@@ -4,9 +4,9 @@ import argparse
 import numpy as np
 
 parser = argparse.ArgumentParser(description='Cut the DLA catalog')
-parser.add_argument('-in',
+parser.add_argument('-i',
                     '--input', help='Input DLA catalog',required=True)
-parser.add_argument('-out',
+parser.add_argument('-o',
                     '--output', help='Output DLA catalog',required=True)
 parser.add_argument('-zmin', help='min z coord to cut', default=0.0,required=False)
 parser.add_argument('-zmax', help='max z coord to cut', default=np.inf,required=False)

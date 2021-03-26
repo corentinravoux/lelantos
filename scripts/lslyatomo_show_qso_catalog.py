@@ -4,7 +4,7 @@ import argparse
 from lslyatomo import tomographic_objects
 
 parser = argparse.ArgumentParser(description='Plot the QSO catalog')
-parser.add_argument('-in',
+parser.add_argument('-i',
                     '--input', help='Input QSO catalog',required=True)
 parser.add_argument('-bins', help='Output QSO catalog', default=100,required=False)
 parser.add_argument('-zname',
