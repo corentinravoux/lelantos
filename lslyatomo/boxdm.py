@@ -67,16 +67,30 @@ class BoxExtractor():
 
 
 
-    def construct_DM_map(self,ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,get_prop=None):
+    def construct_DM_map(self,ra_array,dec_array,z_array,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,get_prop=None):
         self.log.add("Creation of (RA,DEC,R) data matrix")
         coords_ra_dec =np.moveaxis(np.array(np.meshgrid(ra_array,dec_array,h * R_of_z(z_array),indexing='ij')),0,-1)
         self.log.add("Conversion to (X,Y,Z) coordinates in the Saclay box")
         coords_box_saclay = np.zeros(coords_ra_dec.shape)
-        coords_box_saclay[:,:,:,0],coords_box_saclay[:,:,:,1],coords_box_saclay[:,:,:,2] = utils.saclay_mock_sky_to_cartesian(coords_ra_dec[:,:,:,0],coords_ra_dec[:,:,:,1],coords_ra_dec[:,:,:,2],ra0_box,dec0_box)
+        (coords_box_saclay[:,:,:,0],
+         coords_box_saclay[:,:,:,1],
+         coords_box_saclay[:,:,:,2]) = utils.saclay_mock_sky_to_cartesian(
+                                       coords_ra_dec[:,:,:,0],
+                                       coords_ra_dec[:,:,:,1],
+                                       coords_ra_dec[:,:,:,2],
+                                       ra0_box,dec0_box)
         del coords_ra_dec
         self.log.add("Searching for the nearest pixels of the Saclay box")
         coords_pixels_box_saclay = np.zeros(coords_box_saclay.shape)
-        coords_pixels_box_saclay[:,:,:,0],coords_pixels_box_saclay[:,:,:,1],coords_pixels_box_saclay[:,:,:,2] = utils.saclay_mock_coord_dm_map(coords_box_saclay[:,:,:,0],coords_box_saclay[:,:,:,1],coords_box_saclay[:,:,:,2],Rmin,self.size_cell,self.box_shape,self.interpolation_method)
+        (coords_pixels_box_saclay[:,:,:,0],
+         coords_pixels_box_saclay[:,:,:,1],
+         coords_pixels_box_saclay[:,:,:,2]) = utils.saclay_mock_coord_dm_map(
+                                              coords_box_saclay[:,:,:,0],
+                                              coords_box_saclay[:,:,:,1],
+                                              coords_box_saclay[:,:,:,2],
+                                              Rmin,self.size_cell,
+                                              self.box_shape,
+                                              self.interpolation_method)
         del coords_box_saclay
         self.log.add("Loading of the Saclay map")
         DM_mocks_map = utils.saclay_mock_get_box(self.box_dir,self.box_shape)
@@ -102,14 +116,16 @@ class BoxExtractor():
 
 
 
-    def fill_DM_map(self,ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,DM_map,i_box,get_prop=None,Props_map=None):
+    def fill_DM_map(self,ra_array,dec_array,z_array,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,DM_map,i_box,get_prop=None,Props_map=None):
         self.log.add("Creation of (RA,DEC,R) data matrix")
         coords_ra_dec =np.moveaxis(np.array(np.meshgrid(ra_array,dec_array,h * R_of_z(z_array),indexing='ij')),0,-1)
+        print("test 1 ", coords_ra_dec[:,:,:,0].max(),coords_ra_dec[:,:,:,0].min(),coords_ra_dec[:,:,:,1].max(),coords_ra_dec[:,:,:,1].min())
+        print(np.radians(self.box_bound[i_box][0]))
         mask1 = (DM_map[:,:,:] == None)
-        mask2 = (coords_ra_dec[:,:,:,0]>=self.box_bound[i_box][0])
-        mask2 &=(coords_ra_dec[:,:,:,0]<self.box_bound[i_box][1])
-        mask2 &=(coords_ra_dec[:,:,:,1]>=self.box_bound[i_box][2])
-        mask2 &=(coords_ra_dec[:,:,:,1]<self.box_bound[i_box][3])
+        mask2 = (coords_ra_dec[:,:,:,0]>=np.radians(self.box_bound[i_box][0]))
+        mask2 &=(coords_ra_dec[:,:,:,0]<np.radians(self.box_bound[i_box][1]))
+        mask2 &=(coords_ra_dec[:,:,:,1]>=np.radians(self.box_bound[i_box][2]))
+        mask2 &=(coords_ra_dec[:,:,:,1]<np.radians(self.box_bound[i_box][3]))
         if((len(mask1[mask1==True]) == 0)|(len(mask2[mask2==True])==0)):
             self.log.add("No need of the Saclay box {}".format(i_box))
             return(DM_map,Props_map)
@@ -117,11 +133,19 @@ class BoxExtractor():
         del mask1,mask2
         self.log.add("Conversion to (X,Y,Z) coordinates in the Saclay box {}".format(i_box))
         coords_box_saclay = np.zeros(coords_ra_dec.shape)
-        coords_box_saclay[:,:,:,0],coords_box_saclay[:,:,:,1],coords_box_saclay[:,:,:,2] = utils.saclay_mock_sky_to_cartesian(coords_ra_dec[:,:,:,0],coords_ra_dec[:,:,:,1],coords_ra_dec[:,:,:,2],ra0_box,dec0_box)
+        (coords_box_saclay[:,:,:,0],
+         coords_box_saclay[:,:,:,1],
+         coords_box_saclay[:,:,:,2]) = utils.saclay_mock_sky_to_cartesian(
+                                       coords_ra_dec[:,:,:,0],
+                                       coords_ra_dec[:,:,:,1],
+                                       coords_ra_dec[:,:,:,2],
+                                       ra0_box,dec0_box)
+        print("test 1 ", coords_box_saclay[:,:,:,0].max(),coords_box_saclay[:,:,:,0].min(),coords_box_saclay[:,:,:,1].max(),coords_box_saclay[:,:,:,1].min())
         del coords_ra_dec
         self.log.add("Searching for the nearest pixels of the Saclay box {}".format(i_box))
         coords_pixels_box_saclay = np.zeros(coords_box_saclay.shape)
         coords_pixels_box_saclay[:,:,:,0],coords_pixels_box_saclay[:,:,:,1],coords_pixels_box_saclay[:,:,:,2] = utils.saclay_mock_coord_dm_map(coords_box_saclay[:,:,:,0],coords_box_saclay[:,:,:,1],coords_box_saclay[:,:,:,2],Rmin,self.size_cell,self.box_shape[i_box],self.interpolation_method)
+        print("test 1 ", coords_pixels_box_saclay[:,:,:,0].max(),coords_pixels_box_saclay[:,:,:,0].min(),coords_pixels_box_saclay[:,:,:,1].max(),coords_pixels_box_saclay[:,:,:,1].min())
         del coords_box_saclay
         self.log.add("Loading of the Saclay map {}".format(i_box))
         DM_mocks_map = utils.saclay_mock_get_box(self.box_dir[i_box],self.box_shape[i_box])
@@ -144,7 +168,7 @@ class BoxExtractor():
         ra0_box, dec0_box = utils.saclay_mock_center_of_the_box(self.box_bound)
         if(rsd_box): get_prop = ["eta_zz"]
         else: get_prop = None
-        DM_map,Props_map = self.construct_DM_map(ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,get_prop=get_prop)
+        DM_map,Props_map = self.construct_DM_map(ra_array,dec_array,z_array,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,get_prop=get_prop)
         return(DM_map,Props_map,get_prop)
 
 
@@ -157,7 +181,7 @@ class BoxExtractor():
         for i_box in range(len(self.box_dir)):
             (R0,z0,R_of_z,z_of_R,Rmin,Rmax,h) = utils.saclay_mock_box_cosmo_parameters(self.box_shape[i_box],self.size_cell)
             ra0_box, dec0_box = utils.saclay_mock_center_of_the_box(self.box_bound[i_box])
-            DM_map,Props_map = self.fill_DM_map(ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,DM_map,i_box,get_prop=get_prop,Props_map=Props_map)
+            DM_map,Props_map = self.fill_DM_map(ra_array,dec_array,z_array,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,DM_map,i_box,get_prop=get_prop,Props_map=Props_map)
         if(len(DM_map[DM_map==None]!=0)):
             self.log.add("WARNING : Not enough boxes to fill the Dark Matter map")
         self.log.add("Multiplying by growth factor at redshift of the LOS")
@@ -201,11 +225,11 @@ class BoxExtractor():
 
 
 
-    def construct_DM_LOS(self,ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,Rmin,h):
+    def construct_DM_LOS(self,ra_array,dec_array,z_array,R_of_z,ra0_box,dec0_box,Rmin,h):
         self.log.add("Creation of (RA,DEC,R) data matrix")
         R_array = h * R_of_z(z_array)
         self.log.add("Conversion to (X,Y,Z) coordinates in the Saclay box")
-        X,Y,Z = np.zeros(len(R_array)),np.zeros(len(R_array)),np.zeros(len(R_array))
+        X,Y,Z = np.zeros(len(ra_array)),np.zeros(len(dec_array)),np.zeros(len(R_array))
         X,Y,Z = utils.saclay_mock_sky_to_cartesian(ra_array,dec_array,R_array,ra0_box,dec0_box)
         self.log.add("Searching for the nearest pixels of the Saclay box")
         i,j,k = np.zeros(len(R_array)).astype(int),np.zeros(len(R_array)).astype(int),np.zeros(len(R_array)).astype(int)
@@ -219,21 +243,21 @@ class BoxExtractor():
         del DM_mocks_map,i,j,k
         return(DM_LOS)
 
-    def fill_DM_LOS(self,ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,Rmin,h,DM_LOS,i_box):
+    def fill_DM_LOS(self,ra_array,dec_array,z_array,R_of_z,ra0_box,dec0_box,Rmin,h,DM_LOS,i_box):
         self.log.add("Creation of (RA,DEC,R) data matrix")
         R_array = h * R_of_z(z_array)
         mask1 = (DM_LOS[:] == None)
-        mask2 = (ra_array[:]>=self.box_bound[i_box][0])
-        mask2 &=(ra_array[:]<self.box_bound[i_box][1])
-        mask2 &=(dec_array[:]>=self.box_bound[i_box][2])
-        mask2 &=(dec_array[:]<self.box_bound[i_box][3])
+        mask2 = (ra_array[:]>=np.radians(self.box_bound[i_box][0]))
+        mask2 &=(ra_array[:]<np.radians(self.box_bound[i_box][1]))
+        mask2 &=(dec_array[:]>=np.radians(self.box_bound[i_box][2]))
+        mask2 &=(dec_array[:]<np.radians(self.box_bound[i_box][3]))
         if((len(mask1[mask1==True]) == 0)|(len(mask2[mask2==True])==0)):
             self.log.add("No need of the Saclay box {}".format(i_box))
             return(DM_LOS)
         mask = mask1&mask2
         del mask1,mask2
         self.log.add("Conversion to (X,Y,Z) coordinates in the Saclay box {}".format(i_box))
-        X,Y,Z = np.zeros(len(R_array)),np.zeros(len(R_array)),np.zeros(len(R_array))
+        X,Y,Z = np.zeros(len(ra_array)),np.zeros(len(dec_array)),np.zeros(len(R_array))
         X,Y,Z = utils.saclay_mock_sky_to_cartesian(ra_array,dec_array,R_array,ra0_box,dec0_box)
         self.log.add("Searching for the nearest pixels of the Saclay box {}".format(i_box))
         i,j,k = np.zeros(len(R_array)).astype(int),np.zeros(len(R_array)).astype(int),np.zeros(len(R_array)).astype(int)
@@ -252,7 +276,7 @@ class BoxExtractor():
     def extract_los(self,ra_array,dec_array,z_array):
         (R0,z0,R_of_z,z_of_R,Rmin,Rmax,h) = utils.saclay_mock_box_cosmo_parameters(self.box_shape,self.size_cell)
         ra0_box, dec0_box = utils.saclay_mock_center_of_the_box(self.box_bound)
-        los = self.construct_DM_LOS(ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,Rmin,h)
+        los = self.construct_DM_LOS(ra_array,dec_array,z_array,R_of_z,ra0_box,dec0_box,Rmin,h)
         return(los)
 
 
@@ -261,7 +285,7 @@ class BoxExtractor():
         for i_box in range(len(self.box_dir)):
             (R0,z0,R_of_z,z_of_R,Rmin,Rmax,h) = utils.saclay_mock_box_cosmo_parameters(self.box_shape[i_box],self.size_cell)
             ra0_box, dec0_box = utils.saclay_mock_center_of_the_box(self.box_bound[i_box])
-            los = self.fill_DM_LOS(ra_array,dec_array,z_array,R0,R_of_z,ra0_box,dec0_box,Rmin,h,los,i_box)
+            los = self.fill_DM_LOS(ra_array,dec_array,z_array,R_of_z,ra0_box,dec0_box,Rmin,h,los,i_box)
         if(len(los[los==None]!=0)):
             self.log.add("Warning : Not enough boxes to fill the Dark Matter map")
         return(los)
@@ -277,7 +301,7 @@ class BoxExtractor():
         for i_box in range(len(self.box_dir)):
             (R0,z0,R_of_z,z_of_R,Rmin,Rmax,h) = utils.saclay_mock_box_cosmo_parameters(self.box_shape[i_box],self.size_cell)
             ra0_box, dec0_box = utils.saclay_mock_center_of_the_box(self.box_bound[i_box])
-            delta_quasars = self.fill_DM_LOS(ra,dec,z,R0,R_of_z,ra0_box,dec0_box,Rmin,h,delta_quasars,i_box)
+            delta_quasars = self.fill_DM_LOS(ra,dec,z,R_of_z,ra0_box,dec0_box,Rmin,h,delta_quasars,i_box)
         if(len(delta_quasars[delta_quasars==None]!=0)):
             self.log.add("Warning : Not enough boxes to fill the Dark Matter map")
         return(delta_quasars)
@@ -286,7 +310,7 @@ class BoxExtractor():
     def extract_delta(self,ra,dec,z):
         (R0,z0,R_of_z,z_of_R,Rmin,Rmax,h) = utils.saclay_mock_box_cosmo_parameters(self.box_shape,self.size_cell)
         ra0_box, dec0_box = utils.saclay_mock_center_of_the_box(self.box_bound)
-        delta_quasars = self.construct_DM_LOS(ra,dec,z,R0,R_of_z,ra0_box,dec0_box,Rmin,h)
+        delta_quasars = self.construct_DM_LOS(ra,dec,z,R_of_z,ra0_box,dec0_box,Rmin,h)
         return(delta_quasars)
 
 
@@ -306,7 +330,14 @@ class BoxExtractor():
         X_tomo_array,Y_tomo_array, Z_tomo_array = self.create_box_array(X_tomo_min,X_tomo_max,Y_tomo_min,Y_tomo_max,Z_tomo_min,Z_tomo_max,shape_map_output)
         suplementary_parameters = utils.return_suplementary_parameters(property_file.coordinate_transform,property=property_file)
         (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(property_file.Omega_m)
-        ra_array,dec_array,z_array  = utils.convert_cartesian_to_sky(X_tomo_array,Y_tomo_array, Z_tomo_array,property_file.coordinate_transform,inv_rcomov=inv_rcomov,inv_distang=inv_distang,distang=distang,suplementary_parameters=suplementary_parameters)
+        ra_array,dec_array,z_array  = utils.convert_cartesian_to_sky(X_tomo_array,
+                                                                     Y_tomo_array,
+                                                                     Z_tomo_array,
+                                                                     property_file.coordinate_transform,
+                                                                     inv_rcomov=inv_rcomov
+                                                                     ,inv_distang=inv_distang,
+                                                                     distang=distang,
+                                                                     suplementary_parameters=suplementary_parameters)
         del X_tomo_array,Y_tomo_array, Z_tomo_array,suplementary_parameters,rcomov,distang,inv_rcomov,inv_distang
         if(type(self.box_dir) == list):
             (dm_map,prop_maps,prop) = self.extract_box_multiple(ra_array,dec_array,z_array,shape_map_output,rsd_box)
@@ -317,7 +348,7 @@ class BoxExtractor():
         if(gaussian_smoothing is not None):
             gaussian_smoothing_pix = gaussian_smoothing*utils.pixel_per_mpc(property_file.size,shape_map_output)
             dm_map = utils.gaussian_smoothing(dm_map,gaussian_smoothing_pix)
-        dm_map_object = tomographic_objects.TomographicMap(map_array=dm_map,name=name)
+        dm_map_object = tomographic_objects.TomographicMap(map_array=np.array(dm_map),name=name)
         del dm_map
         dm_map_object.write()
         del dm_map_object
@@ -330,10 +361,22 @@ class BoxExtractor():
 
 
 
-    def create_LOS(self,pixel_name,name,growth_multiplication=True,matter_field=True):
+    def create_LOS(self,property_file,pixel_name,name,growth_multiplication=True,matter_field=True):
         pixel = tomographic_objects.Pixel(name=pixel_name)
         pixel.read()
-        ra_array,dec_array,z_array = np.array(pixel.pixel_array[:,0]),np.array(pixel.pixel_array[:,1]),np.array(pixel.pixel_array[:,2])
+        property_file = tomographic_objects.MapPixelProperty(name=property_file)
+        property_file.read()
+        suplementary_parameters = utils.return_suplementary_parameters(property_file.coordinate_transform,property=property_file)
+        (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(property_file.Omega_m)
+        X_array,Y_array,Z_array = np.array(pixel.pixel_array[:,0]),np.array(pixel.pixel_array[:,1]),np.array(pixel.pixel_array[:,2])
+        ra_array,dec_array,z_array  = utils.convert_cartesian_to_sky(X_array,
+                                                                     Y_array,
+                                                                     Z_array,
+                                                                     property_file.coordinate_transform,
+                                                                     inv_rcomov=inv_rcomov
+                                                                     ,inv_distang=inv_distang,
+                                                                     distang=distang,
+                                                                     suplementary_parameters=suplementary_parameters)
         if(type(self.box_dir) == list):
             los = self.extract_los(ra_array,dec_array,z_array)
         else :

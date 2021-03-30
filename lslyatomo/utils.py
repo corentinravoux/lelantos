@@ -193,7 +193,7 @@ def saclay_mock_box_cosmo_parameters(box_shape,size_cell):
 def saclay_mock_center_of_the_box(box_bound):
     ra0_box = (box_bound[0] + box_bound[1])/2
     dec0_box = (box_bound[2] + box_bound[3])/2
-    return(ra0_box, dec0_box)
+    return(np.radians(ra0_box), np.radians(dec0_box))
 
 
 def saclay_mock_coord_dm_map(X,Y,Z,Rmin,size_cell,box_shape,interpolation_method):
@@ -237,7 +237,7 @@ def saclay_mock_sky_to_cartesian(ra,dec,R,ra0,dec0):
     except :
         from lslyatomo.saclaymocks import box as saclay_mock_box
         print("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
-    X,Y,Z = saclay_mock_box.ComputeXYZ2(ra*(np.pi/180),dec*(np.pi/180),R,ra0*(np.pi/180),dec0*(np.pi/180))
+    X,Y,Z = saclay_mock_box.ComputeXYZ2(ra,dec,R,ra0,dec0)
     return(X,Y,Z)
 
 
@@ -747,7 +747,7 @@ def plot_mean_redshift_dependence(value,redshift,value_name,name,**kwargs):
 
     if(outlier_insensitive):
         name = name + "_outlier_insensitive"
-        
+
     return(name)
 
 
