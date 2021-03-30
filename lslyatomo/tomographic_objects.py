@@ -968,33 +968,67 @@ class MapPixelProperty(object):
 
 class Delta(object):
 
-    def __init__(self,delta_file=None,delta_array=None,name=None,pk1d_type=True):
+    def __init__(self,delta_array=None,name=None,pk1d_type=True):
         self.name = name
-        self.delta_file = delta_file
         self.delta_array = delta_array
         self.pk1d_type = pk1d_type
 
 
     def read(self):
-        if(self.name == None):
+        delta_array = []
+        if(self.name is None):
             raise ValueError("No")
         else:
-            self.delta_file = fitsio.FITS(self.name)
+            with fitsio.FITS(self.name) as delta_file:
+                for i in range(1,len(delta_file)):
+                    delta_array.append(self.read_line(delta_file,i))
+                self.delta_array = delta_array
+                delta_file.close()
 
-    def read_line(self,number_line):
+    def read_line(self,delta_file,number_line):
         try:
             from picca import data
         except:
             import lslyatomo.picca.data as data
             print("Picca might be updated, we suggest to install picca independently")
-        if(self.delta_file is None):
+        if(delta_file is None):
             self.read()
         try:
-            delta = data.delta.from_fitsio(self.delta_file[number_line],Pk1D_type=self.pk1d_type)
+            delta = data.delta.from_fitsio(delta_file[number_line],Pk1D_type=self.pk1d_type)
         except:
-            delta = data.Delta.from_fitsio(self.delta_file[number_line],pk1d_type=self.pk1d_type)
+            delta = data.Delta.from_fitsio(delta_file[number_line],pk1d_type=self.pk1d_type)
         return(delta)
 
+
+    def return_params(self,center_ra=True):
+        ra, dec, z, delta, sigma,zqso,id = [],[],[],[],[],[],[]
+        for i in range(len(self.delta_array)):
+            zqso.append(Delta.z_qso(self.delta_array[i]))
+            if((Delta.ra(self.delta_array[i]) > np.pi)&(center_ra)):ra.append(Delta.ra(self.delta_array[i])-2*np.pi)
+            else : ra.append(Delta.ra(self.delta_array[i]))
+            dec.append(Delta.dec(self.delta_array[i]))
+            if(Delta.ivar(self.delta_array[i]) is not None): sigma.append(1/np.sqrt(np.asarray(Delta.ivar(self.delta_array[i]))))
+            else : sigma.append(np.array([0.0 for i in range(len(Delta.delta(self.delta_array[i])))]))
+            delta.append(Delta.delta(self.delta_array[i]))
+            id.append(Delta.thingid(self.delta_array[i]))
+            z.append(((10**Delta.log_lambda(self.delta_array[i]) / utils.lambdaLy)-1))
+
+        return(np.array(ra),
+               np.array(dec),
+               z,
+               np.array(zqso),
+               np.array(id),
+               sigma,
+               delta)
+
+    def write(self):
+        if((self.name is None)|(self.delta_array is None)):
+            raise ValueError("No")
+        fits = fitsio.FITS(self.name,'rw',clobber=True)
+        for i in range(len(self.delta_array)):
+            delta =self.delta_array[i]
+            fi,head = self.create_fi(delta)
+            fits.write(fi,header=head,extname=str(head['THING_ID']))
 
     def create_fi(self,delta):
         nrows = len(Delta.delta(delta))
@@ -1023,50 +1057,6 @@ class Delta(object):
         head['MJD'] = Delta.mjd(delta)
         head['FIBERID'] = Delta.fiberid(delta)
         return(h,head)
-
-    def return_params(self,center_ra=True):
-        ra, dec, z, delta, sigma,zqso,id = [],[],[],[],[],[],[]
-        for j in range(1,len(self.delta_file)):
-            delta_line = self.read_line(j)
-            zqso.append(Delta.z_qso(delta_line))
-            if((Delta.ra(delta_line) > np.pi)&(center_ra)):ra.append(Delta.ra(delta_line)-2*np.pi)
-            else : ra.append(Delta.ra(delta_line))
-            dec.append(Delta.dec(delta_line))
-            if(Delta.ivar(delta_line) is not None): sigma.append(1/np.sqrt(np.asarray(Delta.ivar(delta_line))))
-            else : sigma.append(np.array([0.0 for i in range(len(Delta.delta(delta_line)))]))
-            delta.append(Delta.delta(delta_line))
-            id.append(Delta.thingid(delta_line))
-            z.append(((10**Delta.log_lambda(delta_line) / utils.lambdaLy)-1))
-
-        return(np.array(ra),
-               np.array(dec),
-               z,
-               np.array(zqso),
-               np.array(id),
-               sigma,
-               delta)
-
-    def return_id(self):
-        id = []
-        for i in range(1,len(self.delta_file)):
-            delta = self.read_line(i)
-            id.append(Delta.thingid(delta))
-        return(id)
-
-
-
-
-    def write_from_delta_list(self):
-        fits = fitsio.FITS(self.name,'rw',clobber=True)
-        for i in range(len(self.delta_array)):
-            delta =self.delta_array[i]
-            fi,head = self.create_fi(delta)
-            fits.write(fi,header=head)
-
-    def close(self):
-        self.delta_file.close()
-
-
 
     @staticmethod
     def ra(delta):
