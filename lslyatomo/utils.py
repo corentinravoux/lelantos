@@ -76,7 +76,7 @@ def return_suplementary_parameters(mode,property=None,zmin=None,zmax=None):
     if(mode == "middle"):
         if(property is not None):
             zmin = property.boundary_sky_coord[0][2]
-            zmax = property.boundary_sky_coord[0][1]
+            zmax = property.boundary_sky_coord[1][2]
             suplementary_parameters = [(zmin + zmax)/2]
         elif((zmin is not None)&(zmin is not None)):
             suplementary_parameters = [(zmin + zmax)/2]

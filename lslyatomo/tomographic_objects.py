@@ -551,7 +551,7 @@ class StackMap(TomographicMap):
         if(coordinate_convert is not None):
             if(coordinate_convert.lower() == tomographic_map.coordinate_transform):
                     raise ValueError("Please choose a coordinate transformation different than the map one")
-        if(normalized):
+        if(normalized is not None):
             if(catalog.object_type.lower() != "void"):
                 raise KeyError("It is not possible to normalize this catalog")
             else:

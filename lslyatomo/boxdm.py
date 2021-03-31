@@ -119,8 +119,6 @@ class BoxExtractor():
     def fill_DM_map(self,ra_array,dec_array,z_array,R_of_z,ra0_box,dec0_box,shape_map_output,Rmin,h,DM_map,i_box,get_prop=None,Props_map=None):
         self.log.add("Creation of (RA,DEC,R) data matrix")
         coords_ra_dec =np.moveaxis(np.array(np.meshgrid(ra_array,dec_array,h * R_of_z(z_array),indexing='ij')),0,-1)
-        print("test 1 ", coords_ra_dec[:,:,:,0].max(),coords_ra_dec[:,:,:,0].min(),coords_ra_dec[:,:,:,1].max(),coords_ra_dec[:,:,:,1].min())
-        print(np.radians(self.box_bound[i_box][0]))
         mask1 = (DM_map[:,:,:] == None)
         mask2 = (coords_ra_dec[:,:,:,0]>=np.radians(self.box_bound[i_box][0]))
         mask2 &=(coords_ra_dec[:,:,:,0]<np.radians(self.box_bound[i_box][1]))
@@ -140,12 +138,10 @@ class BoxExtractor():
                                        coords_ra_dec[:,:,:,1],
                                        coords_ra_dec[:,:,:,2],
                                        ra0_box,dec0_box)
-        print("test 1 ", coords_box_saclay[:,:,:,0].max(),coords_box_saclay[:,:,:,0].min(),coords_box_saclay[:,:,:,1].max(),coords_box_saclay[:,:,:,1].min())
         del coords_ra_dec
         self.log.add("Searching for the nearest pixels of the Saclay box {}".format(i_box))
         coords_pixels_box_saclay = np.zeros(coords_box_saclay.shape)
         coords_pixels_box_saclay[:,:,:,0],coords_pixels_box_saclay[:,:,:,1],coords_pixels_box_saclay[:,:,:,2] = utils.saclay_mock_coord_dm_map(coords_box_saclay[:,:,:,0],coords_box_saclay[:,:,:,1],coords_box_saclay[:,:,:,2],Rmin,self.size_cell,self.box_shape[i_box],self.interpolation_method)
-        print("test 1 ", coords_pixels_box_saclay[:,:,:,0].max(),coords_pixels_box_saclay[:,:,:,0].min(),coords_pixels_box_saclay[:,:,:,1].max(),coords_pixels_box_saclay[:,:,:,1].min())
         del coords_box_saclay
         self.log.add("Loading of the Saclay map {}".format(i_box))
         DM_mocks_map = utils.saclay_mock_get_box(self.box_dir[i_box],self.box_shape[i_box])
@@ -334,8 +330,8 @@ class BoxExtractor():
                                                                      Y_tomo_array,
                                                                      Z_tomo_array,
                                                                      property_file.coordinate_transform,
-                                                                     inv_rcomov=inv_rcomov
-                                                                     ,inv_distang=inv_distang,
+                                                                     inv_rcomov=inv_rcomov,
+                                                                     inv_distang=inv_distang,
                                                                      distang=distang,
                                                                      suplementary_parameters=suplementary_parameters)
         del X_tomo_array,Y_tomo_array, Z_tomo_array,suplementary_parameters,rcomov,distang,inv_rcomov,inv_distang
@@ -343,7 +339,9 @@ class BoxExtractor():
             (dm_map,prop_maps,prop) = self.extract_box_multiple(ra_array,dec_array,z_array,shape_map_output,rsd_box)
         else :
             (dm_map,prop_maps,prop) = self.extract_box(ra_array,dec_array,z_array,shape_map_output,rsd_box)
+        del ra_array,dec_array
         if(growth_multiplication): dm_map = self.multiply_by_growth(dm_map,z_array)
+        del z_array
         if(matter_field): dm_map = self.convert_to_matter_field(dm_map)
         if(gaussian_smoothing is not None):
             gaussian_smoothing_pix = gaussian_smoothing*utils.pixel_per_mpc(property_file.size,shape_map_output)
