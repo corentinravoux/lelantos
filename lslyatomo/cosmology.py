@@ -237,7 +237,6 @@ class DeltaModifier(object):
 
         (delta,ivar,delta_other,weight_other) = self.get_delta_sigma_array(namefile,namefile_other=namefile_other)
 
-
         seed = np.random.randint(10000000)
         np.random.seed(seed)
         ivar_rand = np.random.permutation(ivar)
@@ -247,6 +246,77 @@ class DeltaModifier(object):
             weight_other_rand = np.random.permutation(weight_other)
             delta_other_rand = np.random.permutation(delta_other)
 
+        self.write_delta_sigma_array(name_out,delta_rand,ivar_rand,namefile,
+                                     other_delta_path=other_delta_path,namefile_other=namefile_other,
+                                     delta_other_rand=delta_other_rand,weight_other_rand=weight_other_rand,
+                                     other_name_out=other_name_out)
+
+
+
+    def shuffle_deltas_cut_z(self,name_out,n_cut,zmin,zmax,other_delta_path=None,other_name_out=None,seed=None):
+
+        namefile = np.sort(glob.glob(os.path.join(self.delta_path,"delta-*.fits*")))
+        namefile_other = None
+        if(other_delta_path is not None):
+            namefile_other = np.sort(glob.glob(os.path.join(other_delta_path,"delta-*.fits*")))
+        redshift_cut = np.linspace(zmin,zmax,n_cut+1)
+        (delta,ivar,delta_other,weight_other) = self.get_delta_sigma_array_cut_z(namefile,redshift_cut,namefile_other=namefile_other)
+
+        if(seed is None):
+            seed = np.random.randint(10000000)
+        ivar_rand,delta_rand = [],[]
+        np.random.seed(seed)
+        for k in range(n_cut):
+            ivar_rand.append(np.random.permutation(ivar[k]))
+        np.random.seed(seed)
+        for k in range(n_cut):
+            delta_rand.append(np.random.permutation(delta[k]))
+        if(other_delta_path is not None):
+            weight_other_rand,delta_other_rand = [],[]
+            np.random.seed(seed)
+            for k in range(n_cut):
+                weight_other_rand.append(np.random.permutation(weight_other[k]))
+            np.random.seed(seed)
+            for k in range(n_cut):
+                delta_other_rand.append(np.random.permutation(delta_other[k]))
+
+        self.write_delta_sigma_array_cut_z(name_out,delta_rand,ivar_rand,namefile,
+                                           n_cut,redshift_cut,
+                                           other_delta_path=other_delta_path,namefile_other=namefile_other,
+                                           delta_other_rand=delta_other_rand,weight_other_rand=weight_other_rand,
+                                           other_name_out=other_name_out)
+
+
+
+    def get_delta_sigma_array(self,namefile,namefile_other=None):
+        weight_other,delta_other= None,None
+        if(namefile_other is not None):
+            weight_other,delta_other = [],[]
+        ivar,delta = [],[]
+        for i in range(len(namefile)):
+            delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
+            delta_tomo.read()
+            for j in range(len(delta_tomo.delta_array)):
+                ivar.append(tomographic_objects.Delta.ivar(delta_tomo.delta_array[j]))
+                delta.append(tomographic_objects.Delta.delta(delta_tomo.delta_array[j]))
+            if(namefile_other is not None):
+                delta_tomo_other = tomographic_objects.Delta(name=namefile_other[i],pk1d_type=False)
+                delta_tomo_other.read()
+                for j in range(len(delta_tomo_other.delta_array)):
+                    weight_other.append(tomographic_objects.Delta.weights(delta_tomo_other.delta_array[j]))
+                    delta_other.append(tomographic_objects.Delta.delta(delta_tomo_other.delta_array[j]))
+        ivar = np.concatenate(ivar,axis=0)
+        delta = np.concatenate(delta,axis=0)
+        if(namefile_other is not None):
+            weight_other = np.concatenate(weight_other,axis=0)
+            delta_other = np.concatenate(delta_other,axis=0)
+        return(delta,ivar,delta_other,weight_other)
+
+
+    def write_delta_sigma_array(self,name_out,delta_rand,ivar_rand,namefile,
+                                other_delta_path=None,namefile_other=None,
+                                delta_other_rand=None,weight_other_rand=None,
+                                other_name_out=None):
         ibegin = 0
         for i in range(len(namefile)):
             delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
@@ -280,33 +350,44 @@ class DeltaModifier(object):
 
 
 
-    def shuffle_deltas_cut_z(self,name_out,n_cut,zmin,zmax,other_delta_path=None,other_name_out=None,seed=None):
-
-        namefile = np.sort(glob.glob(os.path.join(self.delta_path,"delta-*.fits*")))
-        namefile_other = None
-        if(other_delta_path is not None):
-            namefile_other = np.sort(glob.glob(os.path.join(other_delta_path,"delta-*.fits*")))
-        redshift_cut = np.linspace(zmin,zmax,n_cut+1)
-        (delta,ivar,delta_other,weight_other) = self.get_delta_sigma_array_cut_z(namefile,redshift_cut,namefile_other=namefile_other)
-
-        if(seed is None):
-            seed = np.random.randint(10000000)
-        ivar_rand,delta_rand = [],[]
-        np.random.seed(seed)
+    def get_delta_sigma_array_cut_z(self,namefile,redshift_cut,namefile_other=None):
+        n_cut=len(redshift_cut) - 1
+        weight_other,delta_other= None,None
+        if(namefile_other is not None):
+            weight_other,delta_other = [[]for i in range(n_cut)],[[]for i in range(n_cut)]
+        ivar,delta = [[]for i in range(n_cut)],[[]for i in range(n_cut)]
+        for i in range(len(namefile)):
+            delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
+            delta_tomo.read()
+            for j in range(len(delta_tomo.delta_array)):
+                redshift = ((10**tomographic_objects.Delta.log_lambda(delta_tomo.delta_array[j]) / utils.lambdaLy)-1)
+                for k in range(n_cut):
+                    mask = (redshift >= redshift_cut[k])&(redshift < redshift_cut[k+1])
+                    ivar[k].append(tomographic_objects.Delta.ivar(delta_tomo.delta_array[j])[mask])
+                    delta[k].append(tomographic_objects.Delta.delta(delta_tomo.delta_array[j])[mask])
+            if(namefile_other is not None):
+                delta_tomo_other = tomographic_objects.Delta(name=namefile_other[i],pk1d_type=False)
+                delta_tomo_other.read()
+                for j in range(len(delta_tomo_other.delta_array)):
+                    redshift = ((10**tomographic_objects.Delta.log_lambda(delta_tomo_other.delta_array[j]) / utils.lambdaLy)-1)
+                    for k in range(n_cut):
+                        mask = (redshift >= redshift_cut[k])&(redshift < redshift_cut[k+1])
+                        weight_other[k].append(tomographic_objects.Delta.weights(delta_tomo_other.delta_array[j])[mask])
+                        delta_other[k].append(tomographic_objects.Delta.delta(delta_tomo_other.delta_array[j])[mask])
         for k in range(n_cut):
-            ivar_rand.append(np.random.permutation(ivar[k]))
-        np.random.seed(seed)
-        for k in range(n_cut):
-            delta_rand.append(np.random.permutation(delta[k]))
-        if(other_delta_path is not None):
-            weight_other_rand,delta_other_rand = [],[]
-            np.random.seed(seed)
+            ivar[k] = np.concatenate(ivar[k],axis=0)
+            delta[k] = np.concatenate(delta[k],axis=0)
+        if(namefile_other is not None):
             for k in range(n_cut):
-                weight_other_rand.append(np.random.permutation(weight_other[k]))
-            np.random.seed(seed)
-            for k in range(n_cut):
-                delta_other_rand.append(np.random.permutation(delta_other[k]))
+                weight_other[k] = np.concatenate(weight_other[k],axis=0)
+                delta_other[k] = np.concatenate(delta_other[k],axis=0)
+        return(delta,ivar,delta_other,weight_other)
 
+    def write_delta_sigma_array_cut_z(self,name_out,delta_rand,ivar_rand,namefile,
+                                      n_cut,redshift_cut,
+                                      other_delta_path=None,namefile_other=None,
+                                      delta_other_rand=None,weight_other_rand=None,
+                                      other_name_out=None):
         ibegin = [0 for i in range(n_cut)]
         for i in range(len(namefile)):
             delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
@@ -347,70 +428,12 @@ class DeltaModifier(object):
 
 
 
-    def get_delta_sigma_array(self,namefile,namefile_other=None):
-        weight_other,delta_other= None,None
-        if(namefile_other is not None):
-            weight_other,delta_other = [],[]
-        ivar,delta = [],[]
-        for i in range(len(namefile)):
-            delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
-            delta_tomo.read()
-            for j in range(len(delta_tomo.delta_array)):
-                ivar.append(tomographic_objects.Delta.ivar(delta_tomo.delta_array[j]))
-                delta.append(tomographic_objects.Delta.delta(delta_tomo.delta_array[j]))
-            if(namefile_other is not None):
-                delta_tomo_other = tomographic_objects.Delta(name=namefile_other[i],pk1d_type=False)
-                delta_tomo_other.read()
-                for j in range(len(delta_tomo_other.delta_array)):
-                    weight_other.append(tomographic_objects.Delta.weights(delta_tomo_other.delta_array[j]))
-                    delta_other.append(tomographic_objects.Delta.delta(delta_tomo_other.delta_array[j]))
-        ivar = np.concatenate(ivar,axis=0)
-        delta = np.concatenate(delta,axis=0)
-        if(namefile_other is not None):
-            weight_other = np.concatenate(weight_other,axis=0)
-            delta_other = np.concatenate(delta_other,axis=0)
-        return(delta,ivar,delta_other,weight_other)
-
-
-    def get_delta_sigma_array_cut_z(self,namefile,redshift_cut,namefile_other=None):
-        n_cut=len(redshift_cut) - 1
-        weight_other,delta_other= None,None
-        if(namefile_other is not None):
-            weight_other,delta_other = [[]for i in range(n_cut)],[[]for i in range(n_cut)]
-        ivar,delta = [[]for i in range(n_cut)],[[]for i in range(n_cut)]
-        for i in range(len(namefile)):
-            delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
-            delta_tomo.read()
-            for j in range(len(delta_tomo.delta_array)):
-                redshift = ((10**tomographic_objects.Delta.log_lambda(delta_tomo.delta_array[j]) / utils.lambdaLy)-1)
-                for k in range(n_cut):
-                    mask = (redshift >= redshift_cut[k])&(redshift < redshift_cut[k+1])
-                    ivar[k].append(tomographic_objects.Delta.ivar(delta_tomo.delta_array[j])[mask])
-                    delta[k].append(tomographic_objects.Delta.delta(delta_tomo.delta_array[j])[mask])
-            if(namefile_other is not None):
-                delta_tomo_other = tomographic_objects.Delta(name=namefile_other[i],pk1d_type=False)
-                delta_tomo_other.read()
-                for j in range(len(delta_tomo_other.delta_array)):
-                    redshift = ((10**tomographic_objects.Delta.log_lambda(delta_tomo_other.delta_array[j]) / utils.lambdaLy)-1)
-                    for k in range(n_cut):
-                        mask = (redshift >= redshift_cut[k])&(redshift < redshift_cut[k+1])
-                        weight_other[k].append(tomographic_objects.Delta.weights(delta_tomo_other.delta_array[j])[mask])
-                        delta_other[k].append(tomographic_objects.Delta.delta(delta_tomo_other.delta_array[j])[mask])
-        for k in range(n_cut):
-            ivar[k] = np.concatenate(ivar[k],axis=0)
-            delta[k] = np.concatenate(delta[k],axis=0)
-        if(namefile_other is not None):
-            for k in range(n_cut):
-                weight_other[k] = np.concatenate(weight_other[k],axis=0)
-                delta_other[k] = np.concatenate(delta_other[k],axis=0)
-        return(delta,ivar,delta_other,weight_other)
-
-
-
-
     def subsample_deltas(self,name_out,number_cut,random_density_parameter=False,number_repeat=1,iterative_selection_parameters=None):
         deltas = self.get_new_healpix(number_cut,random_density_parameter=random_density_parameter,number_repeat=number_repeat,iterative_selection_parameters=None)
         self.save_deltas(deltas,name_out,number_cut)
+
+
+
 
 
     def save_deltas(self,deltas,name_out,number_cut):
