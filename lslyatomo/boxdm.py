@@ -120,10 +120,10 @@ class BoxExtractor():
         self.log.add("Creation of (RA,DEC,R) data matrix")
         coords_ra_dec =np.moveaxis(np.array(np.meshgrid(ra_array,dec_array,h * R_of_z(z_array),indexing='ij')),0,-1)
         mask1 = (DM_map[:,:,:] == None)
-        mask2 = (coords_ra_dec[:,:,:,0]>=np.radians(self.box_bound[i_box][0]))
-        mask2 &=(coords_ra_dec[:,:,:,0]<np.radians(self.box_bound[i_box][1]))
-        mask2 &=(coords_ra_dec[:,:,:,1]>=np.radians(self.box_bound[i_box][2]))
-        mask2 &=(coords_ra_dec[:,:,:,1]<np.radians(self.box_bound[i_box][3]))
+        mask2 = (coords_ra_dec[:,:,:,0]>=self.box_bound[i_box][0])
+        mask2 &=(coords_ra_dec[:,:,:,0]<self.box_bound[i_box][1])
+        mask2 &=(coords_ra_dec[:,:,:,1]>=self.box_bound[i_box][2])
+        mask2 &=(coords_ra_dec[:,:,:,1]<self.box_bound[i_box][3])
         if((len(mask1[mask1==True]) == 0)|(len(mask2[mask2==True])==0)):
             self.log.add("No need of the Saclay box {}".format(i_box))
             return(DM_map,Props_map)
@@ -243,10 +243,10 @@ class BoxExtractor():
         self.log.add("Creation of (RA,DEC,R) data matrix")
         R_array = h * R_of_z(z_array)
         mask1 = (DM_LOS[:] == None)
-        mask2 = (ra_array[:]>=np.radians(self.box_bound[i_box][0]))
-        mask2 &=(ra_array[:]<np.radians(self.box_bound[i_box][1]))
-        mask2 &=(dec_array[:]>=np.radians(self.box_bound[i_box][2]))
-        mask2 &=(dec_array[:]<np.radians(self.box_bound[i_box][3]))
+        mask2 = (ra_array[:]>=self.box_bound[i_box][0])
+        mask2 &=(ra_array[:]<self.box_bound[i_box][1])
+        mask2 &=(dec_array[:]>=self.box_bound[i_box][2])
+        mask2 &=(dec_array[:]<self.box_bound[i_box][3])
         if((len(mask1[mask1==True]) == 0)|(len(mask2[mask2==True])==0)):
             self.log.add("No need of the Saclay box {}".format(i_box))
             return(DM_LOS)
@@ -334,6 +334,8 @@ class BoxExtractor():
                                                                      inv_distang=inv_distang,
                                                                      distang=distang,
                                                                      suplementary_parameters=suplementary_parameters)
+        ra_array = np.degrees(ra_array)
+        dec_array = np.degrees(dec_array)
         del X_tomo_array,Y_tomo_array, Z_tomo_array,suplementary_parameters,rcomov,distang,inv_rcomov,inv_distang
         if(type(self.box_dir) == list):
             (dm_map,prop_maps,prop) = self.extract_box_multiple(ra_array,dec_array,z_array,shape_map_output,rsd_box)
@@ -375,6 +377,8 @@ class BoxExtractor():
                                                                      ,inv_distang=inv_distang,
                                                                      distang=distang,
                                                                      suplementary_parameters=suplementary_parameters)
+        ra_array = np.degrees(ra_array)
+        dec_array = np.degrees(dec_array)
         if(type(self.box_dir) == list):
             los = self.extract_los(ra_array,dec_array,z_array)
         else :

@@ -164,7 +164,7 @@ def get_direction_indexes(direction,rotate):
     return(x_index,y_index,index_direction,index_dict)
 
 
-saclay_mock_lines_per_box = {"box" : 5,"vx" : 5,"vy" : 5,"vz" : 5,"eta_xx":1,"eta_xy":1,"eta_xz":1,"eta_yx":1,"eta_yy":1,"eta_yz":1,"eta_zx":1,"eta_zy":1,"eta_zz":1}
+saclay_mock_lines_per_box = {"box" : 1,"vx" : 5,"vy" : 5,"vz" : 5,"eta_xx":1,"eta_xy":1,"eta_xz":1,"eta_yx":1,"eta_yy":1,"eta_yz":1,"eta_zx":1,"eta_zy":1,"eta_zz":1}
 
 def saclay_mock_box_cosmo_parameters(box_shape,size_cell):
     import cosmolopy.distance as dist
@@ -193,7 +193,7 @@ def saclay_mock_box_cosmo_parameters(box_shape,size_cell):
 def saclay_mock_center_of_the_box(box_bound):
     ra0_box = (box_bound[0] + box_bound[1])/2
     dec0_box = (box_bound[2] + box_bound[3])/2
-    return(np.radians(ra0_box), np.radians(dec0_box))
+    return(ra0_box,dec0_box)
 
 
 def saclay_mock_coord_dm_map(X,Y,Z,Rmin,size_cell,box_shape,interpolation_method):
@@ -237,7 +237,7 @@ def saclay_mock_sky_to_cartesian(ra,dec,R,ra0,dec0):
     except :
         from lslyatomo.saclaymocks import box as saclay_mock_box
         print("SaclayMocks might be updated, we suggest to install SaclayMocks independently")
-    X,Y,Z = saclay_mock_box.ComputeXYZ2(ra,dec,R,ra0,dec0)
+    X,Y,Z = saclay_mock_box.ComputeXYZ2(ra*(np.pi/180),dec*(np.pi/180),R,ra0*(np.pi/180),dec0*(np.pi/180))
     return(X,Y,Z)
 
 
@@ -715,14 +715,22 @@ def save_histo(pwd,value,value_name,name,comparison=None,comparison_legend=None,
 
 
 def plot_mean_redshift_dependence(value,redshift,value_name,name,**kwargs):
+    ax = return_key(kwargs,f"{value_name}_ax",None)
     nb_bins = return_key(kwargs,f"{value_name}_z_bins",50)
     ls=return_key(kwargs,f"{value_name}_linestyle",None)
     color=return_key(kwargs,f"{value_name}_color",None)
     marker=return_key(kwargs,f"{value_name}_marker",'.')
     lambda_obs=return_key(kwargs,f"{value_name}_lambda_obs",False)
     lambda_rest=return_key(kwargs,f"{value_name}_lambda_rest",False)
+    multiplicative_coef=return_key(kwargs,f"{value_name}_multiplicative_coef",None)
 
     outlier_insensitive = return_key(kwargs,f"{value_name}_outlier_insensitive",False)
+
+    if(ax is None):
+        ax = plt.gca()
+
+    if(multiplicative_coef is not None):
+        value = value * multiplicative_coef
 
     if(lambda_obs):
         redshift = (1 + redshift)*lambdaLy
@@ -743,7 +751,7 @@ def plot_mean_redshift_dependence(value,redshift,value_name,name,**kwargs):
                                               [np.min(value),np.max(value)],
                                               outlier_insensitive=outlier_insensitive)
 
-    plt.errorbar(bin_centers,means, errors,color=color,ls=ls, marker=marker)
+    ax.errorbar(bin_centers,means, errors,color=color,ls=ls, marker=marker)
 
     if(outlier_insensitive):
         name = name + "_outlier_insensitive"
