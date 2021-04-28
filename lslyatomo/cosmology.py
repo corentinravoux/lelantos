@@ -74,7 +74,7 @@ def get_deltas(namefile,center_ra=True,pk1d_type=True):
 def get_merged_multiple_exposure_deltas(namefile):
     """ Merge deltas with repeated observation"""
     # Pack LOS by Id in the dict Deltas
-    ra, dec, z, deltas, sigmas,zqso = [],[],[],[],[],[],[]
+    ra, dec, z, deltas, sigmas,zqso = [],[],[],[],[],[]
     (Deltas,ids) = get_id_list(namefile)
 
     # For each pack of LOS
@@ -551,7 +551,7 @@ class DeltaModifier(object):
                 cartesian_deltas = np.zeros(sky_deltas.shape)
                 cartesian_deltas[:,0],cartesian_deltas[:,1],cartesian_deltas[:,2] = utils.convert_sky_to_cartesian(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],coordinate_transform,rcomov=rcomov,distang=distang,suplementary_parameters=suplementary_parameters)
                 pixel = tomographic_objects.Pixel.init_from_property_files(property_file_name,pixel_array=cartesian_deltas,name=None)
-                pixel_analyzer = PixelAnalizer(self.pwd,pixel=pixel)
+                pixel_analyzer = PixelAnalizer(pixel=pixel)
                 (zpar,dperpz,densityz) = pixel_analyzer.compute_plot_mean_distance_density("",plot=False)
                 diff_dperp.append(np.mean(abs(np.array(dperpz) -np.array(dperp_ref[cut]))))
                 diff_density.append(np.mean(abs(np.array(densityz) -np.array(density_ref[cut]))))
@@ -575,7 +575,6 @@ class DeltaConverter():
     def __init__(self,pwd,Omega_m,delta_path,coordinate_transform,plot_pixel_properties,software,return_qso_catalog=None,return_dla_catalog=None,dla_catalog=None,return_sky_catalogs=False,repeat=False):
 
         self.pwd = pwd
-        os.chdir(pwd)
         self.delta_path = delta_path
         self.Omega_m = Omega_m
         self.coordinate_transform = coordinate_transform
@@ -624,7 +623,6 @@ class DeltaConverter():
 
         sky_deltas = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j]] for i in range(len(ra)) for j in range(len(z[i]))])
         sky_deltas = sky_deltas[utils.cut_sky_catalog(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],ramin=ra_cut_min,ramax=ra_cut_max,decmin=dec_cut_min,decmax=dec_cut_max,zmin=z_cut_min,zmax=z_cut_max)]
-
         suplementary_parameters = utils.return_suplementary_parameters(self.coordinate_transform,zmin=np.min(sky_deltas[:,2]),zmax=np.max(sky_deltas[:,2]))
         cartesian_deltas = np.zeros(sky_deltas.shape)
         cartesian_deltas[:,0],cartesian_deltas[:,1],cartesian_deltas[:,2] = utils.convert_sky_to_cartesian(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],self.coordinate_transform,rcomov=rcomov,distang=distang,suplementary_parameters=suplementary_parameters)
@@ -726,7 +724,7 @@ class DeltaConverter():
 
 
     def create_dachshund_input_files(self,coordinates_to_write,properties,name_pixel,create_launcher=None):
-        pixel = tomographic_objects.Pixel(name=name_pixel,pixel_array=coordinates_to_write)
+        pixel = tomographic_objects.Pixel(name=os.path.join(self.pwd,name_pixel),pixel_array=coordinates_to_write)
         pixel.write()
         if(create_launcher is not None):
             self.create_dachshund_launcher(np.max(coordinates_to_write[:,0]),
@@ -746,7 +744,7 @@ class DeltaConverter():
 
 
     def create_dachshund_launcher(self,lx,ly,lz,npix,nx,ny,nz,sigmaf,lperp,lpar,namepixel,namemap,nameinput):
-        f = open(f'{nameinput}.cfg',"w")
+        f = open(os.path.join(self.pwd,f'{nameinput}.cfg'),"w")
         f.write("#lx, ly, lz: the domain size in each direction.\n")
         f.write("#num_pixels: the *total* number of pixels.\n")
         f.write("#map_nx, map_ny, map_nz: the number of map points. The map points are arbitrary but for now these n's are used to setup a uniform grid across the domain given above.\n")
@@ -786,7 +784,7 @@ class DeltaConverter():
         coordinate_transform = self.coordinate_transform
         boundary_cartesian_coord = ((properties_map_pixels["minx"],properties_map_pixels["miny"],properties_map_pixels["minz"]),(properties_map_pixels["maxx"],properties_map_pixels["maxy"],properties_map_pixels["maxz"]))
         boundary_sky_coord = ((properties_map_pixels["minra"],properties_map_pixels["mindec"],properties_map_pixels["minredshift"]),(properties_map_pixels["maxra"],properties_map_pixels["maxdec"],properties_map_pixels["maxredshift"]))
-        property_file = tomographic_objects.MapPixelProperty(name=name_out,size=size,shape=shape,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,Omega_m=self.Omega_m)
+        property_file = tomographic_objects.MapPixelProperty(name=os.path.join(self.pwd,name_out),size=size,shape=shape,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,Omega_m=self.Omega_m)
         return(property_file)
 
 
@@ -900,8 +898,11 @@ class DeltaConverter():
         for i in range(len(list(chunks.keys()))):
             key = list(chunks.keys())[i]
             if key != 'overlaping' :
-                self.create_input_files(chunks[key]["coord"],properties,"{}_{}".format(properties["name_pixel"],key),create_launcher=None)
-        pickle.dump([filename,parallel_launcher_params,number_chunks,overlaping],open(f"{nameout}.pickle","wb"))
+                self.create_input_files(chunks[key]["coord"],
+                                        properties,
+                                        f"{properties['name_pixel']}_{key}",
+                                        create_launcher=None)
+        pickle.dump([filename,parallel_launcher_params,number_chunks,overlaping],open(os.path.join(self.pwd,f"{nameout}.pickle"),"wb"))
 
 
 
@@ -909,16 +910,36 @@ class DeltaConverter():
         boundary_cartesian_coord = ((properties_map_pixels["minx"],properties_map_pixels["miny"],properties_map_pixels["minz"]),(properties_map_pixels["maxx"],properties_map_pixels["maxy"],properties_map_pixels["maxz"]))
         boundary_sky_coord = ((properties_map_pixels["minra"],properties_map_pixels["mindec"],properties_map_pixels["minredshift"]),(properties_map_pixels["maxra"],properties_map_pixels["maxdec"],properties_map_pixels["maxredshift"]))
         if(self.return_dla_catalog is not None):
-            dla_catalog_cartesian = tomographic_objects.DLACatalog.init_from_pixel_catalog(cartesian_dla_catalog,name=self.return_dla_catalog,coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
+            dla_catalog_cartesian = tomographic_objects.DLACatalog.init_from_pixel_catalog(cartesian_dla_catalog,
+                                                                                           name=os.path.join(self.pwd,self.return_dla_catalog),
+                                                                                           coordinate_transform=self.coordinate_transform,
+                                                                                           Omega_m=self.Omega_m,
+                                                                                           boundary_cartesian_coord=boundary_cartesian_coord,
+                                                                                           boundary_sky_coord=boundary_sky_coord)
             dla_catalog_cartesian.write()
             if(self.return_sky_catalogs):
-                dla_catalog_sky = tomographic_objects.DLACatalog.init_from_pixel_catalog(sky_dla_catalog,name=f"{self.return_dla_catalog}_sky_coordinates",coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
+                dla_catalog_sky = tomographic_objects.DLACatalog.init_from_pixel_catalog(sky_dla_catalog,
+                                                                                         name=os.path.join(self.pwd,f"{self.return_dla_catalog}_sky_coordinates"),
+                                                                                         coordinate_transform=self.coordinate_transform,
+                                                                                         Omega_m=self.Omega_m,
+                                                                                         boundary_cartesian_coord=boundary_cartesian_coord,
+                                                                                         boundary_sky_coord=boundary_sky_coord)
                 dla_catalog_sky.write()
         if(self.return_qso_catalog is not None):
-            quasar_catalog_cartesian = tomographic_objects.QSOCatalog.init_from_pixel_catalog(cartesian_qso_catalog,name=self.return_qso_catalog,coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
+            quasar_catalog_cartesian = tomographic_objects.QSOCatalog.init_from_pixel_catalog(cartesian_qso_catalog,
+                                                                                              name=os.path.join(self.pwd,self.return_qso_catalog),
+                                                                                              coordinate_transform=self.coordinate_transform,
+                                                                                              Omega_m=self.Omega_m,
+                                                                                              boundary_cartesian_coord=boundary_cartesian_coord,
+                                                                                              boundary_sky_coord=boundary_sky_coord)
             quasar_catalog_cartesian.write()
             if(self.return_sky_catalogs):
-                quasar_catalog_sky = tomographic_objects.QSOCatalog.init_from_pixel_catalog(sky_qso_catalog,name=f"{self.return_qso_catalog}_sky_coordinates",coordinate_transform=self.coordinate_transform,Omega_m=self.Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
+                quasar_catalog_sky = tomographic_objects.QSOCatalog.init_from_pixel_catalog(sky_qso_catalog,
+                                                                                            name=os.path.join(self.pwd,f"{self.return_qso_catalog}_sky_coordinates"),
+                                                                                            coordinate_transform=self.coordinate_transform,
+                                                                                            Omega_m=self.Omega_m,
+                                                                                            boundary_cartesian_coord=boundary_cartesian_coord,
+                                                                                            boundary_sky_coord=boundary_sky_coord)
                 quasar_catalog_sky.write()
 
     def write_additional_catalogs(self,dla_catalog_sky,dla_catalog_cartesian,quasar_catalog_sky,quasar_catalog_cartesian):
@@ -954,8 +975,8 @@ class DeltaConverter():
         property_file.write()
         self.create_additional_catalogs(cartesian_qso_catalog,cartesian_dla_catalog,sky_qso_catalog,sky_dla_catalog,properties_map_pixels)
         if(self.plot_pixel_properties):
-            pixel_analyzer = PixelAnalizer(self.pwd,pixel=properties["name_pixel"],property_file=property_file_name)
-            pixel_analyzer.analyze_pixels(False,True,name_dperp=nameout,coupled_plot=True)
+            pixel_analyzer = PixelAnalizer(pixel=os.path.join(self.pwd,properties["name_pixel"]),property_file=os.path.join(self.pwd,property_file_name))
+            pixel_analyzer.analyze_pixels(False,True,name_dperp=os.path.join(self.pwd,nameout),coupled_plot=True)
 
 
 
@@ -964,9 +985,8 @@ class DeltaConverter():
 
 class PixelAnalizer(object):
 
-    def __init__(self,pwd,pixel=None,property_file=None):
+    def __init__(self,pixel=None,property_file=None):
 
-        self.pwd = pwd
         if(type(pixel) == str):
             pixel_class = tomographic_objects.Pixel.init_from_property_files(property_file,name=pixel)
             pixel_class.read()
