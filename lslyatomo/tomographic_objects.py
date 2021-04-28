@@ -1341,7 +1341,7 @@ class Catalog(object):
 
 
     # CR - add center and degree as a catalog parameter (always centered and in radians) + add conversion in the other way
-    def convert_coordinates(self,decenter=False,degree=False):
+    def convert_coordinates(self,center=False,decenter=False,degree=False,radians=True):
         if(self.catalog_type != "sky"):
             return()
         if(decenter) :

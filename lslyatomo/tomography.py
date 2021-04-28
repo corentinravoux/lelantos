@@ -172,8 +172,8 @@ class TomographyPlot(object):
             x = np.linspace(min(bins),max(bins),1000)
             y = fit_function(x, *popt)
             mu,sigma = popt[1],popt[2]
-            print(mu,sigma)
             plt.plot(x,y,'r--',linewidth=2)
+            return(mu,sigma)
 
 
 
@@ -253,15 +253,41 @@ class TomographyPlot(object):
                 void_in = void_in[mask_void]
         if(galaxy_catalog is not None):
             mask_galaxy_in = self.select_void_in(center_mpc,space_mpc,void_catalog,index_direction)
-            galaxy_in = np.transpose(np.vstack([galaxy_catalog.coord[:,0],galaxy_catalog.coord[:,1],galaxy_catalog.coord[:,2],galaxy_catalog.error_z]))[mask_galaxy_in]
+            galaxy_in = np.transpose(np.vstack([galaxy_catalog.coord[:,0],
+                                                galaxy_catalog.coord[:,1],
+                                                galaxy_catalog.coord[:,2],
+                                                galaxy_catalog.error_z]))[mask_galaxy_in]
 
         name_plot = f"{name}_direction_{direction}_mpc_{center_mpc}"
-        TomographyPlot.plot_slice(self.pwd,map_slice,extentmap,xlab,ylab,name_plot,x_index,y_index,pixel_in=pixel_in,pixel_bis_in=pixel_bis_in,qso_in=qso_in,qso_bis_in=qso_bis_in,void_in=void_in,void_bis_in=void_bis_in,galaxy_in=galaxy_in,redshift_axis=redshift_axis,tomographic_map=tomographic_map,rotate=rotate,**self.kwargs)
+        TomographyPlot.plot_slice(self.pwd,
+                                  map_slice,
+                                  extentmap,
+                                  xlab,
+                                  ylab,
+                                  name_plot,
+                                  x_index,
+                                  y_index,
+                                  pixel_in=pixel_in,
+                                  pixel_bis_in=pixel_bis_in,
+                                  qso_in=qso_in,
+                                  qso_bis_in=qso_bis_in,
+                                  void_in=void_in,
+                                  void_bis_in=void_bis_in,
+                                  galaxy_in=galaxy_in,
+                                  redshift_axis=redshift_axis,
+                                  tomographic_map=tomographic_map,
+                                  rotate=rotate,
+                                  **self.kwargs)
 
 
 
     @staticmethod
-    def plot_slice(pwd,map_slice,extentmap,xlab,ylab,name,x_index,y_index,pixel_in=None,pixel_bis_in=None,qso_in=None,qso_bis_in=None,void_in=None,void_bis_in=None,galaxy_in=None,redshift_axis=False,tomographic_map=None,rotate=False,save_fig=True,**kwargs):
+    def plot_slice(pwd,map_slice,extentmap,xlab,ylab,name,x_index,y_index,
+                   pixel_in=None,pixel_bis_in=None,qso_in=None,
+                   qso_bis_in=None,void_in=None,void_bis_in=None,
+                   galaxy_in=None,redshift_axis=False,
+                   tomographic_map=None,rotate=False,
+                   save_fig=True,**kwargs):
         plt.figure()
         fig = plt.gcf()
         ax = plt.gca()
@@ -293,10 +319,10 @@ class TomographyPlot(object):
 
 
         if(save_fig):
-            plt.savefig(os.path.join(pwd,f"{name}.pdf"),
-                        format="pdf",
+            format = utils.return_key(kwargs,"map_format",'pdf')
+            plt.savefig(os.path.join(pwd,f"{name}.{format}"),
+                        format=format,
                         dpi=utils.return_key(kwargs,"map_dpi",'figure'))
-            plt.show()
             plt.close()
 
 
@@ -316,17 +342,18 @@ class TomographyPlot(object):
                         color=utils.return_key(kwargs,"pixel_marker_color","k"),
                         linestyle = 'None')
         if(pixel_bis_in is not None):
-            plt.plot(pixel_bis_in[:,x_index],pixel_bis_in[:,y_index],
-                        markersize=utils.return_key(kwargs,"pixel_bis_marker_size",
-                                           utils.return_key(kwargs,"pixel_marker_size",2)),
-                        marker=utils.return_key(kwargs,"pixel_bis_marker",
-                                                utils.return_key(kwargs,"pixel_marker",".")),
-                        markeredgewidth = utils.return_key(kwargs,"pixel_bis_marker_edge_size",
-                                                           utils.return_key(kwargs,"pixel_marker_edge_size",1)),
+            if(utils.return_key(kwargs,"pixel_bis_on",True)):
+                plt.plot(pixel_bis_in[:,x_index],pixel_bis_in[:,y_index],
+                            markersize=utils.return_key(kwargs,"pixel_bis_marker_size",
+                                               utils.return_key(kwargs,"pixel_marker_size",2)),
+                            marker=utils.return_key(kwargs,"pixel_bis_marker",
+                                                    utils.return_key(kwargs,"pixel_marker",".")),
+                            markeredgewidth = utils.return_key(kwargs,"pixel_bis_marker_edge_size",
+                                                               utils.return_key(kwargs,"pixel_marker_edge_size",1)),
 
-                        color=utils.return_key(kwargs,"pixel_bis_grey","0.5"),
-                        alpha=utils.return_key(kwargs,"pixel_bis_transparency",0.5),
-                        linestyle = 'None')
+                            color=utils.return_key(kwargs,"pixel_bis_grey","0.5"),
+                            alpha=utils.return_key(kwargs,"pixel_bis_transparency",0.5),
+                            linestyle = 'None')
         if(qso_in is not None):
             plt.plot(qso_in[:,x_index],qso_in[:,y_index],
                      marker = utils.return_key(kwargs,"qso_marker","*"),
@@ -335,17 +362,18 @@ class TomographyPlot(object):
                      color = utils.return_key(kwargs,"qso_marker_color","k"),
                      linestyle = 'None')
         if(qso_bis_in is not None):
-            plt.plot(qso_bis_in[:,x_index],qso_bis_in[:,y_index],
-                     marker = utils.return_key(kwargs,"qso_bis_marker",
-                                               utils.return_key(kwargs,"qso_marker","*")),
-                     markersize = utils.return_key(kwargs,"qso_bis_marker_size",
-                                                    utils.return_key(kwargs,"qso_marker_size",8)),
-                     markeredgewidth = utils.return_key(kwargs,"qso_bis_marker_edge_size",
-                                                        utils.return_key(kwargs,"qso_marker_edge_size",1)),
-                     color = utils.return_key(kwargs,"qso_bis_marker_color",
-                                              utils.return_key(kwargs,"qso_marker_color","k")),
-                     linestyle = 'None',
-                     fillstyle='none')
+            if(utils.return_key(kwargs,"qso_bis_on",True)):
+                plt.plot(qso_bis_in[:,x_index],qso_bis_in[:,y_index],
+                         marker = utils.return_key(kwargs,"qso_bis_marker",
+                                                   utils.return_key(kwargs,"qso_marker","*")),
+                         markersize = utils.return_key(kwargs,"qso_bis_marker_size",
+                                                        utils.return_key(kwargs,"qso_marker_size",8)),
+                         markeredgewidth = utils.return_key(kwargs,"qso_bis_marker_edge_size",
+                                                            utils.return_key(kwargs,"qso_marker_edge_size",1)),
+                         color = utils.return_key(kwargs,"qso_bis_marker_color",
+                                                  utils.return_key(kwargs,"qso_marker_color","k")),
+                         linestyle = 'None',
+                         fillstyle='none')
         if(void_in is not None):
             for i in range(len(void_in)):
                 circle = plt.Circle((void_in[i,x_index],void_in[i,y_index]),void_in[i,3],
@@ -423,9 +451,27 @@ class TomographyPlot(object):
 
 
 
-    def plot_one_slice(self,name,direction,space,center_mpc,qso=None,void=None,galaxy=None,distance_mask = None,criteria_distance_mask = None,rotate = False,minimal_void_crossing = None,redshift_axis=False,cut_plot=None):
-        tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(qso=qso,void=void,galaxy=galaxy,distance_mask = distance_mask,cut_plot=cut_plot)
-        mask_void = self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,
+    def plot_one_slice(self,name,direction,space,center_mpc,
+                       qso=None,
+                       void=None,
+                       galaxy=None,
+                       distance_mask = None,
+                       criteria_distance_mask = None,
+                       rotate = False,
+                       minimal_void_crossing = None,
+                       redshift_axis=False,cut_plot=None):
+        (tomographic_map,
+         pixel,quasar_catalog,
+         void_catalog,
+         galaxy_catalog,
+         dist_map) = self.load_tomographic_objects(qso=qso,
+                                                   void=void,
+                                                   galaxy=galaxy,
+                                                   distance_mask = distance_mask,
+                                                   cut_plot=cut_plot)
+        mask_void = self.mask_tomographic_objects(void_catalog,
+                                                  dist_map,
+                                                  tomographic_map,
                                                   criteria_distance_mask = criteria_distance_mask,
                                                   minimal_void_crossing = minimal_void_crossing)
         self.print_one_slice(name,tomographic_map,direction,space,center_mpc,
@@ -437,7 +483,14 @@ class TomographyPlot(object):
 
 
 
-    def plot_all_slice(self,name,direction,space,qso=None,void=None,galaxy=None,distance_mask = None,criteria_distance_mask = None,rotate = False,minimal_void_crossing = None,redshift_axis=False,cut_plot=None):
+    def plot_all_slice(self,name,direction,space,
+                       qso=None,void=None,galaxy=None,
+                       distance_mask = None,
+                       criteria_distance_mask = None,
+                       rotate = False,
+                       minimal_void_crossing = None,
+                       redshift_axis=False,
+                       cut_plot=None):
         tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(qso=qso,void=void,galaxy=galaxy,distance_mask = distance_mask,cut_plot=cut_plot)
         mask_void = self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask, minimal_void_crossing = minimal_void_crossing)
         center_mpc = space/2
@@ -477,11 +530,12 @@ class TomographyPlot(object):
         tomographic_map = self.load_tomographic_objects(cut_plot=cut_plot)[0]
         (x_index, y_index, index_direction, extentmap, xlab, ylab) = TomographyPlot.get_direction_informations("z",rotate,tomographic_map.size)
         map_data = tomographic_map.map_array
+        i_pix_begin = int(round((zmin*tomographic_map.pixel_per_mpc[index_direction]),0))
         i_pix_end = int(round((zmax*tomographic_map.pixel_per_mpc[index_direction]),0))
-        integrated_map = np.mean(map_data[:,:,0:i_pix_end],axis=2)
+        integrated_map = np.mean(map_data[:,:,i_pix_begin:i_pix_end],axis=2)
         name = f"{name}_integrated_map"
-        TomographyPlot.plot_slice(self.pwd,integrated_map,extentmap,xlab,ylab,name,x_index,y_index,rotate=rotate,**self.kwargs)
-        return(integrated_map)
+        TomographyPlot.plot_slice(self.pwd,integrated_map,extentmap,xlab,ylab,name,x_index,y_index,
+                                  rotate=rotate,**self.kwargs)
 
 
     def plot_catalog_centered_maps(self,direction,name,space,void,nb_plot,radius_centered,qso=None,rotate = False):
@@ -496,8 +550,16 @@ class TomographyPlot(object):
             ylim = [coords[i][y_index]-radius_centered,coords[i][y_index]+radius_centered]
             self.kwargs.update({"map_xlim_min":xlim[0],"map_xlim_max":xlim[1],"map_ylim_min":ylim[0],"map_ylim_max":ylim[1]})
             center_mpc = coords[i][index_direction]
-            name = "{}_number{}_radius{}".format(name,i,np.array(void_catalog.radius)[arg][i])
-            self.print_one_slice(name,tomographic_map,direction,space,center_mpc,pixel=pixel,quasar_catalog=qso,void_catalog=void_catalog,rotate = rotate)
+            name_plot = "{}_number{}_radius{}".format(name,i,np.array(void_catalog.radius)[arg][i])
+            self.print_one_slice(name_plot,
+                                 tomographic_map,
+                                 direction,
+                                 space,
+                                 center_mpc,
+                                 pixel=pixel,
+                                 quasar_catalog=qso,
+                                 void_catalog=void_catalog,
+                                 rotate = rotate)
 
 
 
@@ -680,7 +742,6 @@ class TomographyStack(object):
                                             direction,rotate,**kwargs)
         plt.savefig(f"{name_plot}_{direction}.pdf",format="pdf",
                     dpi=utils.return_key(kwargs,"map_dpi",'figure'))
-        plt.show()
         plt.close()
 
 
