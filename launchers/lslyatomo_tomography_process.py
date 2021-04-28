@@ -1,12 +1,11 @@
 import os
-pwd = os.getcwd()
 from lslyatomo import tomography
 
 
 #### Options #####
 
 merge_output_maps = True
-rebin_map = True
+rebin_map = False
 create_distance_map = True
 
 
@@ -14,36 +13,35 @@ create_distance_map = True
 
 submap_directory = os.path.join(os.getcwd(),"tomography")
 map_name = os.path.join(os.getcwd(),"tomography","map_reconstructed.bin")
-property_file = os.path.join(os.getcwd(),"pixels","property_file.pickle")
+property_file = os.path.join(os.getcwd(),"pixel","property_file.pickle")
 
 
 #### Merging parameters #####
 
-launching_file_name = os.path.join(os.getcwd(),"pixels","data_launch_dachshund.pickle")
+launching_file_name = os.path.join(os.getcwd(),"pixel","DR16_launch_data.pickle")
 
 
 #### Rebin parameters #####
 
 map_rebin_name = os.path.join(os.getcwd(),"tomography","map_reconstructed_rebin.bin")
-new_shape = (16,14,300)
+new_shape = (16,14,150)
 operation = "mean"
 rebin_prop_name = "property_file_rebin.pickle"
 
 
 #### Dist map parameters #####
 
-name_pixel_base = os.path.join(os.getcwd(),"pixels","pixel_stripe82_DR16.bin")
+name_pixel_base = os.path.join(os.getcwd(),"pixel","pixel_stripe82_DR16.bin")
 name_dist_map  = "dist_map_to_los.bin"
-nb_process = 1 
+nb_process = 1
 radius_local = 50
 
 
 
 if __name__ =="__main__":
-    pwd = "./tomography"
-    if(not(os.path.isdir(pwd))):os.mkdir(pwd)
+    pwd = os.path.join(os.getcwd(),"tomography")
     os.chdir(pwd)
-    
+
     if(merge_output_maps):tomography.create_merged_map(submap_directory,launching_file_name,map_name,property_file)
     if(rebin_map):tomography.rebin_map(map_name,property_file,new_shape,map_rebin_name,rebin_prop_name,operation=operation)
     if(create_distance_map):tomography.create_distance_map(name_dist_map,name_pixel_base,property_file,nb_process=nb_process,radius_local=radius_local)
