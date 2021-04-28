@@ -22,6 +22,10 @@ import os,time,pickle,shutil
 from subprocess import call
 from lslyatomo import utils
 from distutils.dir_util import copy_tree
+import multiprocessing as mp
+from functools import partial
+
+
 
 #############################################################################
 #############################################################################
@@ -200,11 +204,11 @@ class Irene(Machine):
 
 
 
-class PersonalComputer(Machine):
+class Bash(Machine):
 
     def __init__(self,ending_str="",error_str=[],**kwargs):
         wait_check = False
-        super(PersonalComputer,self).__init__(ending_str,error_str,wait_check)
+        super(Bash,self).__init__(ending_str,error_str,wait_check)
 
         self.out_file_name = "{}.out"
         self.error_file_name = "{}.err"
@@ -216,10 +220,45 @@ class PersonalComputer(Machine):
 
 
     def launch(self,dir_paths=None,pwd=None,software_command_lines=None,software_name=None):
+
+        number_process = utils.return_key(self.kwargs,"n",1)
+        if(number_process == 1):
+            self.launch_serial(dir_paths=dir_paths,
+                               pwd=pwd,
+                               software_command_lines=software_command_lines,
+                               software_name=software_name)
+        else:
+            self.launch_parallel(number_process,
+                                 dir_paths=dir_paths,
+                                 pwd=pwd,
+                                 software_command_lines=software_command_lines,
+                                 software_name=software_name)
+
+
+    def launch_parallel(self,number_process,dir_paths=None,pwd=None,software_command_lines=None,software_name=None):
+        list_launch = [[dir_paths[i],software_command_lines[i]] for i in range(len(dir_paths))]
+        func = partial(self.launch_single,software_name)
+        with mp.Pool(number_process) as pool:
+            pool.map(func,list_launch)
+
+
+    def launch_single(self,software_name,param_launch):
+        dir_paths,software_command_lines = param_launch[0], param_launch[1]
+        out_name = os.path.join(dir_paths,self.out_file_name.format(software_name))
+        err_name = os.path.join(dir_paths,self.error_file_name.format(software_name))
+        print(f"launch of {software_command_lines}")
+        call(software_command_lines.split(), stdout=open(out_name,'w'), stderr=open(err_name,'w'))
+        print(f"end of {software_command_lines}")
+
+
+    def launch_serial(self,dir_paths=None,pwd=None,software_command_lines=None,software_name=None):
         for i in range(len(dir_paths)):
             out_name = os.path.join(dir_paths[i],self.out_file_name.format(software_name))
             err_name = os.path.join(dir_paths[i],self.error_file_name.format(software_name))
+            print(f"launch of {software_command_lines[i]}")
             call(software_command_lines[i].split(), stdout=open(out_name,'w'), stderr=open(err_name,'w'))
+
+
 
 
 
@@ -321,7 +360,7 @@ class Dachshund(TomographySoftware):
 class TomographyManager(object):
 
     available_software = ("dachshund","borg")
-    available_machine = ("irene","pc")
+    available_machine = ("irene","nersc","bash")
 
     def __init__(self,pwd,software,machine,name_pixel,launch_file,**kwargs):
         self.pwd = pwd
@@ -350,8 +389,8 @@ class TomographyManager(object):
             return(Irene(**kwargs))
         if(machine.lower() == "nersc"):
             return(Nersc(**kwargs))
-        elif(machine.lower() == "pc"):
-            return(PersonalComputer(**kwargs))
+        elif(machine.lower() == "bash"):
+            return(Bash(**kwargs))
         else: return KeyError(f"The machine {machine} is not available, please choose in {TomographyManager.available_machine}")
 
 
@@ -377,9 +416,6 @@ class TomographyManager(object):
             f = open(name,"w")
             f.write("wait")
             f.close()
-
-
-
 
 
 
@@ -477,7 +513,6 @@ class TomographyManager(object):
         launching_file = pickle.load(open(self.launch_file,"rb"))
         listname,launcher_params = launching_file[0],launching_file[1]
         for i in range(len(listname)):
-            # call(["cp",self.pwd + "/Tmp/" + listname[i] +"/" + launcher_params[i]["namepixel"],self.pwd ])
             call(["cp",self.pwd + "/Tmp/" + listname[i] +"/" + launcher_params[i]["namemap"],self.pwd])
 
 
