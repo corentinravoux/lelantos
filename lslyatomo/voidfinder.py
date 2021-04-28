@@ -69,6 +69,7 @@ def cut_catalog(pwd,catalog_name,method_cut,
                                                  distance_map_percent=distance_map_percent)
     void_cut.name = os.path.join(pwd,cut_catalog_name)
     void_cut.write()
+    return(void_cut.name)
 
 
 def get_crossing_qso(catalog_name,qso_name):
@@ -166,11 +167,11 @@ class VoidFinder(object):
         else :
             raise ValueError("The method_void chosen is not implemented, try : WATERSHED or SPHERICAL")
         del map_array
-        self.save_voids(radius, coord,other_array,other_array_name,
-                        self.map_coordinate_transform,self.map_Omega_m,
-                        self.map_boundary_cartesian_coord,
-                        self.map_boundary_sky_coord)
-        return(radius, coord)
+        name = self.save_voids(radius, coord,other_array,other_array_name,
+                               self.map_coordinate_transform,self.map_Omega_m,
+                               self.map_boundary_cartesian_coord,
+                               self.map_boundary_sky_coord)
+        return(name)
 
 
     def find_voids_map_split(self,map_array):
@@ -221,13 +222,13 @@ class VoidFinder(object):
         self.log.add("End of the split finding procedure. Merging catalogs")
         (radius, coord,other_array,other_array_name) = self.merge_chunks(map_chunks)
         coord_clean, radius_clean, other_array_clean = self.delete_voids(self.map_mpc_per_pixel,radius,coord,other_array=other_array,mpc=True)
-        self.save_voids(radius_clean, coord_clean,other_array_clean,other_array_name,
-                        self.map_coordinate_transform,self.map_Omega_m,
-                        self.map_boundary_cartesian_coord,
-                        self.map_boundary_sky_coord)
+        name = self.save_voids(radius_clean, coord_clean,other_array_clean,other_array_name,
+                               self.map_coordinate_transform,self.map_Omega_m,
+                               self.map_boundary_cartesian_coord,
+                               self.map_boundary_sky_coord)
         self.delete_temporary_files(map_chunks,list_index_map_chunks)
         del map_chunks,list_index_map_chunks
-        return(radius_clean, coord_clean)
+        return(name)
 
 
     def split_map_in_chunks(self,map_array):
@@ -704,6 +705,7 @@ class VoidFinder(object):
                                                                     other_array=other_array,
                                                                     other_array_name = other_array_name)
         void.write()
+        return(name)
 
     def get_name_catalog(self):
         if (self.find_cluster):
