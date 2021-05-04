@@ -48,7 +48,9 @@ def compute_additional_stats(catalog_name,pixel_name):
 
 
 
-def cut_catalog(pwd,catalog_name,method_cut,
+def cut_catalog(pwd,
+                catalog_name,
+                method_cut,
                 coord_min=None,
                 coord_max=None,
                 cut_crossing_param=None,

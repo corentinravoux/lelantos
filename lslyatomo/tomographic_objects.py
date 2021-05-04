@@ -320,7 +320,16 @@ class TomographicMap(object):
 
 class DistanceMap(TomographicMap):
 
-    def __init__(self,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None):
+    def __init__(self,
+                 map_array=None,
+                 name=None,
+                 shape=None,
+                 size=None,
+                 boundary_cartesian_coord=None,
+                 boundary_sky_coord=None,
+                 coordinate_transform=None,
+                 property_file=None,
+                 Omega_m=None):
         super(DistanceMap,self).__init__(map_array=map_array,name=name,shape=shape,size=size,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,property_file=property_file,Omega_m=Omega_m)
 
 
@@ -1904,7 +1913,8 @@ class VoidCatalog(Catalog):
 
 
 
-    def cut_catalog_void(self,method_cut,
+    def cut_catalog_void(self,
+                         method_cut,
                          coord_min=None,
                          coord_max=None,
                          cut_crossing_param=None,
@@ -1913,13 +1923,16 @@ class VoidCatalog(Catalog):
                          distance_map_prop=None,
                          distance_map_param=None,
                          distance_map_percent=None):
-        mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=False)
+        mask_select = self.cut_catalog(coord_min=coord_min,
+                                       coord_max=coord_max,
+                                       center_x_coord=False)
         string_to_add = ""
-        if type(method_cut) == str :
-            if method_cut == "ALL":
-                method_cut = ["CROSSING","RADIUS","DIST","BORDER"]
-            else:
-                method_cut = [method_cut]
+        if(type(method_cut) ==list):
+            method_cut = tuple(method_cut)
+        if(type(method_cut) != tuple):
+            method_cut = tuple(str(k.strip()) for k in method_cut.strip().split(','))
+        if method_cut == ("ALL",):
+            method_cut = ("CROSSING","RADIUS","DIST","BORDER")
 
         if("CROSSING" in method_cut):
             if (cut_crossing_param is None) : raise KeyError("Crossing parameter is not computed. Please do so with compute_additional_stats()")

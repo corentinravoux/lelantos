@@ -902,7 +902,7 @@ class DeltaConverter():
                                         properties,
                                         f"{properties['name_pixel']}_{key}",
                                         create_launcher=None)
-        pickle.dump([filename,parallel_launcher_params,number_chunks,overlaping],open(os.path.join(self.pwd,f"{nameout}.pickle"),"wb"))
+        pickle.dump([filename,parallel_launcher_params,number_chunks,overlaping],open(os.path.join(self.pwd,f"{nameout}_launch_data.pickle"),"wb"))
 
 
 
@@ -1253,20 +1253,26 @@ class DeltaAnalyzer(object):
                                  comparison_legend=comparison_legend,
                                  **kwargs)
             if(mean_z_dependence)&(value_name not in ["redshift","ra","dec"]):
-                utils.save_mean_redshift_dependence(self.pwd,value,redshift,
-                                                    value_name,name,
+                utils.save_mean_redshift_dependence(self.pwd,
+                                                    value,
+                                                    redshift,
+                                                    value_name,
+                                                    name,
                                                     comparison=comparison_value,
                                                     comparison_redshift=redshift_comp,
                                                     comparison_legend=None,
                                                     **kwargs)
 
             if(z_dependence)&(value_name not in ["redshift","ra","dec"]):
-                utils.save_redshift_dependence(self.pwd,value,redshift,
-                                                    value_name,name,
-                                                    comparison=comparison_value,
-                                                    comparison_redshift=redshift_comp,
-                                                    comparison_legend=None,
-                                                    **kwargs)
+                utils.save_redshift_dependence(self.pwd,
+                                               value,
+                                               redshift,
+                                               value_name,
+                                               name,
+                                               comparison=comparison_value,
+                                               comparison_redshift=redshift_comp,
+                                               comparison_legend=None,
+                                               **kwargs)
         if(ra_dec_plots):
             self.plot_ra_dec(ra,dec,name,
                              comparison=None,comparison_legend=None,
@@ -1339,13 +1345,13 @@ class DeltaAnalyzer(object):
         plt.plot(ra_array,density_array/abs(ra_size*(maxdec-mindec)))
         plt.title("LOS density in function of RA")
         plt.grid()
-        plt.savefig(f"{plot_name}_los_density.pdf",format = "pdf")
+        plt.savefig(os.path.join(pwd,f"{plot_name}_los_density.pdf"),format = "pdf")
         if(different_sign_region):
             plt.figure()
             plt.plot(ra_array,density_array_plus/abs(ra_size*maxdec))
             plt.title("LOS density in function of RA for DEC >= 0")
             plt.grid()
-            plt.savefig(f"{plot_name}_los_density_dec_positive.pdf",format = "pdf")
+            plt.savefig(os.path.join(pwd,f"{plot_name}_los_density_dec_positive.pdf"),format = "pdf")
             plt.figure()
             plt.plot(ra_array,density_array_minus/abs(ra_size*mindec))
             plt.title("LOS density in function of RA for DEC < 0")

@@ -40,7 +40,6 @@ radius_local = 50
 
 if __name__ =="__main__":
     pwd = os.path.join(os.getcwd(),"tomography")
-    os.chdir(pwd)
 
     if(merge_output_maps):tomography.create_merged_map(submap_directory,launching_file_name,map_name,property_file)
     if(rebin_map):tomography.rebin_map(map_name,property_file,new_shape,map_rebin_name,rebin_prop_name,operation=operation)
