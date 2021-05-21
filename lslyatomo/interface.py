@@ -65,6 +65,7 @@ def main(input_file):
     main_path = os.path.abspath(main_config["path"])
     os.makedirs(main_path,exist_ok=True)
 
+    delta_transform_config = config["delta transform"]
     delta_config = config["delta convert"]
     software_config = config["tomography software"]
     tomography_config = config["tomography launching"]
@@ -75,8 +76,13 @@ def main(input_file):
     void_plot_config = config["void plot"]
     tomography_plot_config = config["tomography plot"]
 
-
     delta_path = os.path.abspath(main_config.getstr("delta_path"))
+
+    if(main_config.getboolean("transform_delta")):
+        delta_transform_path = delta_transform_config.getstr("delta_path_out")
+        transform_delta(delta_path,delta_transform_path,delta_transform_config,delta_config,main_config)
+        delta_path = os.path.abspath(delta_transform_path)
+
     plot_delta_path = os.path.join(main_path,delta_plot_config.getstr("plot_delta_path"))
     if(main_config.getboolean("plot_delta")):
         plot_delta(plot_delta_path,delta_path,delta_plot_config,delta_config,main_config)
@@ -113,44 +119,22 @@ def main(input_file):
 
 
 
+def transform_delta(delta_path,delta_transform_path,delta_transform_config,delta_config,main_config):
+
+    os.makedirs(delta_transform_path,exist_ok=True)
+    if(delta_transform_config.getstr("other_delta_path_out") is not None):
+        os.makedirs(delta_transform_config.getstr("other_delta_path_out"),exist_ok=True)
+    delta_modifier = cosmology.DeltaModifier(delta_transform_path,
+                                             main_config.getstr("delta_path"))
+
+    delta_modifier.shuffle_deltas_cut_z(delta_transform_config.getint("n_cut"),
+                                        delta_config.getfloat("z_cut_min"),
+                                        delta_config.getfloat("z_cut_max"),
+                                        other_delta_path=delta_transform_config.getstr("other_delta_path"),
+                                        other_path_out=delta_transform_config.getstr("other_delta_path_out"))
 
 
 
-
-
-
-def plot_delta(plot_delta_path,delta_path,delta_plot_config,delta_config,main_config):
-    os.makedirs(plot_delta_path,exist_ok=True)
-    delta_plotter = cosmology.DeltaAnalyzer(plot_delta_path,
-                                            delta_path,
-                                            center_ra=delta_plot_config.getboolean("center_ra"),
-                                            z_cut_min=delta_config.getfloat("z_cut_min"),
-                                            z_cut_max=delta_config.getfloat("z_cut_max"),
-                                            dec_cut_min=delta_config.getfloat("dec_cut_min"),
-                                            dec_cut_max=delta_config.getfloat("dec_cut_max"),
-                                            ra_cut_min=delta_config.getfloat("ra_cut_min"),
-                                            ra_cut_max=delta_config.getfloat("ra_cut_max"),
-                                            degree=delta_plot_config.getboolean("degree"))
-
-
-    delta_plotter.plot(list(delta_plot_config.gettuplestr("value_names")),
-                       main_config.getstr("name"),
-                       histo=delta_plot_config.getboolean("plot_histo"),
-                       mean_z_dependence=delta_plot_config.getboolean("plot_mean_z_dependence"),
-                       z_dependence=delta_plot_config.getboolean("plot_z_dependence"),
-                       ra_dec_plots=delta_plot_config.getboolean("plot_ra_dec"),
-                       **delta_plot_config.getdict("plot_args"))
-
-    if(delta_plot_config.getboolean("plot_comparison")):
-        delta_plotter.plot(list(delta_plot_config.gettuplestr("value_names")),
-                           f"{main_config.getstr('name')}_comparison",
-                           comparison=delta_plot_config.getstr("comparison"),
-                           comparison_legend=list(delta_plot_config.gettuplestr("comparison_legend")),
-                           histo=delta_plot_config.getboolean("plot_histo"),
-                           mean_z_dependence=delta_plot_config.getboolean("plot_mean_z_dependence"),
-                           z_dependence=delta_plot_config.getboolean("plot_z_dependence"),
-                           print_stats=delta_plot_config.getboolean("print_stats"),
-                           **delta_plot_config.getdict("plot_args"))
 
 
 def convert_delta(pixel_path,delta_path,software_config,delta_config,main_config):
@@ -191,6 +175,44 @@ def convert_delta(pixel_path,delta_path,software_config,delta_config,main_config
                                     number_chunks=delta_config.gettupleint("number_chunks"),
                                     overlaping=delta_config.getfloat("overlaping"),
                                     shape_sub_map=delta_config.gettupleint("shape_sub_map"))
+
+
+
+
+def plot_delta(plot_delta_path,delta_path,delta_plot_config,delta_config,main_config):
+    os.makedirs(plot_delta_path,exist_ok=True)
+    delta_plotter = cosmology.DeltaAnalyzer(plot_delta_path,
+                                            delta_path,
+                                            center_ra=delta_plot_config.getboolean("center_ra"),
+                                            z_cut_min=delta_config.getfloat("z_cut_min"),
+                                            z_cut_max=delta_config.getfloat("z_cut_max"),
+                                            dec_cut_min=delta_config.getfloat("dec_cut_min"),
+                                            dec_cut_max=delta_config.getfloat("dec_cut_max"),
+                                            ra_cut_min=delta_config.getfloat("ra_cut_min"),
+                                            ra_cut_max=delta_config.getfloat("ra_cut_max"),
+                                            degree=delta_plot_config.getboolean("degree"))
+
+
+    delta_plotter.plot(list(delta_plot_config.gettuplestr("value_names")),
+                       main_config.getstr("name"),
+                       histo=delta_plot_config.getboolean("plot_histo"),
+                       mean_z_dependence=delta_plot_config.getboolean("plot_mean_z_dependence"),
+                       z_dependence=delta_plot_config.getboolean("plot_z_dependence"),
+                       ra_dec_plots=delta_plot_config.getboolean("plot_ra_dec"),
+                       **delta_plot_config.getdict("plot_args"))
+
+    if(delta_plot_config.getboolean("plot_comparison")):
+        delta_plotter.plot(list(delta_plot_config.gettuplestr("value_names")),
+                           f"{main_config.getstr('name')}_comparison",
+                           comparison=delta_plot_config.getstr("comparison"),
+                           comparison_legend=list(delta_plot_config.gettuplestr("comparison_legend")),
+                           histo=delta_plot_config.getboolean("plot_histo"),
+                           mean_z_dependence=delta_plot_config.getboolean("plot_mean_z_dependence"),
+                           z_dependence=delta_plot_config.getboolean("plot_z_dependence"),
+                           print_stats=delta_plot_config.getboolean("print_stats"),
+                           **delta_plot_config.getdict("plot_args"))
+
+
 
 
 def launch_tomography(tomo_path,pixel_path,software_config,tomography_config,main_config):
