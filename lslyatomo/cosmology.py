@@ -48,6 +48,31 @@ def get_delta_list(delta_path):
             delta_list = delta_list + list(np.sort(glob.glob(os.path.join(delta_path[i],"delta-*.fits*"))))
     return(delta_list)
 
+
+
+# CR - need to rethink delta class
+def preselect_deltas(namefile,ramin=None,ramax=None,decmin=None,decmax=None,center_ra=True,pk1d_type=True):
+    print(len(namefile))
+    subset_namefile = []
+    if((ramin is None)&(ramax is None)&(decmin is None)&(decmax is None)):
+        return(namefile)
+    for i in range(len(namefile)):
+        delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=pk1d_type)
+        delta_tomo.read()
+        ra,dec,redshift,redshift_qso,id,sigma,delta = delta_tomo.return_params(center_ra=center_ra)
+        mask = np.full(ra.shape,True)
+        if(ramin is not None): mask&= ra > ramin
+        if(ramax is not None): mask&= ra < ramax
+        if(decmin is not None): mask&= dec > decmin
+        if(ramin is not None): mask&= dec < decmax
+        if(len(mask[mask]) != 0):
+            subset_namefile.append(namefile[i])
+    print(len(subset_namefile))
+    if(len(subset_namefile) == 0):
+        raise KeyError("Select window does not contain any delta files")
+    return(subset_namefile)
+
+
 def get_deltas(namefile,center_ra=True,pk1d_type=True):
     """ Extract delta properties """
     ras, decs, redshifts,redshift_qsos,ids, sigmas, deltas = [],[],[],[],[],[],[]
@@ -224,20 +249,13 @@ class DeltaModifier(object):
     def __init__(self,pwd,delta_path,center_ra=True,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None):
         self.pwd = pwd
         self.delta_path = delta_path
-        self.center_ra = center_ra
-        self.dec_cut_min = dec_cut_min
-        self.dec_cut_max = dec_cut_max
-        self.ra_cut_min = ra_cut_min
-        self.ra_cut_max = ra_cut_max
-        self.z_cut_min = z_cut_min
-        self.z_cut_max = z_cut_max
 
 
 
 
-    # CR - not a proper shuffle, need to rethink the way Delta class is done at one point
+    # CR - need to rethink the way Delta class is done (+ add shuffle inside)
 
-    def shuffle_deltas(self,name_out,other_delta_path=None,other_name_out=None):
+    def shuffle_deltas(self,other_delta_path=None,other_path_out=None):
 
         namefile = get_delta_list(self.delta_path)
         namefile_other = None
@@ -255,14 +273,14 @@ class DeltaModifier(object):
             weight_other_rand = np.random.permutation(weight_other)
             delta_other_rand = np.random.permutation(delta_other)
 
-        self.write_delta_sigma_array(name_out,delta_rand,ivar_rand,namefile,
+        self.write_delta_sigma_array(delta_rand,ivar_rand,namefile,
                                      other_delta_path=other_delta_path,namefile_other=namefile_other,
                                      delta_other_rand=delta_other_rand,weight_other_rand=weight_other_rand,
-                                     other_name_out=other_name_out)
+                                     other_path_out=other_path_out)
 
 
 
-    def shuffle_deltas_cut_z(self,name_out,n_cut,zmin,zmax,other_delta_path=None,other_name_out=None,seed=None):
+    def shuffle_deltas_cut_z(self,n_cut,zmin,zmax,other_delta_path=None,other_path_out=None,seed=None):
 
         namefile = get_delta_list(self.delta_path)
         namefile_other = None
@@ -289,11 +307,11 @@ class DeltaModifier(object):
             for k in range(n_cut):
                 delta_other_rand.append(np.random.permutation(delta_other[k]))
 
-        self.write_delta_sigma_array_cut_z(name_out,delta_rand,ivar_rand,namefile,
+        self.write_delta_sigma_array_cut_z(delta_rand,ivar_rand,namefile,
                                            n_cut,redshift_cut,
                                            other_delta_path=other_delta_path,namefile_other=namefile_other,
                                            delta_other_rand=delta_other_rand,weight_other_rand=weight_other_rand,
-                                           other_name_out=other_name_out)
+                                           other_path_out=other_path_out)
 
 
 
@@ -322,10 +340,10 @@ class DeltaModifier(object):
         return(delta,ivar,delta_other,weight_other)
 
 
-    def write_delta_sigma_array(self,name_out,delta_rand,ivar_rand,namefile,
+    def write_delta_sigma_array(self,delta_rand,ivar_rand,namefile,
                                 other_delta_path=None,namefile_other=None,
                                 delta_other_rand=None,weight_other_rand=None,
-                                other_name_out=None):
+                                other_path_out=None):
         ibegin = 0
         for i in range(len(namefile)):
             delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
@@ -336,7 +354,7 @@ class DeltaModifier(object):
                 delta_tomo.delta_array[j].iv  = ivar_rand[ibegin:ibegin+len(delta_tomo.delta_array[j].iv)]
                 ibegin = ibegin + len(delta_tomo.delta_array[j].de)
                 delta_obj_list.append(delta_tomo.delta_array[j])
-            name_delta = name_out + namefile[i].split("/")[-1].split("delta")[-1]
+            name_delta = os.path.join(self.pwd,namefile[i].split(self.delta_path)[-1].split("/")[-1])
             new_delta_tomo = tomographic_objects.Delta(name=name_delta,pk1d_type=True)
             new_delta_tomo.delta_array = delta_obj_list
             new_delta_tomo.write()
@@ -352,7 +370,7 @@ class DeltaModifier(object):
                     delta_tomo_other.delta_array[j].we  = weight_other_rand[ibegin:ibegin+len(delta_tomo_other.delta_array[j].we)]
                     ibegin = ibegin + len(delta_tomo_other.delta_array[j].de)
                     delta_obj_list.append(delta_tomo_other.delta_array[j])
-                name_delta = other_name_out + namefile_other[i].split("/")[-1].split("delta")[-1]
+                name_delta =  os.path.join(other_path_out,namefile_other[i].split(other_delta_path)[-1].split("/")[-1])
                 new_delta_tomo = tomographic_objects.Delta(name=name_delta,pk1d_type=False)
                 new_delta_tomo.delta_array = delta_obj_list
                 new_delta_tomo.write()
@@ -392,11 +410,11 @@ class DeltaModifier(object):
                 delta_other[k] = np.concatenate(delta_other[k],axis=0)
         return(delta,ivar,delta_other,weight_other)
 
-    def write_delta_sigma_array_cut_z(self,name_out,delta_rand,ivar_rand,namefile,
+    def write_delta_sigma_array_cut_z(self,delta_rand,ivar_rand,namefile,
                                       n_cut,redshift_cut,
                                       other_delta_path=None,namefile_other=None,
                                       delta_other_rand=None,weight_other_rand=None,
-                                      other_name_out=None):
+                                      other_path_out=None):
         ibegin = [0 for i in range(n_cut)]
         for i in range(len(namefile)):
             delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
@@ -410,7 +428,7 @@ class DeltaModifier(object):
                     delta_tomo.delta_array[j].iv[mask]  = ivar_rand[k][ibegin[k]:ibegin[k]+len(delta_tomo.delta_array[j].iv[mask])]
                     ibegin[k] = ibegin[k] + len(delta_tomo.delta_array[j].de[mask])
                 delta_obj_list.append(delta_tomo.delta_array[j])
-            name_delta = name_out + namefile[i].split("/")[-1].split("delta")[-1]
+            name_delta = os.path.join(self.pwd,namefile[i].split(self.delta_path)[-1].split("/")[-1])
             new_delta_tomo = tomographic_objects.Delta(name=name_delta,pk1d_type=True)
             new_delta_tomo.delta_array = delta_obj_list
             new_delta_tomo.write()
@@ -429,7 +447,7 @@ class DeltaModifier(object):
                         delta_tomo_other.delta_array[j].we[mask]  = weight_other_rand[k][ibegin[k]:ibegin[k]+len(delta_tomo_other.delta_array[j].we[mask])]
                         ibegin[k] = ibegin[k] + len(delta_tomo_other.delta_array[j].de[mask])
                     delta_obj_list.append(delta_tomo_other.delta_array[j])
-                name_delta = other_name_out + namefile_other[i].split("/")[-1].split("delta")[-1]
+                name_delta =  os.path.join(other_path_out,namefile_other[i].split(other_delta_path)[-1].split("/")[-1])
                 new_delta_tomo = tomographic_objects.Delta(name=name_delta,pk1d_type=False)
                 new_delta_tomo.delta_array = delta_obj_list
                 new_delta_tomo.write()
@@ -437,33 +455,61 @@ class DeltaModifier(object):
 
 
 
-    def subsample_deltas(self,name_out,number_cut,random_density_parameter=False,number_repeat=1,iterative_selection_parameters=None):
-        deltas = self.get_new_healpix(number_cut,random_density_parameter=random_density_parameter,number_repeat=number_repeat,iterative_selection_parameters=None)
-        self.save_deltas(deltas,name_out,number_cut)
-
-
-
-
-
-    def save_deltas(self,deltas,name_out,number_cut):
-        for cut in range(number_cut):
-            delta = tomographic_objects.Delta(name=f"{name_out}_{cut}.fits",delta_file=deltas[cut])
-            delta.write()
-
-
-    def get_new_healpix(self,number_cut,random_density_parameter=None,number_repeat=1,iterative_selection_parameters=None):
+    def get_new_healpix(self,
+                        number_cut,
+                        random_density_parameter=None,
+                        number_repeat=1,
+                        iterative_selection_parameters=None,
+                        ra_cut_min=None,
+                        ra_cut_max=None,
+                        dec_cut_min=None,
+                        dec_cut_max=None,
+                        z_cut_min=None,
+                        z_cut_max=None,
+                        center_ra=True):
         if(random_density_parameter is None):
-            deltas = self.create_healpix(number_cut,random=None,return_len_ra=False)
+            deltas = self.create_healpix(number_cut,
+                                         random=None,
+                                         return_len_ra=False,
+                                         ra_cut_min=ra_cut_min,
+                                         ra_cut_max=ra_cut_max,
+                                         dec_cut_min=dec_cut_min,
+                                         dec_cut_max=dec_cut_max,
+                                         center_ra=center_ra)
         else :
             if (number_repeat == 1):
-                deltas = self.create_healpix(number_cut,random=random_density_parameter,return_len_ra=False)
+                deltas = self.create_healpix(number_cut,
+                                             random=random_density_parameter,
+                                             return_len_ra=False,
+                                             ra_cut_min=ra_cut_min,
+                                             ra_cut_max=ra_cut_max,
+                                             dec_cut_min=dec_cut_min,
+                                             dec_cut_max=dec_cut_max,
+                                             center_ra=center_ra)
             else :
                 if(iterative_selection_parameters is None):return KeyError("Please dictionary parameter for the iterative selection")
-                deltas = self.iterate_healpix_creation(number_cut,random_density_parameter,number_repeat,iterative_selection_parameters)
+                deltas = self.iterate_healpix_creation(number_cut,
+                                                       random_density_parameter,
+                                                       number_repeat,
+                                                       iterative_selection_parameters,
+                                                       ra_cut_min=ra_cut_min,
+                                                       ra_cut_max=ra_cut_max,
+                                                       dec_cut_min=dec_cut_min,
+                                                       dec_cut_max=dec_cut_max,
+                                                       z_cut_min=z_cut_min,
+                                                       z_cut_max=z_cut_max)
         return(deltas)
 
 
-    def create_healpix(self,number_cut,random=None,return_len_ra=False):
+    def create_healpix(self,
+                       number_cut,
+                       random=None,
+                       return_len_ra=False,
+                       ra_cut_min=None,
+                       ra_cut_max=None,
+                       dec_cut_min=None,
+                       dec_cut_max=None,
+                       center_ra=True):
         namefile = get_delta_list(self.delta_path)
         deltas ={}
         ra_array = []
@@ -474,7 +520,7 @@ class DeltaModifier(object):
             delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
             delta_tomo.read()
             for j in range(len(delta_tomo.delta_array)):
-                if(self.center_ra):
+                if(center_ra):
                     if(delta_tomo.delta_array[j].ra *180 /np.pi  > 180):
                         ra =((delta_tomo.delta_array[j].ra * 180 / np.pi)-360)
                     else:
@@ -482,26 +528,41 @@ class DeltaModifier(object):
                 else :
                     ra = ((delta_tomo.delta_array[j].ra * 180 / np.pi))
                 dec = (delta_tomo.delta_array[j].dec* 180 / np.pi)
-                if((ra>self.ra_cut_min)&(ra<self.ra_cut_max)&(dec>self.dec_cut_min)&(dec<self.dec_cut_max)):
+                if((ra>ra_cut_min)&(ra<ra_cut_max)&(dec>dec_cut_min)&(dec<dec_cut_max)):
                     ra_array.append(ra)
                     dec_array.append(dec)
                     for cut in range(number_cut):
-                        interval_ra =  ((cut)/(number_cut))*(self.ra_cut_max-self.ra_cut_min) + self.ra_cut_min  , ((cut + 1)/(number_cut))*(self.ra_cut_max-self.ra_cut_min) + self.ra_cut_min
+                        interval_ra =  ((cut)/(number_cut))*(ra_cut_max-ra_cut_min) + ra_cut_min  , ((cut + 1)/(number_cut))*(ra_cut_max-ra_cut_min) + ra_cut_min
                         if((ra>interval_ra[0])&(ra<=interval_ra[1])):
-                            if(self.center_ra):
+                            if(center_ra):
                                 delta_tomo.delta_array[j].ra = delta_tomo.delta_array[j].ra - 2*np.pi
                             deltas[cut].append(delta_tomo.delta_array[j])
         if (random is not None):
-            deltas = self.randomize_choice_of_los(deltas,random,number_cut,len(ra_array))
+            deltas = self.randomize_choice_of_los(deltas,
+                                                  random,
+                                                  number_cut,
+                                                  len(ra_array),
+                                                  ra_cut_min=ra_cut_min,
+                                                  ra_cut_max=ra_cut_max,
+                                                  dec_cut_min=dec_cut_min,
+                                                  dec_cut_max=dec_cut_max)
         if(return_len_ra):
             return(deltas,len(ra_array))
         else :
             return(deltas)
 
 
-    def randomize_choice_of_los(self,deltas_dict,random,number_cut,number_ra):
+    def randomize_choice_of_los(self,
+                                deltas_dict,
+                                random,
+                                number_cut,
+                                number_ra,
+                                ra_cut_min=None,
+                                ra_cut_max=None,
+                                dec_cut_min=None,
+                                dec_cut_max=None):
         deltas = deltas_dict.copy()
-        density = number_ra/((self.ra_cut_max-self.ra_cut_min)*(self.dec_cut_max-self.dec_cut_min))
+        density = number_ra/((ra_cut_max-ra_cut_min)*(dec_cut_max-dec_cut_min))
         utils.Logger.add("density before random choice ="  + str(density))
         random_cut = random/density
         ra_random = []
@@ -512,20 +573,32 @@ class DeltaModifier(object):
             for i in range(len(deltas[cut])):
                 ra_random.append(deltas[cut][i].ra*180 /np.pi)
                 dec_random.append(deltas[cut][i].dec*180 /np.pi)
-        density = len(ra_random)/((self.ra_cut_max-self.ra_cut_min)*(self.dec_cut_max-self.dec_cut_min))
+        density = len(ra_random)/((ra_cut_max-ra_cut_min)*(dec_cut_max-dec_cut_min))
         utils.Logger.add("density after random choice ="  + str(density))
         return(deltas)
 
 
 
-    def iterate_healpix_creation(self,number_cut,random_density_parameter,number_repeat,iterative_selection_parameters,property_file_name):
+    def iterate_healpix_creation(self,
+                                 number_cut,
+                                 random_density_parameter,
+                                 number_repeat,
+                                 iterative_selection_parameters,
+                                 property_file_name,
+                                 ra_cut_min=None,
+                                 ra_cut_max=None,
+                                 dec_cut_min=None,
+                                 dec_cut_max=None,
+                                 z_cut_min=None,
+                                 z_cut_max=None,
+                                 center_ra=True):
         """ To optimize & test"""
         density_names = iterative_selection_parameters["density_names"]
         dperp_names = iterative_selection_parameters["separation_names"]
         Om = iterative_selection_parameters["Om"]
         (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(Om)
         coordinate_transform = iterative_selection_parameters["coordinate_transform"]
-        suplementary_parameters = utils.return_suplementary_parameters(coordinate_transform,zmin=self.z_cut_min,zmax=self.z_cut_max)
+        suplementary_parameters = utils.return_suplementary_parameters(coordinate_transform,zmin=z_cut_min,zmax=z_cut_max)
         density_ref ={}
         dperp_ref = {}
         for cut in range(number_cut):
@@ -534,20 +607,28 @@ class DeltaModifier(object):
         min_density, min_dperp = np.inf,np.inf
         delta_to_keep = {}
         utils.Logger.add("Beginning of the random iteration selection")
-        deltas_dict,number_ra = self.create_healpix(number_cut,random=False,return_len_ra=True)
+        deltas_dict,number_ra = self.create_healpix(number_cut,
+                                                    random=False,return_len_ra=True,center_ra=center_ra)
         deltas_random={}
         for i in range(number_repeat):
             utils.Logger.add("repeat "+ str(i))
             utils.Logger.add("deltas "+ str(i) + " computed")
             diff_dperp , diff_density = [], []
-            deltas_random = self.randomize_choice_of_los(deltas_dict,random_density_parameter,number_cut,number_ra)
+            deltas_random = self.randomize_choice_of_los(deltas_dict,
+                                                         random_density_parameter,
+                                                         number_cut,
+                                                         number_ra,
+                                                         ra_cut_min=ra_cut_min,
+                                                         ra_cut_max=ra_cut_max,
+                                                         dec_cut_min=dec_cut_min,
+                                                         dec_cut_max=dec_cut_max)
             for cut in range(number_cut):
                 delta_file = tomographic_objects.Delta(delta_file=None,delta_array=deltas_random[cut],name="delta_" + str(cut) + "_to_test.pickle")
                 delta_file.write()
                 namefile = "delta_" + str(cut) + "_to_test.pickle"
                 (ra,dec,z,zqso,ids,sigmas,deltas) = get_deltas(namefile)
                 sky_deltas = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j]] for i in range(len(ra)) for j in range(len(z[i]))])
-                sky_deltas = sky_deltas[utils.cut_sky_catalog(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],ramin=self.ra_cut_min,ramax=self.ra_cut_max,decmin=self.dec_cut_min,decmax=self.dec_cut_max,zmin=self.z_cut_min,zmax=self.z_cut_max)]
+                sky_deltas = sky_deltas[utils.cut_sky_catalog(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],ramin=ra_cut_min,ramax=ra_cut_max,decmin=dec_cut_min,decmax=dec_cut_max,zmin=z_cut_min,zmax=z_cut_max)]
                 cartesian_deltas = np.zeros(sky_deltas.shape)
                 cartesian_deltas[:,0],cartesian_deltas[:,1],cartesian_deltas[:,2] = utils.convert_sky_to_cartesian(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],coordinate_transform,rcomov=rcomov,distang=distang,suplementary_parameters=suplementary_parameters)
                 pixel = tomographic_objects.Pixel.init_from_property_files(property_file_name,pixel_array=cartesian_deltas,name=None)
@@ -566,6 +647,43 @@ class DeltaModifier(object):
             os.remove("delta_" + str(cut) + "_to_test.pickle")
         utils.Logger.add("End of the random iteration selection")
         return(delta_to_keep)
+
+    def save_deltas(self,deltas,name_out,number_cut):
+        for cut in range(number_cut):
+            delta = tomographic_objects.Delta(name=f"{name_out}_{cut}.fits",delta_file=deltas[cut])
+            delta.write()
+
+
+
+    # CR - Unused delta subsampler, need to be incorporated in the delta class
+
+    def subsample_deltas(self,
+                         name_out,
+                         number_cut,
+                         random_density_parameter=False,
+                         number_repeat=1,
+                         iterative_selection_parameters=None,
+                         ra_cut_min=None,
+                         ra_cut_max=None,
+                         dec_cut_min=None,
+                         dec_cut_max=None,
+                         z_cut_min=None,
+                         z_cut_max=None,
+                         center_ra=True):
+        deltas = self.get_new_healpix(number_cut,
+                                      random_density_parameter=random_density_parameter,
+                                      number_repeat=number_repeat,
+                                      iterative_selection_parameters=None,
+                                      ra_cut_min=ra_cut_min,
+                                      ra_cut_max=ra_cut_max,
+                                      dec_cut_min=dec_cut_min,
+                                      dec_cut_max=dec_cut_max,
+                                      z_cut_min=z_cut_min,
+                                      z_cut_max=z_cut_max,
+                                      center_ra=center_ra)
+        self.save_deltas(deltas,name_out,number_cut)
+
+
 
 
 
@@ -590,6 +708,11 @@ class DeltaConverter():
 
     def transform_delta_to_pixel_file(self,rebin=None,shuffle=None,sigma_min=None,sigma_max=None,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None):
         namefile = get_delta_list(self.delta_path)
+        # namefile = preselect_deltas(namefile,
+        #                             ramin=ra_cut_min,
+        #                             ramax=ra_cut_max,
+        #                             decmin=dec_cut_min,
+        #                             decmax=dec_cut_max)
         properties_map_pixels = {}
         (rcomov,distang,inv_rcomov,inv_distang) = utils.get_cosmo_function(self.Omega_m)
         if(self.repeat):
@@ -617,7 +740,6 @@ class DeltaConverter():
                     mask &=(dla_catalog.coord_z < z_cut_max)
                 zdlas.append(dla_catalog.coord_z[mask])
                 z_qso_dlas.append(dla_catalog.z_qso[mask])
-
 
 
 
@@ -1175,6 +1297,11 @@ class DeltaAnalyzer(object):
     def get_ra_dec(self,delta_path):
         """ Obtain arrays of RA and DEC coordinates from a list or a name of a delta file in pickle, fits or ascii format"""
         namefile = get_delta_list(delta_path)
+        # namefile = preselect_deltas(namefile,
+        #                             ramin=self.ra_cut_min,
+        #                             ramax=self.ra_cut_max,
+        #                             decmin=self.dec_cut_min,
+        #                             decmax=self.dec_cut_max)
         (ra,dec,z,zqso,ids,sigmas,deltas)  = get_deltas(namefile,center_ra=self.center_ra,
                                                         pk1d_type=self.pk1d_type)
         pixel_coord = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j],zqso[i],ids[i]]
