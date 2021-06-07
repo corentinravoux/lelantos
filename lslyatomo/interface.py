@@ -131,7 +131,8 @@ def transform_delta(delta_path,delta_transform_path,delta_transform_config,delta
                                         delta_config.getfloat("z_cut_min"),
                                         delta_config.getfloat("z_cut_max"),
                                         other_delta_path=delta_transform_config.getstr("other_delta_path"),
-                                        other_path_out=delta_transform_config.getstr("other_delta_path_out"))
+                                        other_path_out=delta_transform_config.getstr("other_delta_path_out"),
+                                        seed=delta_transform_config.getint("seed"))
 
 
 
