@@ -255,7 +255,7 @@ class DeltaModifier(object):
 
     # CR - need to rethink the way Delta class is done (+ add shuffle inside)
 
-    def shuffle_deltas(self,other_delta_path=None,other_path_out=None):
+    def shuffle_deltas(self,other_delta_path=None,other_path_out=None,seed=None):
 
         namefile = get_delta_list(self.delta_path)
         namefile_other = None
@@ -263,8 +263,8 @@ class DeltaModifier(object):
             namefile_other = get_delta_list(other_delta_path)
 
         (delta,ivar,delta_other,weight_other) = self.get_delta_sigma_array(namefile,namefile_other=namefile_other)
-
-        seed = np.random.randint(10000000)
+        if(seed is None):
+            seed = np.random.randint(10000000)
         np.random.seed(seed)
         ivar_rand = np.random.permutation(ivar)
         delta_rand = np.random.permutation(delta)
