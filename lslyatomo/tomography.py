@@ -500,10 +500,20 @@ class TomographyPlot(object):
             center_mpc += space
 
 
-    def plot(self,name,direction,space,center_mpc,qso=None,
-             void=None,galaxy=None,distance_mask = None,
-             criteria_distance_mask = None,rotate = False,
-             minimal_void_crossing = None,redshift_axis=False,cut_plot=None):
+    def plot(self,
+             name,
+             direction,
+             space,
+             center_mpc,
+             qso=None,
+             void=None,
+             galaxy=None,
+             distance_mask = None,
+             criteria_distance_mask = None,
+             rotate = False,
+             minimal_void_crossing = None,
+             redshift_axis=False,
+             cut_plot=None):
 
         if((type(center_mpc) == float)|(type(center_mpc) == int)):
             self.plot_one_slice(name,direction,space,center_mpc,
@@ -657,8 +667,7 @@ class TomographyPlot(object):
 
 class TomographyStack(object):
 
-    def __init__(self,pwd,map_name,catalog_name,type_catalog,property_file_stack,size_stack,name_stack,shape_stack=None,map_shape=None,map_size=None,property_file=None,coordinate_convert=None,interpolation_method="NEAREST",normalized=None):
-        self.pwd = pwd
+    def __init__(self,map_name,catalog_name,type_catalog,property_file_stack,size_stack,name_stack,shape_stack=None,map_shape=None,map_size=None,property_file=None,coordinate_convert=None,interpolation_method="NEAREST",normalized=None):
         self.size_stack = size_stack
         self.name_stack = name_stack
         self.property_file_stack = property_file_stack
@@ -706,11 +715,26 @@ class TomographyStack(object):
 
 
     @staticmethod
-    def plot_stack(pwd,stack_name,stack_property,name_plot,rotate=False,ellipticity=False,los_quasar=None,**kwargs):
-        stack = tomographic_objects.StackMap.init_classic(name=stack_name,property_file=stack_property)
+    def plot_stack(pwd,
+                   stack_name,
+                   stack_property,
+                   name_plot,
+                   rotate=False,
+                   ellipticity=False,
+                   los_quasar=None,
+                   **kwargs):
+        stack = tomographic_objects.StackMap.init_classic(name=stack_name,
+                                                          property_file=stack_property)
         stack.read()
         for direction in ["x","y","z"]:
-            TomographyStack.plot_stack_direction(pwd,stack,name_plot,direction,rotate=rotate,ellipticity=ellipticity,los_quasar=los_quasar,**kwargs)
+            TomographyStack.plot_stack_direction(pwd,
+                                                 stack,
+                                                 name_plot,
+                                                 direction,
+                                                 rotate=rotate,
+                                                 ellipticity=ellipticity,
+                                                 los_quasar=los_quasar,
+                                                 **kwargs)
 
 
 
@@ -740,6 +764,7 @@ class TomographyStack(object):
                                             stack.mpc_per_pixel[y_index],
                                             stack.mpc_per_pixel[x_index],
                                             direction,rotate,**kwargs)
+        plt.plot([0],[0],"kx")
         plt.savefig(f"{name_plot}_{direction}.pdf",format="pdf",
                     dpi=utils.return_key(kwargs,"map_dpi",'figure'))
         plt.close()

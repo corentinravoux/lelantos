@@ -1779,13 +1779,20 @@ class VoidCatalog(Catalog):
             if("THING_ID" in other_array_name):primary_key = other_array[np.argwhere("THING_ID" == np.asarray(other_array_name))[0][0]]
             if("CROSSING" in other_array_name):crossing_param = other_array[np.argwhere("CROSSING" == np.asarray(other_array_name))[0][0]]
             if("LOS_DIST" in other_array_name):los_distance = other_array[np.argwhere("LOS_DIST" == np.asarray(other_array_name))[0][0]]
-        return(cls(name=name,coord=coord,primary_key=primary_key,radius=radius,
-                   weights=weights,crossing_param=crossing_param,
-                   central_value=central_value,filling_factor=filling_factor,
-                   los_distance = los_distance,mean_value=mean_value,
+        return(cls(name=name,
+                   coord=coord,
+                   primary_key=primary_key,
+                   radius=radius,
+                   weights=weights,
+                   crossing_param=crossing_param,
+                   central_value=central_value,
+                   filling_factor=filling_factor,
+                   los_distance = los_distance,
+                   mean_value=mean_value,
                    catalog_type=catalog_type,
                    coordinate_transform=coordinate_transform,
-                   Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,
+                   Omega_m=Omega_m,
+                   boundary_sky_coord=boundary_sky_coord,
                    boundary_cartesian_coord=boundary_cartesian_coord))
 
     @classmethod

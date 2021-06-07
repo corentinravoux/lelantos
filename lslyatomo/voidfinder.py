@@ -505,7 +505,7 @@ class VoidFinder(object):
         elif(self.delete_option == "ITERATION"):
             new_coord, new_radius, new_other_array = self.iterate_overlap_deletion(mpc_per_pixel,radius,coord,other_array=other_array,mpc=mpc)
         elif(self.delete_option == "NONE"):
-            True
+            new_coord, new_radius, new_other_array = coord, radius, other_array
         else:
             raise ValueError("The delete_option chosen is not implemented, try : CLUSTERS, ITERATION or NONE")
         if(other_array is not None):
