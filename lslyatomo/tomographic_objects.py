@@ -1769,7 +1769,17 @@ class VoidCatalog(Catalog):
 
 
     @classmethod
-    def init_from_dictionary(cls,name,radius,coord,catalog_type,coordinate_transform,Omega_m,boundary_cartesian_coord,boundary_sky_coord,other_array=None,other_array_name = None):
+    def init_from_dictionary(cls,
+                             name,
+                             radius,
+                             coord,
+                             catalog_type,
+                             coordinate_transform,
+                             Omega_m,
+                             boundary_cartesian_coord,
+                             boundary_sky_coord,
+                             other_array=None,
+                             other_array_name = None):
         central_value, weights, filling_factor, primary_key, crossing_param, mean_value,los_distance = None,None, None, None, None, None, None
         if(other_array_name is not None):
             if("VALUE" in other_array_name):central_value = other_array[np.argwhere("VALUE" == np.asarray(other_array_name))[0][0]]
