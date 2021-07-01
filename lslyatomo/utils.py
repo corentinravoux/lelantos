@@ -42,12 +42,16 @@ lambdaLy = 1215.673123130217
 
 
 def mpc_per_pixel(size,shape):
-    # return(np.array(size)/(np.array(shape)))
     return(np.array(size)/(np.array(shape)-1))
 
 def pixel_per_mpc(size,shape):
-    # return((np.array(shape))/np.array(size))
     return((np.array(shape)-1)/np.array(size))
+
+def get_map_shape(size,mpc_per_pixel):
+    return((np.array(size)/np.array(mpc_per_pixel)) + 1)
+
+def get_map_size(shape,mpc_per_pixel):
+    return((np.array(shape) - 1)*mpc_per_pixel)
 
 
 def get_cosmo_function(Omega_m,Omega_k=0.):

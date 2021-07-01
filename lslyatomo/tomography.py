@@ -676,12 +676,15 @@ class TomographyStack(object):
         self.normalized = normalized
 
 
-        self.tomographic_map = tomographic_objects.TomographicMap.init_classic(name=map_name,shape=map_shape,size=map_size,property_file=property_file)
+        self.tomographic_map = tomographic_objects.TomographicMap.init_classic(name=map_name,
+                                                                               shape=map_shape,
+                                                                               size=map_size,
+                                                                               property_file=property_file)
         self.tomographic_map.read()
         self.catalog = tomographic_objects.Catalog.init_catalog_from_fits(catalog_name, type_catalog)
 
         if(shape_stack is None):
-            self.shape_stack = tuple(np.around(size_stack / self.tomographic_map.mpc_per_pixel,decimals=0).astype(int))
+            self.shape_stack = tuple(np.around(utils.get_map_shape(size_stack,self.tomographic_map.mpc_per_pixel),decimals=0).astype(int))
         else:
             self.shape_stack = shape_stack
 

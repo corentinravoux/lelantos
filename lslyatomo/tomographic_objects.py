@@ -228,19 +228,19 @@ class TomographicMap(object):
 
 
     def compute_pk3d(self,kmin,kmax,n_k,distance_map=None,criteria_distance_mask=None,log=False):
+        """ Never tested properly, might be false in term of mpc per pixel conversion"""
         if((distance_map is not None)&(criteria_distance_mask is not None)):
             self.mask_map_from_name(distance_map,criteria_distance_mask)
 
         map_3D = self.map_array
         map_fft_3D = np.fft.fftn(map_3D)
         del map_3D
-        number_Mpc_per_pixels = self.mpc_per_pixel
-        kx = np.fft.fftfreq(map_fft_3D.shape[0],number_Mpc_per_pixels[0])
-        ky = np.fft.fftfreq(map_fft_3D.shape[1],number_Mpc_per_pixels[1])
-        kz = np.fft.fftfreq(map_fft_3D.shape[2],number_Mpc_per_pixels[2])
+        kx = np.fft.fftfreq(map_fft_3D.shape[0],self.mpc_per_pixel[0])
+        ky = np.fft.fftfreq(map_fft_3D.shape[1],self.mpc_per_pixel[1])
+        kz = np.fft.fftfreq(map_fft_3D.shape[2],self.mpc_per_pixel[2])
         kx_space , ky_space, kz_space = np.meshgrid(kx,ky,kz)
         del kx,ky,kz
-        normalization_factor = (number_Mpc_per_pixels[0]*number_Mpc_per_pixels[1]*number_Mpc_per_pixels[2])/(self.shapeMap[0]*self.shapeMap[1]*self.shapeMap[2])
+        normalization_factor = (self.mpc_per_pixel[0]*self.mpc_per_pixel[1]*self.mpc_per_pixel[2])/(self.shapeMap[0]*self.shapeMap[1]*self.shapeMap[2])
         power = normalization_factor * np.absolute(map_fft_3D)**2
         norm_k = np.array(map_fft_3D.shape)
         del map_fft_3D
@@ -654,6 +654,7 @@ class StackMap(TomographicMap):
             gauss = utils.gaussian_fitter_2d(inpdata = sign * Slice)
             p,success = gauss.FitGauss2D()
             angle = p[5]
+            # CR - to check, conversion between shape and size need a -1
             p[1] = (p[1] - Slice.shape[0]//2) * self.mpc_per_pixel[x_index]
             p[2] = -(p[2] - Slice.shape[1]//2) * self.mpc_per_pixel[y_index]
             sigma1 = p[3] * np.sqrt( (np.cos(np.radians(angle)) * self.mpc_per_pixel[x_index])**2 + (np.sin(np.radians(angle)) * self.mpc_per_pixel[y_index])**2)
