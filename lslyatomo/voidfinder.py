@@ -234,82 +234,92 @@ class VoidFinder(object):
 
 
     def split_map_in_chunks(self,map_array):
-        pixels_x = self.map_shape[0]
-        pixels_y = self.map_shape[1]
-        subIntervalx = pixels_x//self.split_map[0]
-        subIntervaly = pixels_y//self.split_map[1]
+        subIntervalx = self.map_shape[0]//self.split_map[0]
+        subIntervaly = self.map_shape[1]//self.split_map[1]
         if(self.split_overlap is None):
-            overlaping_x,overlaping_y = 0,0
+            overlaping_x, overlaping_y = 0,0
+        elif(type(self.split_overlap) == int):
+            overlaping_x, overlaping_y = self.split_overlap,self.split_overlap
         else :
-            overlaping_x = int(np.round(self.split_overlap/self.map_mpc_per_pixel[0],0))
-            overlaping_y = int(np.round(self.split_overlap/self.map_mpc_per_pixel[1],0))
+            overlaping_x, overlaping_y = self.split_overlap[0],self.split_overlap[1]
         map_chunks = {}
         for i in range(self.split_map[0]):
             for j in range(self.split_map[1]):
                 map_chunks[f'{i:03d}' + f'{j:03d}']={}
                 if((i==self.split_map[0]-1)&(i==0)):
-                    pixel_x_interval = [i*subIntervalx, (i+1)*subIntervalx]
+                    pixel_x_interval = [0, self.map_shape[0]]
                 elif i == 0 :
-                    pixel_x_interval = [i*subIntervalx, (i+1)*subIntervalx + overlaping_x]
+                    pixel_x_interval = [0, subIntervalx + overlaping_x]
                 elif i == self.split_map[0]-1 :
                     pixel_x_interval = [i*subIntervalx - overlaping_x, self.map_shape[0]]
                 else:
                     pixel_x_interval = [i*subIntervalx - overlaping_x, (i+1)*subIntervalx + overlaping_x]
                 if((j==self.split_map[1]-1)&(j==0)):
-                    pixel_y_interval = [  j*subIntervaly, (j+1)*subIntervaly]
+                    pixel_y_interval = [0, self.map_shape[1]]
                 elif j == 0 :
-                    pixel_y_interval = [  j*subIntervaly, (j+1)*subIntervaly + overlaping_y]
+                    pixel_y_interval = [0 , subIntervaly + overlaping_y]
                 elif j == self.split_map[1]-1 :
                     pixel_y_interval = [ j*subIntervaly - overlaping_y , self.map_shape[1]]
                 else:
-                    pixel_y_interval = [  j*subIntervaly -overlaping_y, (j+1)*subIntervaly + overlaping_y]
-                size_x_interval = np.array(pixel_x_interval)*self.map_mpc_per_pixel[0]
-                size_y_interval = np.array(pixel_y_interval)*self.map_mpc_per_pixel[1]
-                map_size = (size_x_interval[1]-size_x_interval[0],size_y_interval[1]-size_y_interval[0],self.map_size[2])
-                map_shape = (pixel_x_interval[1]-pixel_x_interval[0],pixel_y_interval[1]-pixel_y_interval[0],self.map_shape[2])
+                    pixel_y_interval = [ j*subIntervaly - overlaping_y, (j+1)*subIntervaly + overlaping_y]
+                min_x_interval = pixel_x_interval[0]*self.map_mpc_per_pixel[0]
+                min_y_interval = pixel_y_interval[0]*self.map_mpc_per_pixel[1]
+
+                map_shape = (pixel_x_interval[1]-pixel_x_interval[0],
+                             pixel_y_interval[1]-pixel_y_interval[0],
+                             self.map_shape[2])
+                map_size = utils.get_map_size(map_shape, self.map_mpc_per_pixel)
                 map_chunks[f'{i:03d}' + f'{j:03d}']["map_name"]=f"{self.map_name}_{i:03d}{j:03d}"
-                map_chunks[f'{i:03d}' + f'{j:03d}']["map_mpc_per_pixel"]=utils.mpc_per_pixel(map_size, map_shape)
-                map_chunks[f'{i:03d}' + f'{j:03d}']["map_array"]=map_array[pixel_x_interval[0]:pixel_x_interval[1],pixel_y_interval[0]:pixel_y_interval[1],:]
+                map_chunks[f'{i:03d}' + f'{j:03d}']["map_mpc_per_pixel"]= self.map_mpc_per_pixel
+                map_chunks[f'{i:03d}' + f'{j:03d}']["map_array"]=map_array[pixel_x_interval[0]:pixel_x_interval[1],
+                                                                           pixel_y_interval[0]:pixel_y_interval[1],:]
                 map_chunks[f'{i:03d}' + f'{j:03d}']["map_size"]=map_size
-                map_chunks[f'{i:03d}' + f'{j:03d}']["map_min"]=(size_x_interval[0],size_y_interval[0],0)
+                map_chunks[f'{i:03d}' + f'{j:03d}']["map_min"]=(min_x_interval,min_y_interval,0)
         return(map_chunks)
 
     def merge_chunks(self,map_chunks):
         radius_to_contatenate = []
         coord_to_contatenate = []
+        if(self.split_overlap is not None):
+            if(type(self.split_overlap) == int):
+                overlaping_x, overlaping_y = self.split_overlap,self.split_overlap
+            else :
+                overlaping_x, overlaping_y = self.split_overlap[0],self.split_overlap[1]
         other_array_name = map_chunks[list(map_chunks.keys())[0]]["other_array_name"]
         other_array = [[] for i in range(len(other_array_name))]
         for i in range(self.split_map[0]):
             for j in range(self.split_map[1]):
                 coord_chunks = map_chunks[f'{i:03d}' + f'{j:03d}']["coord"]
+                mpc_per_pixel = map_chunks[f'{i:03d}' + f'{j:03d}']["map_mpc_per_pixel"]
                 if(coord_chunks.shape[0] !=0):
                     if(self.split_overlap is not None):
                         if((i==self.split_map[0]-1)&(i==0)):
-                            pixel_x_interval = [0,0]
+                            pixel_x_interval = [0.,0.]
                         elif i == 0 :
-                            pixel_x_interval = [0, self.split_overlap]
+                            pixel_x_interval = [0, overlaping_x]
                         elif i == self.split_map[0]-1 :
-                            pixel_x_interval = [ self.split_overlap,0]
+                            pixel_x_interval = [overlaping_x, 0]
                         else:
-                            pixel_x_interval = [ self.split_overlap,self.split_overlap]
+                            pixel_x_interval = [overlaping_x, overlaping_x]
                         if((j==self.split_map[1]-1)&(j==0)):
                             pixel_y_interval = [0,0]
                         elif j == 0 :
-                            pixel_y_interval = [0, self.split_overlap]
+                            pixel_y_interval = [0, overlaping_y]
                         elif j == self.split_map[1]-1 :
-                            pixel_y_interval =  [ self.split_overlap,0]
+                            pixel_y_interval = [overlaping_y, 0]
                         else:
-                            pixel_y_interval = [ self.split_overlap,self.split_overlap]
-                        mask = (coord_chunks[:,0] > pixel_x_interval[0])
-                        mask &= (coord_chunks[:,0] < map_chunks[f'{i:03d}' + f'{j:03d}']["map_size"][0] - pixel_x_interval[1])
-                        mask &= (coord_chunks[:,1] > pixel_y_interval[0])
-                        mask &= (coord_chunks[:,1] < map_chunks[f'{i:03d}' + f'{j:03d}']["map_size"][1] - pixel_y_interval[1])
+                            pixel_y_interval = [overlaping_y, overlaping_y]
+                        mask = (coord_chunks[:,0] > pixel_x_interval[0]*mpc_per_pixel[0])
+                        mask &= (coord_chunks[:,0] < map_chunks[f'{i:03d}' + f'{j:03d}']["map_size"][0] - (pixel_x_interval[1]*mpc_per_pixel[0]))
+                        mask &= (coord_chunks[:,1] > pixel_y_interval[0]*mpc_per_pixel[1])
+                        mask &= (coord_chunks[:,1] < map_chunks[f'{i:03d}' + f'{j:03d}']["map_size"][1] - (pixel_y_interval[1]*mpc_per_pixel[1]))
                     else:
                         mask = np.full(coord_chunks.shape[0],True)
                     radius_to_contatenate.append(map_chunks[f'{i:03d}' + f'{j:03d}']["radius"][mask])
                     for k in range(len(other_array_name)):
                         other_array[k].append(np.array(map_chunks[f'{i:03d}' + f'{j:03d}']["other_array"][k])[mask])
-                    coord_to_contatenate.append((map_chunks[f'{i:03d}' + f'{j:03d}']["coord"] + np.array(map_chunks[f'{i:03d}' + f'{j:03d}']["map_min"]))[mask])
+                    coord_to_contatenate.append((map_chunks[f'{i:03d}' + f'{j:03d}']["coord"]
+                                                 + np.array(map_chunks[f'{i:03d}' + f'{j:03d}']["map_min"]))[mask])
         if(len(radius_to_contatenate) == 0):
             radius = np.empty(0)
             coord = np.empty(0)
@@ -319,6 +329,7 @@ class VoidFinder(object):
         for k in range(len(other_array_name)):
             other_array[k] = np.concatenate(other_array[k],axis=0)
         return(radius, coord,other_array,other_array_name)
+
 
 
 
