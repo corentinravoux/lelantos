@@ -362,8 +362,19 @@ class TomographyManager(object):
     available_software = ("dachshund","borg")
     available_machine = ("irene","nersc","bash")
 
-    def __init__(self,pwd,software,machine,name_pixel,launch_file,**kwargs):
+    def __init__(self,
+                 pwd,
+                 software,
+                 machine,
+                 name_pixel,
+                 launch_file,
+                 symlink_folder = None,
+                 **kwargs):
         self.pwd = pwd
+        if(symlink_folder is not None):
+            self.link_tomography_folder(symlink_folder)
+            self.pwd = symlink_folder
+
         self.name_pixel = name_pixel
         self.launch_file = launch_file
 
@@ -519,6 +530,7 @@ class TomographyManager(object):
     def remove_tmp(self):
         shutil.rmtree(os.path.join(self.pwd,"Tmp"), ignore_errors=True)
 
-    def displace_tomography_folder(self,out_folder):
-        copy_tree(self.pwd,out_folder)
-        shutil.rmtree(self.pwd, ignore_errors=True)
+    def link_tomography_folder(self,symlink_folder):
+        if(os.path.isdir(symlink_folder)):
+            os.remove(symlink_folder)
+        os.symlink(self.pwd,symlink_folder,target_is_directory =True)
