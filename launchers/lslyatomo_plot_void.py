@@ -1,12 +1,13 @@
 import os
 from lslyatomo import voidfinder
 
+plot_void_path = os.path.join(os.getcwd(),"plot_void")
 
 value_names = ["radius","redshift","central_value","los_distance"]
 plot_histo = True
 plot_mean_z_dependence = True
 plot_z_dependence = True
-plot_comparison = True
+plot_comparison = False
 
 threshold = 0.14
 average = 0.12
@@ -49,9 +50,8 @@ plot_args_comparison.update({"central_value_alpha" : 0.5,
 
 
 if __name__ == '__main__' :
-    pwd = os.path.join(os.getcwd(),"plot_void")
-    if(not(os.path.isdir(pwd))):os.mkdir(pwd)
-    plot = voidfinder.PlotVoid(pwd,void_catalog)
+    os.makedirs(plot_void_path,exist_ok=True)
+    plot = voidfinder.PlotVoid(plot_void_path,void_catalog)
 
     plot.plot(value_names,name,
               histo=plot_histo,

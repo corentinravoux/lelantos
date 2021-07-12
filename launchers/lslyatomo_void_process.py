@@ -8,8 +8,8 @@ create_fake_qso_catalog = True
 
 ### General factor parameters ###
 
-catalog_name = os.path.join(os.getcwd(),"void","Catalog_Voids_SPHERICAL_0.14threshold_0.12average_4rmin_ITERATION_deletion.fits")
-catalog_name = os.path.join(os.getcwd(),"void","Catalog_Voids_WATERSHED_0.11threshold_1.5dist_clusters_4rmin_CLUSTERS_deletion.fits")
+void_path = os.path.join(os.getcwd(),"void")
+catalog_name = os.path.join(void_path,"Catalog_Voids_SPHERICAL_0.14threshold_0.12average_4rmin_ITERATION_deletion.fits")
 
 ### Additional stats parameters ###
 
@@ -27,7 +27,6 @@ distance_map_param = 20
 distance_map_percent = 0.95
 cut_border_prop = os.path.join(os.getcwd(),"pixel","property_file.pickle")
 
-print(os.getcwd())
 
 
 ### Merge parameters ###
@@ -46,14 +45,12 @@ catalog_name_qso_like = catalog_name
 
 
 if __name__ == '__main__' :
-    pwd = os.path.join(os.getcwd(),"void")
-    if(not(os.path.isdir(pwd))):os.mkdir(pwd)
-
-
     if(compute_additional_stats):
         voidfinder.compute_additional_stats(catalog_name,pixel_name)
     if(cut_catalog):
-        voidfinder.cut_catalog(pwd,catalog_name,method_cut,
+        voidfinder.cut_catalog(void_path,
+                               catalog_name,
+                               method_cut,
                                cut_crossing_param=cut_crossing_param,
                                cut_radius=cut_radius,
                                distance_map_name=distance_map_name,
@@ -62,7 +59,9 @@ if __name__ == '__main__' :
                                distance_map_percent=distance_map_percent,
                                cut_border_prop=cut_border_prop)
     if(merge_catalog):
-        voidfinder.create_merged_catalog(pwd,list_catalog_name,merged_catalog_name)
+        voidfinder.create_merged_catalog(void_path,
+                                         list_catalog_name,
+                                         merged_catalog_name)
 
     if(create_fake_qso_catalog):
         voidfinder.create_qso_like_catalog(catalog_name_qso_like)

@@ -7,21 +7,22 @@ from lslyatomo import tomography
 #### Options ####
 
 plot_map = True
-plot_centered_maps = False
-plot_delta_histogram = False
+plot_centered_maps = True
+plot_delta_histogram = True
 plot_delta_histogram_comparison = False
-plot_integrated_map = False
+plot_integrated_map = True
 
 
 
 
 #### General options ####
 
+plot_tomography_path = os.path.join(os.getcwd(),"plot_tomography")
 name_map = os.path.join(os.getcwd(),"tomography","map_reconstructed.bin")
 prop = os.path.join(os.getcwd(),"pixel","property_file.pickle")
 pixel_name = os.path.join(os.getcwd(),"pixel","pixel_stripe82_DR16.bin")
 qso = os.path.join(os.getcwd(),"pixel","qso_catalog.fits")
-void = os.path.join(os.getcwd(),"void","Catalog_Voids_SPHERICAL_0.12threshold_0.14average_4rmin_ITERATION_deletion.fits")
+void = os.path.join(os.getcwd(),"void","Catalog_Voids_SPHERICAL_0.14threshold_0.12average_4rmin_ITERATION_deletion.fits")
 minimal_void_crossing = None
 distance_mask = os.path.join(os.getcwd(),"tomography","dist_map_to_los.bin")
 criteria_distance_mask = 20
@@ -67,13 +68,13 @@ additional_args = {"map_delta_min" : -1.0,
 
 #### Plot map options ####
 
-center_mpc = 10 #"all"
+center_mpc = 10
 direction = "y"
 space = 12
 name_plot_map = "DR16"
 redshift_axis= True
 rotate = False
-cut_plot= None #(1/2,1,1)
+cut_plot= None
 
 
 
@@ -102,16 +103,13 @@ radius_centered = 50
 zmin = 100
 zmax = 200
 name_out_integrated = "Stripe82"
-vmin_integrate = -0.1
-vmax_integrate = 0.1
 
 
 
 
 if __name__ == '__main__' :
-    pwd = os.path.join(os.getcwd(),"plot_tomography")
-    if(not(os.path.isdir(pwd))):os.mkdir(pwd)
-    Treat = tomography.TomographyPlot(pwd,map_name=name_map,pixel_name=pixel_name,
+    os.makedirs(plot_tomography_path,exist_ok=True)
+    Treat = tomography.TomographyPlot(plot_tomography_path,map_name=name_map,pixel_name=pixel_name,
                                       property_file=prop,**additional_args)
     if(plot_map):
         Treat.plot(name_plot_map,direction,space,center_mpc,qso=qso,
@@ -128,8 +126,10 @@ if __name__ == '__main__' :
                                    log_scale=log_scale)
 
     if(plot_integrated_map):
-        Treat.plot_integrate_image(zmin,zmax,name_out_integrated,vmin_integrate,
-                                      vmax_integrate,rotate=rotate)
+        Treat.plot_integrate_image(zmin,
+                                   zmax,
+                                   name_out_integrated,
+                                   rotate=rotate)
 
     if(plot_centered_maps):
         Treat.plot_catalog_centered_maps(direction,name_plot_centered,space,

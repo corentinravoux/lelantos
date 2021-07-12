@@ -3,33 +3,32 @@ import os
 from lslyatomo import cosmology
 import numpy as np
 
-
+plot_delta_path = os.path.join(os.getcwd(),"plot_delta")
 delta_path = os.path.join(os.getcwd(),"delta")
 center_ra_to_zero = True
-name = os.path.join(os.getcwd(),"plot_delta","test")
+name = "DR16"
 degree = True
 
 z_cut_min=2.1
 z_cut_max=3.2
-dec_cut_min=52.4#0.4
-dec_cut_max=54.2 #1.2
-ra_cut_min=-147.5 #-1.0
-ra_cut_max=-144.5 #0.75
+dec_cut_min=52.4
+dec_cut_max=54.2
+ra_cut_min=-147.5
+ra_cut_max=-144.5
 
 
-value_names = ["ra"]#"delta","sigma","redshift"]
-value_names = ["snr"]#"delta","sigma","redshift"]
-plot_histo = False
+value_names = ["snr","delta","sigma","redshift"]
+plot_histo = True
 plot_mean_z_dependence = True
 plot_z_dependence = False
-plot_comparison = False
-ra_dec_plots = False
+plot_comparison = True
+ra_dec_plots = True
 
 
 
-comparison = None #[os.path.join(os.getcwd(),"delta")]
-comparison_legend = ["test","test"]
-name_comparison = "test_comparison"
+comparison = [os.path.join(os.getcwd(),"delta_shuffle")]
+comparison_legend = ["DR16","DR16 Shuffle"]
+name_comparison = "DR16_shuffle_comparison"
 print_stats = True
 
 plot_args = {"sigma_bins" : 36,
@@ -49,8 +48,6 @@ plot_args = {"sigma_bins" : 36,
 
              "ra_bins" : 20,
 
-
-
              "snr_norm" : True,
              "snr_bins" : 100,
              "snr_z_bins": 30,
@@ -69,18 +66,22 @@ plot_args_comparison.update({"delta_alpha" : 0.5,
 
 if __name__ =="__main__":
 
-    pwd = os.path.join(os.getcwd(),"plot_delta")
-    if(not(os.path.isdir(pwd))):os.mkdir(pwd)
+    os.makedirs(plot_delta_path,exist_ok=True)
 
-
-    treat = cosmology.DeltaAnalyzer(pwd,delta_path,center_ra=center_ra_to_zero,
-                                    z_cut_min=z_cut_min,z_cut_max=z_cut_max,
-                                    dec_cut_min=dec_cut_min,dec_cut_max=dec_cut_max,
-                                    ra_cut_min=ra_cut_min,ra_cut_max=ra_cut_max,
+    treat = cosmology.DeltaAnalyzer(plot_delta_path,
+                                    delta_path,
+                                    center_ra=center_ra_to_zero,
+                                    z_cut_min=z_cut_min,
+                                    z_cut_max=z_cut_max,
+                                    dec_cut_min=dec_cut_min,
+                                    dec_cut_max=dec_cut_max,
+                                    ra_cut_min=ra_cut_min,
+                                    ra_cut_max=ra_cut_max,
                                     degree=degree)
 
-    
-    treat.plot(value_names,name,
+
+    treat.plot(value_names,
+               name,
                histo=plot_histo,
                mean_z_dependence=plot_mean_z_dependence,
                z_dependence=plot_z_dependence,
@@ -88,7 +89,8 @@ if __name__ =="__main__":
                **plot_args)
 
     if(plot_comparison):
-        treat.plot(value_names,name_comparison,
+        treat.plot(value_names,
+                   name_comparison,
                    comparison=comparison,
                    comparison_legend=comparison_legend,
                    histo=plot_histo,

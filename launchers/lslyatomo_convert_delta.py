@@ -1,20 +1,17 @@
-
 import os
-pwd = os.getcwd()
 from lslyatomo import cosmology
 
 
-delta_path = os.path.join(pwd,"delta")
-
-
+delta_path = os.path.join(os.getcwd(),"delta")
+pixel_path = os.path.join(os.getcwd(),"pixel")
 
 Omega_m = 0.3147
 z_cut_min=2.1
 z_cut_max=3.2
-dec_cut_min=52.4#0.4
-dec_cut_max=54.2 #1.2
-ra_cut_min=-147.5 #-1.0
-ra_cut_max=-144.5 #0.75
+dec_cut_min=52.4
+dec_cut_max=54.2
+ra_cut_min=-147.5
+ra_cut_max=-144.5
 sigma_min=0.1
 sigma_max= None
 
@@ -23,7 +20,7 @@ sigma_max= None
 coordinate_transform = "middle"
 software = "dachshund"
 mode = "parallel"
-nameout = "DR16_launch_data"
+nameout = "DR16"
 property_file_name = "property_file.pickle"
 
 repeat = False
@@ -32,7 +29,6 @@ return_dla_catalog = None
 dla_catalog = None
 return_sky_catalogs = True
 rebin = None
-shuffle = None
 
 
 plot_delta_properties = True
@@ -47,7 +43,12 @@ shape_map = (32, 28, 300)
 sigmaf = 0.01
 lperp = 13
 lpar = 13
-properties = {"shape" :shape_map , "sigma_f":sigmaf , "lperp":lperp ,"lpar":lpar,"name_pixel":name_pixel,"name_map":name_map}
+properties = {"shape" :shape_map,
+              "sigma_f":sigmaf ,
+              "lperp":lperp ,
+              "lpar":lpar,
+              "name_pixel":name_pixel,
+              "name_map":name_map}
 
 
 number_chunks = (2,2)
@@ -58,22 +59,28 @@ overlaping = 13
 
 
 if __name__ =="__main__":
+    os.makedirs(os.path.join(os.getcwd(),"pixel"),exist_ok=True)
 
-    pwd = os.path.join(os.getcwd(),"pixel")
-    if(not(os.path.isdir(pwd))):os.mkdir(pwd)
-
-    delta_converter = cosmology.DeltaConverter(pwd,Omega_m,delta_path,
+    delta_converter = cosmology.DeltaConverter(pixel_path,
+                                               Omega_m,
+                                               delta_path,
                                                coordinate_transform,
-                                               plot_delta_properties,software,
+                                               plot_delta_properties,
+                                               software,
                                                return_qso_catalog=return_qso_catalog,
                                                return_dla_catalog=return_dla_catalog,
                                                dla_catalog=dla_catalog,
                                                return_sky_catalogs=return_sky_catalogs,
                                                repeat=repeat)
-    delta_converter.transform_delta(mode,nameout,properties,property_file_name,
-                                    rebin=rebin,shuffle=shuffle,
-                                    sigma_min=sigma_min,sigma_max=sigma_max,
-                                    z_cut_min=z_cut_min,z_cut_max=z_cut_max,
+    delta_converter.transform_delta(mode,
+                                    nameout,
+                                    properties,
+                                    property_file_name,
+                                    rebin=rebin,
+                                    sigma_min=sigma_min,
+                                    sigma_max=sigma_max,
+                                    z_cut_min=z_cut_min,
+                                    z_cut_max=z_cut_max,
                                     dec_cut_min=dec_cut_min,
                                     dec_cut_max=dec_cut_max,
                                     ra_cut_min=ra_cut_min,
