@@ -73,6 +73,13 @@ def cut_catalog(pwd,
     void_cut.write()
     return(void_cut.name)
 
+def correct_void_coordinates(pwd,catalog_name,method,name_out,inv_g_function,pixel_name,**kwargs):
+    void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
+    void.correct_coordinates(method,name_out,inv_g_function,pixel_name,**kwargs)
+    void.name = os.path.join(pwd,name_out)
+    void.write()
+
+
 
 def get_crossing_qso(catalog_name,qso_name):
     void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
@@ -93,6 +100,10 @@ def qso_to_3d(catalog_name,new_name,moveaxis=None):
 def void_to_3d(catalog_name,new_name,moveaxis=None):
     void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
     void.writetxt(new_name,moveaxis=moveaxis)
+
+
+
+
 
 #############################################################################
 #############################################################################

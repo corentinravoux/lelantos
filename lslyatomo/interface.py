@@ -49,7 +49,6 @@ def parse_string(input):
 
 
 def main(input_file):
-    # CR - stack can be added
     config = configparser.ConfigParser(allow_no_value=True,
                                        converters={"str": parse_string,
                                                    "int": parse_int,
@@ -72,9 +71,11 @@ def main(input_file):
     tomography_process_config = config["tomography process"]
     void_finder_config = config["void finder"]
     void_process_config = config["void process"]
+    stack_void_config = config["void stack"]
     delta_plot_config = config["delta plot"]
     void_plot_config = config["void plot"]
     tomography_plot_config = config["tomography plot"]
+    stack_void_plot_config = config["stack void plot"]
 
     delta_path = os.path.abspath(main_config.getstr("delta_path"))
 
@@ -93,8 +94,6 @@ def main(input_file):
 
     tomo_abs_path = os.path.abspath(os.path.join(main_path,tomography_config.getstr("tomo_path")))
     tomo_path = os.path.relpath(tomo_abs_path,os.getcwd())
-    if(main_config.getstr("copy_tomography_folder") is not None):
-        tomo_abs_path = main_config.getstr("copy_tomography_folder")
     if(main_config.getboolean("launch_tomography")):
         launch_tomography(tomo_path,pixel_path,software_config,tomography_config,main_config)
 
@@ -104,10 +103,35 @@ def main(input_file):
     void_path = os.path.abspath(os.path.join(main_path,void_finder_config.getstr("void_path")))
     void_catalog_name_default = None
     if(main_config.getboolean("find_void")):
-        void_catalog_name_default = find_void(void_path,tomo_abs_path,pixel_path,void_finder_config,tomography_process_config,delta_config)
+        void_catalog_name_default = find_void(void_path,
+                                              tomo_abs_path,
+                                              pixel_path,
+                                              void_finder_config,
+                                              tomography_process_config,
+                                              delta_config)
 
     if(main_config.getboolean("process_void")):
-        void_catalog_name_default = process_void(void_path,tomo_abs_path,pixel_path,void_process_config,delta_config,tomography_process_config,software_config,void_catalog_name_default)
+        void_catalog_name_default = process_void(void_path,
+                                                 tomo_abs_path,
+                                                 pixel_path,
+                                                 void_process_config,
+                                                 delta_config,
+                                                 tomography_process_config,
+                                                 software_config,
+                                                 void_catalog_name_default)
+
+    stack_void_path = os.path.abspath(os.path.join(main_path,stack_void_config.getstr("stack_void_path")))
+    if(main_config.getboolean("stack_void")):
+        (stack_void_name_default,
+         property_stack_void_name_default) = stack_void(stack_void_path,
+                                                        tomo_abs_path,
+                                                        void_path,
+                                                        pixel_path,
+                                                        stack_void_config,
+                                                        tomography_process_config,
+                                                        delta_config,
+                                                        void_catalog_name_default)
+
 
     plot_void_path = os.path.join(main_path,void_plot_config.getstr("plot_void_path"))
     if(main_config.getboolean("plot_void")):
@@ -115,9 +139,24 @@ def main(input_file):
 
     plot_tomography_path = os.path.join(main_path,tomography_plot_config.getstr("plot_tomography_path"))
     if(main_config.getboolean("plot_tomography")):
-        plot_tomography(plot_tomography_path,tomo_abs_path,pixel_path,void_path,tomography_plot_config,tomography_process_config,software_config,delta_config,main_config,void_catalog_name_default)
+        plot_tomography(plot_tomography_path,
+                        tomo_abs_path,
+                        pixel_path,
+                        void_path,
+                        tomography_plot_config,
+                        tomography_process_config,
+                        software_config,
+                        delta_config,
+                        main_config,
+                        void_catalog_name_default)
 
-
+    plot_stack_void_path = os.path.join(main_path,stack_void_plot_config.getstr("plot_stack_void_path"))
+    if(main_config.getboolean("plot_stack_void")):
+        plot_stack_void(plot_stack_void_path,
+                        stack_void_path,
+                        stack_void_plot_config,
+                        stack_void_name_default,
+                        property_stack_void_name_default)
 
 def transform_delta(delta_path,delta_transform_path,delta_transform_config,delta_config,main_config):
 
@@ -164,7 +203,6 @@ def convert_delta(pixel_path,delta_path,software_config,delta_config,main_config
                                     properties,
                                     delta_config.getstr("property_file_name"),
                                     rebin=delta_config.getstr("rebin"),
-                                    shuffle=delta_config.getstr("shuffle"),
                                     sigma_min=delta_config.getfloat("sigma_min"),
                                     sigma_max=delta_config.getfloat("sigma_max"),
                                     z_cut_min=delta_config.getfloat("z_cut_min"),
@@ -223,12 +261,11 @@ def launch_tomography(tomo_path,pixel_path,software_config,tomography_config,mai
                                              tomography_config.getstr("machine"),
                                              os.path.join(pixel_path,software_config.getstr("name_pixel")),
                                              os.path.join(pixel_path,f"{main_config.getstr('name')}_launch_data.pickle"),
+                                             symlink_folder = tomography_config.getstr("symlink_folder"),
                                              **tomography_config.getdict("dict_launch"))
     manager.launch_all()
     manager.copy()
     manager.remove_tmp()
-    if(main_config.getstr("copy_tomography_folder") is not None):
-        manager.displace_tomography_folder(main_config.getstr("copy_tomography_folder"))
 
 
 
@@ -263,7 +300,7 @@ def find_void(void_path,tomo_abs_path,pixel_path,void_finder_config,tomography_p
                                         number_core=void_finder_config.getint("number_process"),
                                         find_cluster=void_finder_config.getboolean("find_cluster"),
                                         split_map=void_finder_config.gettupleint("split_map"),
-                                        split_overlap=void_finder_config.getfloat("split_overlap"),
+                                        split_overlap=void_finder_config.gettupleint("split_overlap"),
                                         delete_option=void_finder_config.getstr("delete_option"),
                                         restart=void_finder_config.getboolean("restart"))
     void_catalog_name_default = void_finder.find_voids()
@@ -295,6 +332,37 @@ def process_void(void_path,tomo_abs_path,pixel_path,void_process_config,delta_co
     return(void_catalog_name_default)
 
 
+def stack_void(stack_void_path,
+               tomo_abs_path,
+               void_path,
+               pixel_path,
+               stack_void_config,
+               tomography_process_config,
+               delta_config,
+               void_catalog_name_default):
+    os.makedirs(stack_void_path,exist_ok=True)
+    if(stack_void_config.getstr("void_catalog") is not None):
+        void_catalog_name = os.path.join(void_path,stack_void_config.getstr("void_catalog"))
+    else:
+        void_catalog_name = void_catalog_name_default
+
+    stack = tomography.TomographyStack(os.path.join(tomo_abs_path,tomography_process_config.getstr("map_name")),
+                                       void_catalog_name,
+                                       stack_void_config.getstr("type_catalog"),
+                                       os.path.join(stack_void_path,stack_void_config.getstr("property_file_stack")),
+                                       stack_void_config.getfloat("size_stack"),
+                                       os.path.join(stack_void_path,stack_void_config.getstr("name_stack")),
+                                       shape_stack=stack_void_config.gettupleint("shape_stack"),
+                                       property_file=os.path.join(pixel_path,delta_config.getstr("property_file_name")),
+                                       coordinate_convert=stack_void_config.getstr("coordinate_convert"),
+                                       interpolation_method=stack_void_config.getstr("interpolation_method"),
+                                       normalized=stack_void_config.getboolean("normalized"))
+    stack.stack()
+    return(os.path.join(stack_void_path,stack_void_config.getstr("name_stack")),
+           os.path.join(stack_void_path,stack_void_config.getstr("property_file_stack")))
+
+
+
 def plot_void(plot_void_path,void_path,void_plot_config,main_config,void_catalog_name_default):
     if(void_plot_config.getstr("void_catalog") is not None):
         void_catalog_name_plot = os.path.join(void_path,void_plot_config.getstr("void_catalog"))
@@ -323,7 +391,16 @@ def plot_void(plot_void_path,void_path,void_plot_config,main_config,void_catalog
                   **void_plot_config.getdict("plot_args"))
 
 
-def plot_tomography(plot_tomography_path,tomo_abs_path,pixel_path,void_path,tomography_plot_config,tomography_process_config,software_config,delta_config,main_config,void_catalog_name_default):
+def plot_tomography(plot_tomography_path,
+                    tomo_abs_path,
+                    pixel_path,
+                    void_path,
+                    tomography_plot_config,
+                    tomography_process_config,
+                    software_config,
+                    delta_config,
+                    main_config,
+                    void_catalog_name_default):
     os.makedirs(plot_tomography_path,exist_ok=True)
     Treat = tomography.TomographyPlot(plot_tomography_path,
                                       map_name=os.path.join(tomo_abs_path,tomography_process_config.getstr("map_name")),
@@ -374,3 +451,29 @@ def plot_tomography(plot_tomography_path,tomo_abs_path,pixel_path,void_path,tomo
                                          tomography_plot_config.getfloat("radius_centered"),
                                          qso=os.path.join(pixel_path,delta_config.getstr("return_qso_catalog")),
                                          rotate =tomography_plot_config.getboolean("rotate"))
+
+
+def plot_stack_void(plot_stack_void_path,
+                    stack_void_path,
+                    stack_void_plot_config,
+                    stack_void_name_default,
+                    property_stack_void_name_default):
+    os.makedirs(plot_stack_void_path,exist_ok=True)
+
+    if(stack_void_plot_config.getstr("stack_name") is not None):
+        name_stack = os.path.join(stack_void_path,stack_void_plot_config.getstr("stack_name"))
+    else:
+        name_stack = stack_void_name_default
+
+    if(stack_void_plot_config.getstr("property_stack_name") is not None):
+        property_file_stack = os.path.join(stack_void_path,stack_void_plot_config.getstr("stack_name"))
+    else:
+        property_file_stack = property_stack_void_name_default
+
+    tomography.TomographyStack.plot_stack(plot_stack_void_path,
+                                          name_stack,
+                                          property_file_stack,
+                                          os.path.join(plot_stack_void_path,stack_void_plot_config.getstr("name_plot")),
+                                          ellipticity=stack_void_plot_config.getboolean("ellipticity"),
+                                          pixel_file_qso_distance=stack_void_plot_config.getstr("pixel_file_qso_distance"),
+                                          **stack_void_plot_config.getdict("plot_args"))

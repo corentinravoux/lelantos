@@ -46,13 +46,14 @@ def get_delta_list(delta_path):
         delta_list = []
         for i in range(len(delta_path)):
             delta_list = delta_list + list(np.sort(glob.glob(os.path.join(delta_path[i],"delta-*.fits*"))))
+    if(len(delta_list) == 0):
+        raise KeyError("No delta file was found")
     return(delta_list)
 
 
 
 # CR - need to rethink delta class
 def preselect_deltas(namefile,ramin=None,ramax=None,decmin=None,decmax=None,center_ra=True,pk1d_type=True):
-    print(len(namefile))
     subset_namefile = []
     if((ramin is None)&(ramax is None)&(decmin is None)&(decmax is None)):
         return(namefile)
@@ -246,16 +247,17 @@ def delete_missing_pixels(listz,listsigmas,listdelta):
 
 class DeltaModifier(object):
 
-    def __init__(self,pwd,delta_path,center_ra=True,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None):
+    def __init__(self,pwd,delta_path):
         self.pwd = pwd
         self.delta_path = delta_path
 
 
-
-
     # CR - need to rethink the way Delta class is done (+ add shuffle inside)
 
-    def shuffle_deltas(self,other_delta_path=None,other_path_out=None,seed=None):
+    def shuffle_deltas(self,
+                       other_delta_path=None,
+                       other_path_out=None,
+                       seed=None):
 
         namefile = get_delta_list(self.delta_path)
         namefile_other = None
@@ -280,14 +282,25 @@ class DeltaModifier(object):
 
 
 
-    def shuffle_deltas_cut_z(self,n_cut,zmin,zmax,other_delta_path=None,other_path_out=None,seed=None):
+    def shuffle_deltas_cut_z(self,
+                             n_cut,
+                             zmin,
+                             zmax,
+                             other_delta_path=None,
+                             other_path_out=None,
+                             seed=None):
 
         namefile = get_delta_list(self.delta_path)
         namefile_other = None
         if(other_delta_path is not None):
             namefile_other = get_delta_list(other_delta_path)
         redshift_cut = np.linspace(zmin,zmax,n_cut+1)
-        (delta,ivar,delta_other,weight_other) = self.get_delta_sigma_array_cut_z(namefile,redshift_cut,namefile_other=namefile_other)
+        (delta,
+         ivar,
+         delta_other,
+         weight_other) = self.get_delta_sigma_array_cut_z(namefile,
+                                                          redshift_cut,
+                                                          namefile_other=namefile_other)
 
         if(seed is None):
             seed = np.random.randint(10000000)
@@ -307,27 +320,36 @@ class DeltaModifier(object):
             for k in range(n_cut):
                 delta_other_rand.append(np.random.permutation(delta_other[k]))
 
-        self.write_delta_sigma_array_cut_z(delta_rand,ivar_rand,namefile,
-                                           n_cut,redshift_cut,
-                                           other_delta_path=other_delta_path,namefile_other=namefile_other,
-                                           delta_other_rand=delta_other_rand,weight_other_rand=weight_other_rand,
+        self.write_delta_sigma_array_cut_z(delta_rand,
+                                           ivar_rand,
+                                           namefile,
+                                           n_cut,
+                                           redshift_cut,
+                                           other_delta_path=other_delta_path,
+                                           namefile_other=namefile_other,
+                                           delta_other_rand=delta_other_rand,
+                                           weight_other_rand=weight_other_rand,
                                            other_path_out=other_path_out)
 
 
 
-    def get_delta_sigma_array(self,namefile,namefile_other=None):
+    def get_delta_sigma_array(self,
+                              namefile,
+                              namefile_other=None):
         weight_other,delta_other= None,None
         if(namefile_other is not None):
             weight_other,delta_other = [],[]
         ivar,delta = [],[]
         for i in range(len(namefile)):
-            delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
+            delta_tomo = tomographic_objects.Delta(name=namefile[i],
+                                                   pk1d_type=True)
             delta_tomo.read()
             for j in range(len(delta_tomo.delta_array)):
                 ivar.append(tomographic_objects.Delta.ivar(delta_tomo.delta_array[j]))
                 delta.append(tomographic_objects.Delta.delta(delta_tomo.delta_array[j]))
             if(namefile_other is not None):
-                delta_tomo_other = tomographic_objects.Delta(name=namefile_other[i],pk1d_type=False)
+                delta_tomo_other = tomographic_objects.Delta(name=namefile_other[i],
+                                                             pk1d_type=False)
                 delta_tomo_other.read()
                 for j in range(len(delta_tomo_other.delta_array)):
                     weight_other.append(tomographic_objects.Delta.weights(delta_tomo_other.delta_array[j]))
@@ -592,7 +614,6 @@ class DeltaModifier(object):
                                  z_cut_min=None,
                                  z_cut_max=None,
                                  center_ra=True):
-        """ To optimize & test"""
         density_names = iterative_selection_parameters["density_names"]
         dperp_names = iterative_selection_parameters["separation_names"]
         Om = iterative_selection_parameters["Om"]
@@ -650,17 +671,14 @@ class DeltaModifier(object):
 
     def save_deltas(self,deltas,name_out,number_cut):
         for cut in range(number_cut):
-            delta = tomographic_objects.Delta(name=f"{name_out}_{cut}.fits",delta_file=deltas[cut])
+            delta = tomographic_objects.Delta(name=os.path.join(self.pwd,f"{name_out}_{cut}.fits"),delta_array=deltas[cut])
             delta.write()
 
-
-
-    # CR - Unused delta subsampler, need to be incorporated in the delta class
 
     def subsample_deltas(self,
                          name_out,
                          number_cut,
-                         random_density_parameter=False,
+                         random_density_parameter=None,
                          number_repeat=1,
                          iterative_selection_parameters=None,
                          ra_cut_min=None,
@@ -673,7 +691,7 @@ class DeltaModifier(object):
         deltas = self.get_new_healpix(number_cut,
                                       random_density_parameter=random_density_parameter,
                                       number_repeat=number_repeat,
-                                      iterative_selection_parameters=None,
+                                      iterative_selection_parameters=iterative_selection_parameters,
                                       ra_cut_min=ra_cut_min,
                                       ra_cut_max=ra_cut_max,
                                       dec_cut_min=dec_cut_min,
@@ -706,7 +724,16 @@ class DeltaConverter():
 
 
 
-    def transform_delta_to_pixel_file(self,rebin=None,shuffle=None,sigma_min=None,sigma_max=None,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None):
+    def transform_delta_to_pixel_file(self,
+                                      rebin=None,
+                                      sigma_min=None,
+                                      sigma_max=None,
+                                      z_cut_min=None,
+                                      z_cut_max=None,
+                                      dec_cut_min=None,
+                                      dec_cut_max=None,
+                                      ra_cut_min=None,
+                                      ra_cut_max=None):
         namefile = get_delta_list(self.delta_path)
         # namefile = preselect_deltas(namefile,
         #                             ramin=ra_cut_min,
@@ -719,9 +746,6 @@ class DeltaConverter():
             (ra,dec,z,zqso,ids,sigmas,deltas) = get_merged_multiple_exposure_deltas(namefile)
         else:
             (ra,dec,z,zqso,ids,sigmas,deltas)  = get_deltas(namefile)
-
-        if(shuffle is not None):
-            (ra,dec,deltas,sigmas) = self.shuffle_data(shuffle,ra,dec,deltas,sigmas)
 
         if(rebin is not None):
             (z,deltas,sigmas) = self.rebin_data(z,deltas,sigmas,rebin)
@@ -786,34 +810,6 @@ class DeltaConverter():
 
         return(cartesian_deltas,cartesian_qso_catalog,cartesian_dla_catalog,sky_deltas,sky_qso_catalog,sky_dla_catalog,properties_map_pixels)
 
-
-
-    def shuffle_data(self,shuffle,ra,dec,deltas,sigmas):
-        if(shuffle == "radec"):
-            ra,dec = self.shuffle_arrays(ra,dec)
-        elif(shuffle == "deltasigma") :
-            deltas,sigmas = self.shuffle_deltas_sigmas(deltas,sigmas)
-        return(ra,dec,deltas,sigmas)
-
-
-    def shuffle_deltas_sigmas(self,deltas,sigmas):
-        len_deltas = [len(deltas[i]) for i in range(len(deltas))]
-        delta_list, sigma_list = [],[]
-        for i in range(len(deltas)):
-            delta_list = delta_list + [deltas[i][j] for j in range(len(deltas[i]))]
-            sigma_list = sigma_list + [sigmas[i][j] for j in range(len(sigmas[i]))]
-        delta_list ,sigma_list = self.shuffle_arrays(delta_list,sigma_list)
-        deltas_shuffle,sigmas_shuffle = [],[]
-        for i in range(len(len_deltas)):
-            i_begin = int(np.sum(len_deltas[:(i)]))
-            i_end = np.sum(len_deltas[:(i+1)])
-            deltas_shuffle.append(delta_list[i_begin:i_end])
-            sigmas_shuffle.append(sigma_list[i_begin:i_end])
-        return(deltas_shuffle,sigmas_shuffle)
-
-
-    def shuffle_arrays(self,x,y):
-        return(np.random.permutation(x), np.random.permutation(y))
 
 
     def rebin_data(self,z,deltas,sigmas,bin_pixel,method="gauss"):
@@ -1084,8 +1080,24 @@ class DeltaConverter():
 
 
 
-    def transform_delta(self,mode,nameout,properties,property_file_name,rebin=False,shuffle=None,sigma_min=None,sigma_max=None,z_cut_min=None,z_cut_max=None,dec_cut_min=None,dec_cut_max=None,ra_cut_min=None,ra_cut_max=None,number_chunks=None,overlaping=None,shape_sub_map=None):
-        (cartesian_deltas,cartesian_qso_catalog,cartesian_dla_catalog,sky_deltas,sky_qso_catalog,sky_dla_catalog,properties_map_pixels) = self.transform_delta_to_pixel_file(rebin=rebin,shuffle=shuffle,sigma_min=sigma_min,sigma_max=sigma_max,z_cut_min=z_cut_min,z_cut_max=z_cut_max,dec_cut_min=dec_cut_min,dec_cut_max=dec_cut_max,ra_cut_min=ra_cut_min,ra_cut_max=ra_cut_max)
+    def transform_delta(self,
+                        mode,
+                        nameout,
+                        properties,
+                        property_file_name,
+                        rebin=False,
+                        sigma_min=None,
+                        sigma_max=None,
+                        z_cut_min=None,
+                        z_cut_max=None,
+                        dec_cut_min=None,
+                        dec_cut_max=None,
+                        ra_cut_min=None,
+                        ra_cut_max=None,
+                        number_chunks=None,
+                        overlaping=None,
+                        shape_sub_map=None):
+        (cartesian_deltas,cartesian_qso_catalog,cartesian_dla_catalog,sky_deltas,sky_qso_catalog,sky_dla_catalog,properties_map_pixels) = self.transform_delta_to_pixel_file(rebin=rebin,sigma_min=sigma_min,sigma_max=sigma_max,z_cut_min=z_cut_min,z_cut_max=z_cut_max,dec_cut_min=dec_cut_min,dec_cut_max=dec_cut_max,ra_cut_min=ra_cut_min,ra_cut_max=ra_cut_max)
         if(mode.lower() == "serial"):
             shape = self.create_serial_input(nameout,properties,cartesian_deltas,sky_deltas)
         elif(mode.lower() == "parallel"):
@@ -1258,8 +1270,8 @@ class PixelAnalizer(object):
     def compute_plot_mean_distance_density(self,nameout,coupled=False,plot=True):
         (zpar,dperpz,densityz) = self.pixel.compute_mean_distance_density()
         if(plot):
-            PixelAnalizer.write_dperp_file(zpar,dperpz,f'{nameout}_dperp_file')
-            PixelAnalizer.write_density_file(zpar,densityz,f'{nameout}_density_file')
+            PixelAnalizer.write_dperp_file(zpar,dperpz,f'{nameout}_dperp_file.pickle')
+            PixelAnalizer.write_density_file(zpar,densityz,f'{nameout}_density_file.pickle')
             PixelAnalizer.plot_mean_distance_density(zpar,dperpz,densityz,nameout,coupled_plot=coupled)
         return(zpar,dperpz,densityz)
 
@@ -1346,7 +1358,8 @@ class DeltaAnalyzer(object):
             sigma_comp.append(sigma)
             delta_comp.append(delta)
             snr_comp.append(snr)
-        return(ra_comp,dec_comp,
+        return(ra_comp,
+               dec_comp,
                redshift_comp,
                redshift_qso_comp,
                id_comp,
@@ -1355,17 +1368,32 @@ class DeltaAnalyzer(object):
                snr_comp)
 
 
-    def plot(self,value_names,name,
-             comparison=None,comparison_legend=None,
-             histo=True,mean_z_dependence=True,
-             z_dependence=True,ra_dec_plots=True,
+    def plot(self,
+             value_names,
+             name,
+             comparison=None,
+             comparison_legend=None,
+             histo=True,
+             mean_z_dependence=True,
+             z_dependence=True,
+             ra_dec_plots=True,
              print_stats=False,
              **kwargs):
-        (ra,dec,redshift,redshift_qso,
-         id,sigma,delta,snr)=self.get_ra_dec(self.delta_path)
-        (ra_comp,dec_comp,redshift_comp,
-         redshift_qso_comp,id_comp,
-         sigma_comp,delta_comp,
+
+        (ra,
+         dec,
+         redshift,
+         redshift_qso,
+         id,
+         sigma,
+         delta,snr)=self.get_ra_dec(self.delta_path)
+        (ra_comp,
+         dec_comp,
+         redshift_comp,
+         redshift_qso_comp,
+         id_comp,
+         sigma_comp,
+         delta_comp,
          snr_comp)=self.get_ra_dec_comparison(comparison)
 
         for value_name in value_names:
@@ -1375,8 +1403,11 @@ class DeltaAnalyzer(object):
             if(lambda_rest):
                 kwargs[f"{value_name}_redshift_qso"] = redshift_qso
             if(histo):
-                utils.save_histo(self.pwd,value,value_name,
-                                 name,comparison=comparison_value,
+                utils.save_histo(self.pwd,
+                                 value,
+                                 value_name,
+                                 name,
+                                 comparison=comparison_value,
                                  comparison_legend=comparison_legend,
                                  **kwargs)
             if(mean_z_dependence)&(value_name not in ["redshift","ra","dec"]):
@@ -1401,7 +1432,9 @@ class DeltaAnalyzer(object):
                                                comparison_legend=None,
                                                **kwargs)
         if(ra_dec_plots):
-            self.plot_ra_dec(ra,dec,name,
+            self.plot_ra_dec(ra,
+                             dec,
+                             name,
                              comparison=None,comparison_legend=None,
                              **kwargs)
         if((comparison is not None)&(print_stats)):
@@ -1410,19 +1443,29 @@ class DeltaAnalyzer(object):
 
 
 
-    def plot_ra_dec(self,ra,dec,name,
+    def plot_ra_dec(self,
+                    ra,
+                    dec,
+                    name,
                     comparison_ra=None,
                     comparison_dec=None,
                     comparison_legend=None,
                     **kwargs):
 
-        utils.save_ra_dec(self.pwd,ra,dec,name,
+        utils.save_ra_dec(self.pwd,
+                          ra,
+                          dec,
+                          name,
                           comparison_ra=comparison_ra,
                           comparison_dec=comparison_dec,
                           comparison_legend=comparison_legend,
                           **kwargs)
 
-        DeltaAnalyzer.plot_los_density(self.pwd,ra,dec,name,**kwargs)
+        DeltaAnalyzer.plot_los_density(self.pwd,
+                                       ra,
+                                       dec,
+                                       name,
+                                       **kwargs)
 
 
 

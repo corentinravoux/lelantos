@@ -156,9 +156,9 @@ class TomographicMap(object):
 
     def read(self):
         if(self.name is None):
-            raise ValueError("No")
+            raise ValueError("No name was provided for reading map")
         if(self.shape is None):
-            raise ValueError("No")
+            raise ValueError("No shape was provided for reading map")
         else:
             with open(self.name,'r') as f:
                 self.map_array = np.fromfile(f,dtype=np.float64).reshape(self.shape)
@@ -167,7 +167,7 @@ class TomographicMap(object):
 
     def write(self):
         if(self.map_array.all() == None):
-            raise ValueError("No")
+            raise ValueError("No map array is stored in this map class for writting")
         listmap=np.ravel(self.map_array)
         listmap.tofile(self.name)
 
@@ -461,8 +461,29 @@ class DistanceMap(TomographicMap):
 
 class StackMap(TomographicMap):
 
-    def __init__(self,map_array=None,name=None,shape=None,size=None,boundary_cartesian_coord=None,boundary_sky_coord=None,coordinate_transform=None,property_file=None,Omega_m=None,tomographic_map=None,catalog=None,ellipticity=None,mean_los_distance=None):
-        super(StackMap,self).__init__(map_array=map_array,name=name,shape=shape,size=size,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord,coordinate_transform=coordinate_transform,property_file=property_file,Omega_m=Omega_m)
+    def __init__(self,
+                 map_array=None,
+                 name=None,
+                 shape=None,
+                 size=None,
+                 boundary_cartesian_coord=None,
+                 boundary_sky_coord=None,
+                 coordinate_transform=None,
+                 property_file=None,
+                 Omega_m=None,
+                 tomographic_map=None,
+                 catalog=None,
+                 ellipticity=None,
+                 mean_los_distance=None):
+        super(StackMap,self).__init__(map_array=map_array,
+                                      name=name,
+                                      shape=shape,
+                                      size=size,
+                                      boundary_cartesian_coord=boundary_cartesian_coord,
+                                      boundary_sky_coord=boundary_sky_coord,
+                                      coordinate_transform=coordinate_transform,
+                                      property_file=property_file,
+                                      Omega_m=Omega_m)
 
         self.tomographic_map = tomographic_map
         self.catalog = catalog
@@ -489,7 +510,13 @@ class StackMap(TomographicMap):
 
 
     @classmethod
-    def init_stack_by_property_file(cls,property_file_name,name=None,tomographic_map_name=None,property_file_map=None,catalog_name=None,type_catalog=None):
+    def init_stack_by_property_file(cls,
+                                    property_file_name,
+                                    name=None,
+                                    tomographic_map_name=None,
+                                    property_file_map=None,
+                                    catalog_name=None,
+                                    type_catalog=None):
         tomographic_map, catalog = None, None
         if(tomographic_map_name is not None)&(property_file_map is not None):
             tomographic_map = TomographicMap.init_from_property_files(property_file_map,name=tomographic_map_name)
@@ -504,7 +531,16 @@ class StackMap(TomographicMap):
 
 
     @classmethod
-    def init_by_tomographic_map(cls,tomographic_map,catalog,size_stack,shape_stack,property_file,interpolation_method="NEAREST",name=None,normalized=None,coordinate_convert=None):
+    def init_by_tomographic_map(cls,
+                                tomographic_map,
+                                catalog,
+                                size_stack,
+                                shape_stack,
+                                property_file,
+                                name=None,
+                                interpolation_method="NEAREST",
+                                normalized=False,
+                                coordinate_convert=None):
         (coord,radius,min_radius) = cls.initiate_stack(coordinate_convert,normalized,tomographic_map,catalog)
         coord_stack = cls.create_init_stack_coordinates(shape_stack,size_stack)
         voids_list,local_maps = [],[]
@@ -560,7 +596,7 @@ class StackMap(TomographicMap):
         if(coordinate_convert is not None):
             if(coordinate_convert.lower() == tomographic_map.coordinate_transform):
                     raise ValueError("Please choose a coordinate transformation different than the map one")
-        if(normalized is not None):
+        if(normalized):
             if(catalog.object_type.lower() != "void"):
                 raise KeyError("It is not possible to normalize this catalog")
             else:
@@ -719,7 +755,7 @@ class Pixel(object):
 
     def read(self):
         if(self.name is None):
-            raise ValueError("No")
+            raise ValueError("No name was provided for reading pixel")
         else:
             with open(self.name,'r') as f:
                 pixel_data = np.fromfile(f,dtype=np.float64)
@@ -728,7 +764,7 @@ class Pixel(object):
 
     def write(self):
         if(self.pixel_array is None):
-            raise ValueError("No")
+            raise ValueError("No pixel array is stored in this pixel class for writting")
         listpixel=np.ravel(self.pixel_array)
         listpixel.tofile(self.name)
 
@@ -754,16 +790,17 @@ class Pixel(object):
         if(self.Omega_m is not None): log.add(f"Value of Omega_m used: {self.Omega_m}")
         log.close()
 
-
-
-
     def repack_by_los(self):
-        coord = self.pixel_array
+        coord = self.pixel_array[:,0:3]
         unique_coord = np.unique(coord[:,0:2],axis=0)
         z = []
         for i in range(unique_coord.shape[0]):
-            z.append(coord[:,2][(coord[:,0]==unique_coord[i,0])&(coord[:,1]==unique_coord[i,1])])
-        return(unique_coord[:,0],unique_coord[:,1],np.asarray(z))
+            mask = coord[:,0]==unique_coord[i,0]
+            mask2 = coord[:,1][mask] == unique_coord[i,1]
+            z.append(coord[:,2][mask][mask2])
+        return(unique_coord[:,0],unique_coord[:,1],z)
+
+
 
     def compute_mean_separation(self):
         coord_pixels = self.pixel_array[:,0:3]
@@ -987,7 +1024,7 @@ class Delta(object):
     def read(self):
         delta_array = []
         if(self.name is None):
-            raise ValueError("No")
+            raise ValueError("No name was provided for reading delta")
         else:
             with fitsio.FITS(self.name) as delta_file:
                 for i in range(1,len(delta_file)):
@@ -1033,7 +1070,7 @@ class Delta(object):
 
     def write(self):
         if((self.name is None)|(self.delta_array is None)):
-            raise ValueError("No")
+            raise ValueError("No delta array or name is stored in this delta class for writting")
         fits = fitsio.FITS(self.name,'rw',clobber=True)
         for i in range(len(self.delta_array)):
             delta =self.delta_array[i]
@@ -1210,7 +1247,7 @@ class Catalog(object):
     @staticmethod
     def load_from_fits(name):
         if(name == None):
-            raise ValueError("No")
+            raise ValueError("No name was provided for reading catalog")
         else:
             return(fitsio.FITS(name))
 
@@ -2101,6 +2138,79 @@ class VoidCatalog(Catalog):
         void_coords = np.transpose(np.stack([X,Y,Z,self.weights,redshift]))
         return(void_coords)
 
+
+    def correct_coordinates(self,method,name_out,inv_g_function,pixel_name,**kwargs):
+        if(method == "barycenter"):
+            self.correct_coordinates_barycenter(inv_g_function,pixel_name,**kwargs)
+        elif(method == "mindist"):
+            self.correct_coordinates_mindist(inv_g_function,pixel_name,**kwargs)
+
+
+
+    def correct_coordinates_barycenter(self,
+                                       inv_g,
+                                       pixel_name,
+                                       r_max=None,
+                                       weight=None,
+                                       sigma=None,
+                                       A=1,
+                                       L_perp=None,
+                                       iterate=False,
+                                       random_catalog_iterate=None,
+                                       pixel_repacked=None):
+
+        pixel = Pixel(name=pixel_name)
+        pixel.read()
+        if(pixel_repacked is not None):
+            (x,y,z) = pickle.load(open(pixel_repacked,"rb"))
+        else:
+            x,y,z = pixel.repack_by_los()
+        if(weight is None):
+            function_weight = lambda x : 1
+        elif(weight == "gauss"):
+            function_weight = lambda x : np.exp(-0.5*(x/sigma)**2)
+        elif(weight == "exp"):
+            function_weight = lambda x : np.exp(-x/L_perp)
+        mini_los = np.array([np.min(z[i]) for i in range(len(z))])
+        maxi_los = np.array([np.max(z[i]) for i in range(len(z))])
+        for i in range(len(self.coord)):
+            mask = (self.coord[i,2] > mini_los)&(self.coord[i,2] < maxi_los)
+            if(r_max is not None):
+                mask &=(np.sqrt((self.coord[i,0]-x)**2 + (self.coord[i,1]-y)**2)<r_max)
+            s_perp_i_x = x[mask] - self.coord[i,0]
+            s_perp_i_y = y[mask] - self.coord[i,1]
+            s_perp_i = np.sqrt(s_perp_i_x**2  + s_perp_i_y **2 )
+            r_perp_i = inv_g(s_perp_i)
+            r_perp_i_x = s_perp_i_x * (r_perp_i/s_perp_i)
+            r_perp_i_y = s_perp_i_y * (r_perp_i/s_perp_i)
+            d_r_perp_x = A * np.sum(function_weight(s_perp_i)*(r_perp_i_x - s_perp_i_x)) / np.sum(function_weight(s_perp_i))
+            d_r_perp_y = A * np.sum(function_weight(s_perp_i)*(r_perp_i_y - s_perp_i_y)) / np.sum(function_weight(s_perp_i))
+            print(f"Void {i+1} over {len(self.coord)}:")
+            print(f"    x displacement {d_r_perp_x}")
+            print(f"    y displacement {d_r_perp_y}")
+            self.coord[i,0] = self.coord[i,0] + d_r_perp_x
+            self.coord[i,1] = self.coord[i,1] + d_r_perp_y
+
+    def correct_coordinates_mindist(self,inv_g_min,pixel_name):
+        pixel = Pixel(name=pixel_name)
+        pixel.read()
+        x,y,z = pixel.repack_by_los()
+        mini_los = np.array([np.min(z[i]) for i in range(len(z))])
+        maxi_los = np.array([np.max(z[i]) for i in range(len(z))])
+        for i in range(len(self.coord)):
+            mask = (self.coord[i,2] > mini_los)&(self.coord[i,2] < maxi_los)
+            s_perp_i_x = x[mask] - self.coord[i,0]
+            s_perp_i_y = y[mask] - self.coord[i,1]
+            s_perp_i = np.sqrt(s_perp_i_x**2  + s_perp_i_y **2 )
+            arg_min = np.argmin(s_perp_i)
+            r_perp_i = inv_g_min(s_perp_i[arg_min])
+            r_perp_i_x = s_perp_i_x[arg_min] * (r_perp_i/s_perp_i[arg_min])
+            r_perp_i_y = s_perp_i_y[arg_min] * (r_perp_i/s_perp_i[arg_min])
+            self.coord[i,0] = self.coord[i,0] + r_perp_i_x - s_perp_i_x
+            self.coord[i,1] = self.coord[i,1] + r_perp_i_y - s_perp_i_y
+
+
+
     def convert_to_cross_corr_radec(self):
         if self.catalog_type == "cartesian":
             self.convert_to_sky()
@@ -2138,6 +2248,33 @@ class VoidCatalog(Catalog):
         h.write(r_array,extname="R")
         h.write(delta_array,extname="DELTA")
         h.close()
+
+
+    def create_randomized_catalog(self,
+                                  name_out,
+                                  property_file,
+                                  seed=None,
+                                  randomized_z_distribution=False):
+        prop = MapPixelProperty(name= property_file)
+        prop.read()
+        if(self.catalog_type == "sky"):
+            (minx,miny,minz) = prop.boundary_sky_coord[0]
+            (maxx,maxy,maxz) = prop.boundary_sky_coord[1]
+        elif(self.catalog_type == "cartesian"):
+            (minx,miny,minz) = prop.boundary_cartesian_coord[0]
+            (maxx,maxy,maxz) = prop.boundary_cartesian_coord[1]
+            maxx, minx = maxx - minx, 0.0
+            maxy, miny = maxy - miny, 0.0
+            maxz, minz = maxz - minz, 0.0
+        if(seed is not None):
+            np.random.seed(seed)
+        for i in range(len(self.coord)):
+            self.coord[i,0] = minx + np.random.rand()*(maxx-minx)
+            self.coord[i,1] = miny + np.random.rand()*(maxy-miny)
+            if(randomized_z_distribution):
+                self.coord[i,2] = minz + np.random.rand()*(maxz-minz)
+        self.name = name_out
+        self.write()
 
 
 
