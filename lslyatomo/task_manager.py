@@ -21,7 +21,6 @@ Tested on Cobalt and Irene clusters.
 import os,time,pickle,shutil
 from subprocess import call
 from lslyatomo import utils
-from distutils.dir_util import copy_tree
 import multiprocessing as mp
 from functools import partial
 
