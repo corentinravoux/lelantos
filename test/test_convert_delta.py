@@ -13,14 +13,13 @@ Description:
 
 import numpy as np
 import os
-pwd = os.getcwd()
 from lslyatomo import cosmology
 from lslyatomo import tomographic_objects
 import pickle
 
 ################################# INPUT ######################################
 
-delta_path = os.path.join(pwd,"data","delta")
+delta_path = os.path.join("./data","delta")
 Omega_m = 0.3147
 z_cut_min=2.1
 z_cut_max=3.2
@@ -49,8 +48,12 @@ lperp = 13
 lpar = 13
 name_pixel_properties = "pixel_stripe82_DR16.bin"
 name_map_properties = "pixel_stripe82_DR16.bin"
-properties = {"sigma_f":sigmaf , "lperp":lperp ,"lpar":lpar, "shape" : shape_map,
-              "name_pixel":name_pixel_properties,"name_map":name_map_properties}
+properties = {"sigma_f":sigmaf ,
+              "lperp":lperp ,
+              "lpar":lpar,
+              "shape" : shape_map,
+              "name_pixel":name_pixel_properties,
+              "name_map":name_map_properties}
 
 
 
@@ -59,12 +62,12 @@ properties = {"sigma_f":sigmaf , "lperp":lperp ,"lpar":lpar, "shape" : shape_map
 ################################# OUTPUT #####################################
 
 
-launcher_name = os.path.join(pwd,"data","pixel","DR16_launch_data")
-property_file_name = os.path.join(pwd,"data","pixel","property_file.pickle")
-qso_catalog_cartesian_name = os.path.join(pwd,"data","pixel","qso_catalog.fits")
-qso_catalog_sky_name = os.path.join(pwd,"data","pixel","qso_catalog.fits_sky_coordinates")
-name_pixel = os.path.join(pwd,"data","pixel","pixel_stripe82_DR16.bin")
-name_map = os.path.join(pwd,"data","pixel","map_stripe82_DR16.bin")
+launcher_name = os.path.join("./data","pixel","DR16_launch_data")
+property_file_name = os.path.join("./data","pixel","property_file.pickle")
+qso_catalog_cartesian_name = os.path.join("./data","pixel","qso_catalog.fits")
+qso_catalog_sky_name = os.path.join("./data","pixel","qso_catalog.fits_sky_coordinates")
+name_pixel = os.path.join("./data","pixel","pixel_stripe82_DR16.bin")
+name_map = os.path.join("./data","pixel","map_stripe82_DR16.bin")
 
 
 
@@ -75,7 +78,7 @@ name_map = os.path.join(pwd,"data","pixel","map_stripe82_DR16.bin")
 
 
 def test_transformation():
-    delta_converter = cosmology.DeltaConverter(pwd,
+    delta_converter = cosmology.DeltaConverter("./",
                                                Omega_m,
                                                delta_path,
                                                coordinate_transform,
@@ -122,7 +125,9 @@ def test_transformation():
 
 
 def test_parallel_launch():
-    delta_converter = cosmology.DeltaConverter(pwd,Omega_m,delta_path,
+    delta_converter = cosmology.DeltaConverter("./",
+                                               Omega_m,
+                                               delta_path,
                                                coordinate_transform,
                                                plot_delta_properties,
                                                software,
@@ -134,7 +139,8 @@ def test_parallel_launch():
     (cartesian_deltas,
     cartesian_qso_catalog,
     cartesian_dla_catalog,
-    sky_deltas,sky_qso_catalog,
+    sky_deltas,
+    sky_qso_catalog,
     sky_dla_catalog,
     properties_map_pixels) = delta_converter.transform_delta_to_pixel_file(rebin=rebin,
                                                                            sigma_min=sigma_min,
