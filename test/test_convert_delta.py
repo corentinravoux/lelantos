@@ -39,13 +39,12 @@ return_dla_catalog = None
 dla_catalog = None
 return_sky_catalogs = True
 rebin = None
-shuffle = None
 plot_delta_properties = False
 number_chunks = (2,2)
 shape_sub_map = (20,20,300)
 overlaping = 13
 sigmaf = 0.01
-shape_map = (None, None, 300)
+shape_map = None
 lperp = 13
 lpar = 13
 name_pixel_properties = "pixel_stripe82_DR16.bin"
@@ -76,7 +75,9 @@ name_map = os.path.join(pwd,"data","pixel","map_stripe82_DR16.bin")
 
 
 def test_transformation():
-    delta_converter = cosmology.DeltaConverter(pwd,Omega_m,delta_path,
+    delta_converter = cosmology.DeltaConverter(pwd,
+                                               Omega_m,
+                                               delta_path,
                                                coordinate_transform,
                                                plot_delta_properties,
                                                software,
@@ -88,10 +89,10 @@ def test_transformation():
     (cartesian_deltas,
     cartesian_qso_catalog,
     cartesian_dla_catalog,
-    sky_deltas,sky_qso_catalog,
+    sky_deltas,
+    sky_qso_catalog,
     sky_dla_catalog,
     properties_map_pixels) = delta_converter.transform_delta_to_pixel_file(rebin=rebin,
-                                                                           shuffle=shuffle,
                                                                            sigma_min=sigma_min,
                                                                            sigma_max=sigma_max,
                                                                            z_cut_min=z_cut_min,
@@ -136,7 +137,6 @@ def test_parallel_launch():
     sky_deltas,sky_qso_catalog,
     sky_dla_catalog,
     properties_map_pixels) = delta_converter.transform_delta_to_pixel_file(rebin=rebin,
-                                                                           shuffle=shuffle,
                                                                            sigma_min=sigma_min,
                                                                            sigma_max=sigma_max,
                                                                            z_cut_min=z_cut_min,
@@ -148,9 +148,14 @@ def test_parallel_launch():
 
 
     (parallel_launcher_params,
-    filename,chunks,shape) = delta_converter.create_parallel_input(properties,cartesian_deltas,
-                                                                   number_chunks,overlaping,
-                                                                   shape_sub_map)
+     filename,
+     chunks,
+     shape) = delta_converter.create_parallel_input(properties,
+                                                    cartesian_deltas,
+                                                    number_chunks,
+                                                    overlaping,
+                                                    shape_sub_map)
+
     for key in list(chunks.keys()):
         if key != 'overlaping' :
             pixel = tomographic_objects.Pixel(name="{}_{}".format(name_pixel,key))

@@ -1074,9 +1074,6 @@ class DeltaConverter():
 
     # CR - Modification : dissociate map properties and launcher properties
 
-    #### Main routine
-
-
 
 
 
