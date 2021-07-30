@@ -1,7 +1,23 @@
 # lslyatomo
 
 Package to create and manipulate on large-scale Lyman-alpha tomographic maps.
-It includes
+
+It includes launchers and scripts to modify
+
+
+## Install
+
+This package can be install with pip:
+
+```
+pip install . --user
+```
+
+
+
+- modify flux contrast files (delta)
+- plot flux contrast properties
+- convert flux contrast files to pixel files
 
 ## lslyatomo
 
