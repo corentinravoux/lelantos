@@ -372,7 +372,6 @@ class TomographyManager(object):
         self.pwd = pwd
         if(symlink_folder is not None):
             self.link_tomography_folder(symlink_folder)
-            self.pwd = symlink_folder
 
         self.name_pixel = name_pixel
         self.launch_file = launch_file
@@ -530,6 +529,10 @@ class TomographyManager(object):
         shutil.rmtree(os.path.join(self.pwd,"Tmp"), ignore_errors=True)
 
     def link_tomography_folder(self,symlink_folder):
-        if(os.path.isdir(symlink_folder)):
-            os.remove(symlink_folder)
-        os.symlink(self.pwd,symlink_folder,target_is_directory =True)
+        os.makedirs(symlink_folder,exist_ok=True)
+        if(os.path.isdir(self.pwd)):
+            try:
+                os.remove(self.pwd)
+            except:
+                shutil.rmtree(self.pwd)
+        os.symlink(symlink_folder,self.pwd,target_is_directory =True)

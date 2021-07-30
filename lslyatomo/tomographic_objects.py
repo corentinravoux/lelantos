@@ -2177,8 +2177,8 @@ class VoidCatalog(Catalog):
             mask = (self.coord[i,2] > mini_los)&(self.coord[i,2] < maxi_los)
             if(r_max is not None):
                 mask &=(np.sqrt((self.coord[i,0]-x)**2 + (self.coord[i,1]-y)**2)<r_max)
-            s_perp_i_x = x[mask] - self.coord[i,0]
-            s_perp_i_y = y[mask] - self.coord[i,1]
+            s_perp_i_x = - ( x[mask] - self.coord[i,0] )
+            s_perp_i_y = - ( y[mask] - self.coord[i,1] )
             s_perp_i = np.sqrt(s_perp_i_x**2  + s_perp_i_y **2 )
             r_perp_i = inv_g(s_perp_i)
             r_perp_i_x = s_perp_i_x * (r_perp_i/s_perp_i)
