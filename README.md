@@ -2,7 +2,7 @@
 
 Package to create and manipulate large-scale Lyman-alpha tomographic maps.
 
-It includes launchers and scripts to
+It includes launchers and scripts to modify or process diverse tomographic objects including flux contrast files (delta) lines-of-sight (pixel), tomographic map and void catalog.
 
 
 ## Install
