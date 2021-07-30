@@ -18,13 +18,13 @@ They are automaticaly installed if pip is used.
 
 To convert a tomographic box into a format for 3D visualization, you need pyevtk as additional package.
 
-This package use code parts from public packages [picca][https://github.com/igmhub/picca] and [SaclayMocks][https://github.com/igmhub/SaclayMocks] but it is advised to install them.
+This package use code parts from public packages [picca](https://github.com/igmhub/picca) and [SaclayMocks](https://github.com/igmhub/SaclayMocks) but it is advised to install them.
 
 
 
 
 
-Finally to run tomographic mapping, you need to put the executable of the tomographic algorithm you want to use in the lslyatomo/exec directory. From now the only algorithm available is [dachshund][https://github.com/caseywstark/dachshund]
+Finally to run tomographic mapping, you need to put the executable of the tomographic algorithm you want to use in the lslyatomo/exec directory. From now the only algorithm available is [dachshund](https://github.com/caseywstark/dachshund)
 
 
 
