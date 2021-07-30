@@ -1,8 +1,8 @@
 # lslyatomo
 
-Package to create and manipulate on large-scale Lyman-alpha tomographic maps.
+Package to create and manipulate large-scale Lyman-alpha tomographic maps.
 
-It includes launchers and scripts to modify
+It includes launchers and scripts to
 
 
 ## Install
@@ -21,99 +21,63 @@ To convert a tomographic box into a format for 3D visualization, you need pyevtk
 This package use code parts from public packages [picca](https://github.com/igmhub/picca) and [SaclayMocks](https://github.com/igmhub/SaclayMocks) but it is advised to install them.
 
 
-
-
-
-Finally to run tomographic mapping, you need to put the executable of the tomographic algorithm you want to use in the lslyatomo/exec directory. From now the only algorithm available is [dachshund](https://github.com/caseywstark/dachshund)
-
-
+Finally to run tomographic mapping, you need to put the executable of the tomographic algorithm you want to use in the lslyatomo/lslyatomo/exec directory. From now the only algorithm available is [dachshund](https://github.com/caseywstark/dachshund).
 
 
 
 ## Launchers
 
-/local/home/cravoux/Documents/Python/Packages/lslyatomo/launchers/lslyatomo_convert_delta.py
-/local/home/cravoux/Documents/Python/Packages/lslyatomo/launchers/lslyatomo_plot_delta.py
-
-/local/home/cravoux/Documents/Python/Packages/lslyatomo/launchers/lslyatomo_plot_pixel.py
-
-/local/home/cravoux/Documents/Python/Packages/lslyatomo/launchers/lslyatomo_plot_stack_qso.py
-/local/home/cravoux/Documents/Python/Packages/lslyatomo/launchers/lslyatomo_plot_stack_void.py
-/local/home/cravoux/Documents/Python/Packages/lslyatomo/launchers/lslyatomo_plot_tomography.py
+The main launchers available in lslyatomo/launchers folder are:
 
 
-- modify flux contrast files (delta)
-- plot flux contrast properties
-- convert flux contrast files to pixel files
+- **lslyatomo_subsample_delta.py** Subsampling of flux constrat files (delta), output of picca delta generation routine.
 
-## lslyatomo
+- **lslyatomo_shuffle_delta.py** Shuffling of flux constrat files (delta).
 
+- **lslyatomo_convert_delta.py** Conversion of flux constrat files (delta) to pixel file, input of tomographic mapping procedure.
 
-The launcher present in this folder were used for the creation of a Tomographic map obtained from DR16 eBOSS data.
+- **lslyatomo_tomography_manager.py** Running tomography algorithm.
 
-This folder contains :
+- **lslyatomo_tomography_process.py** Processing the tomographic map output.
 
--	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_3D.py
+- **lslyatomo_void_finder.py** Launching of the void finding routine on the tomographic map.
 
-	Program to launch a 3D visualization compatible with Paraview of the box obtained from Tomography
+- **lslyatomo_void_process.py** Post-processing of void catalog.
 
+- **lslyatomo_plot_delta.py** Plotting routines for flux constrat files (delta).
 
--	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_Dachshund.py
+- **lslyatomo_plot_pixel.py** Plotting routines for pixel file.
 
-	Launcher of Tomographic process on cluster (Task manager)
+- **lslyatomo_plot_tomography.py** Plotting routines for tomographic map.
 
-
-- 	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_Prepare_Daschund.py
-
-	Use picca to prepare all dachshund inputs from deltas
-
-
-- 	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_Ra_Dec_Map.py
-
-	Plot of delta maps obtained at the end of picca in P1D
-
-
--	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_Stack.py
-
-	Stacking procedure on tomographic maps
-
-
--	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_Treat_box.py
-
-	Program which analyze Saclay mocks boxes to extract DM density field corresponding to a given tomographic map
-
-
--	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_TreatClamato.py
-
-	Plot properties from a tomographic map
-
-
--	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_Treat_stack.py
-
-	Plot properties from stacks of the tomographic map
-
-
--	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_Treat_Voids.py
-
-	Plot properties from voids or proto-clusters obtained on a tomographic map
-
-
--	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_VoidFinder.py
-
-	Void and Over-density finder for Tomographic map.
+- **lslyatomo_plot_void.py** Plotting routines for void catalog.
 
 
 
-A classical Tomographic map study generally follows :
 
-1) Preparing the datas obtaining from picca (deltas) to prepare the DACHSHUND inputs: Launch_ra_dec_map.py, Launch_Prepare_Daschund.py
+Additional launchers can be used for specific studies:
 
-2) Launching of DACHSHUND: Launch_Dachshund.py
+- **lslyatomo_stack_void.py** Stacking of void position on a tomographic map.
 
-3) Verifications of the Tomographic map with the initial DM density field (on mocks): Launch_Treat_box.py
+- **lslyatomo_stack_qso.py** Stacking of quasar position on a tomographic map.
 
-4) Supplementary calculations on the map : Launch_VoidFinder.py, Launch_Stack.py
+- **lslyatomo_plot_stack_void.py** Plotting routines for void stack.
 
-5) Ploting of the tomographic map : Launch_TreatClamato.py, Launch_3D.py
+- **lslyatomo_plot_stack_qso.py** Plotting routines for qso stack.
 
-6) Ploting of supplementary studies : Launch_Treat_Voids.py, Launch_Treat_stack.py
+- **lslyatomo_tomography_3d.py** Conversion of tomographic objects into a format for 3D visualization.
+
+- **lslyatomo_boxdm.py** Extraction of the underlying dark matter box of mocks associated to a given box geometry.
+
+
+## Scripts
+
+The lslyatomo/scripts folder contains scripts using argparse or config parser.
+
+Most of the previous launchers can be globaly launched by modifying interface_example.ini and running:
+
+```
+lslyatomo_interface.py interface_example.ini
+```
+
+The other scripts are used to quickly modify or show information of tomographic objects.
