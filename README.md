@@ -13,6 +13,28 @@ This package can be install with pip:
 pip install . --user
 ```
 
+The minimal required python packages are: fitsio, numpy, scipy, matplotlib
+They are automaticaly installed if pip is used.
+
+To convert a tomographic box into a format for 3D visualization, you need pyevtk as additional package.
+
+This package use code parts from public packages picca and SaclayMocks but it is advised to install them:
+
+
+```
+https://github.com/igmhub/SaclayMocks
+https://github.com/igmhub/picca
+```
+
+Finally to run tomographic mapping, you need to put the executable of the tomographic algorithm you want to use in the lslyatomo/exec directory. From now the only algorithm available is dachshund and can be find at:
+
+```
+https://github.com/caseywstark/dachshund
+```
+
+
+## Launchers
+
 
 
 - modify flux contrast files (delta)
