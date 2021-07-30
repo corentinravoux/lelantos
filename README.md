@@ -1,4 +1,11 @@
-# lsstomo
+# lslyatomo
+
+Package to create and manipulate on large-scale Lyman-alpha tomographic maps.
+It includes
+
+## lslyatomo
+
+
 The launcher present in this folder were used for the creation of a Tomographic map obtained from DR16 eBOSS data.
 
 This folder contains :
@@ -15,7 +22,7 @@ This folder contains :
 
 - 	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_Prepare_Daschund.py
 
-	Use picca to prepare all dachshund inputs from deltas 
+	Use picca to prepare all dachshund inputs from deltas
 
 
 - 	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_Ra_Dec_Map.py
@@ -25,7 +32,7 @@ This folder contains :
 
 -	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_Stack.py
 
-	Stacking procedure on tomographic maps 
+	Stacking procedure on tomographic maps
 
 
 -	/local/home/cravoux/Documents/Python/Launchers/Tomography/Launch_Treat_box.py
