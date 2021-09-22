@@ -412,10 +412,14 @@ def plot_tomography(plot_tomography_path,
             void_catalog_name_plot_tomo = os.path.join(void_path,tomography_plot_config.getstr("void_catalog"))
         else:
             void_catalog_name_plot_tomo = void_catalog_name_default
+        try:
+            center_mpc = tomography_plot_config.getfloat("center_mpc")
+        except:
+            center_mpc = tomography_plot_config.getstr("center_mpc")
         Treat.plot(main_config.getstr('name'),
                    tomography_plot_config.getstr("direction"),
                    tomography_plot_config.getfloat("space"),
-                   tomography_plot_config.getfloat("center_mpc"),
+                   center_mpc,
                    qso=os.path.join(pixel_path,delta_config.getstr("return_qso_catalog")),
                    void=void_catalog_name_plot_tomo,
                    galaxy=tomography_plot_config.getstr("galaxy"),
