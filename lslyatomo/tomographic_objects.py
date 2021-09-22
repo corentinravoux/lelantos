@@ -1692,9 +1692,25 @@ class DLACatalog(Catalog):
 
 class GalaxyCatalog(Catalog):
 
-    def __init__(self,name=None,coord=None,primary_key=None,confidence=None,
-                      standard_deviation=None,magnitude=None,catalog_type="sky"):
-        super(GalaxyCatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type)
+    def __init__(self,name=None,
+                      coord=None,
+                      primary_key=None,
+                      coordinate_transform=None,
+                      Omega_m=None,
+                      boundary_cartesian_coord=None,
+                      boundary_sky_coord=None,
+                      confidence=None,
+                      standard_deviation=None,
+                      magnitude=None,
+                      catalog_type="sky"):
+        super(GalaxyCatalog,self).__init__(name=name,
+                                           coord=coord,
+                                           primary_key=primary_key,
+                                           catalog_type=catalog_type,
+                                           coordinate_transform=coordinate_transform,
+                                           Omega_m=Omega_m,
+                                           boundary_cartesian_coord=boundary_cartesian_coord,
+                                           boundary_sky_coord=boundary_sky_coord)
 
         self.confidence = confidence
         self.standard_deviation = standard_deviation
@@ -1704,6 +1720,44 @@ class GalaxyCatalog(Catalog):
 
     @classmethod
     def init_from_fits(cls,name):
+        catalog = Catalog.load_from_fits(name)
+        (coordinate_transform,boundary_cartesian_coord,boundary_sky_coord, Omega_m) = Catalog.load_header(catalog)
+        if("RA" in catalog[1].get_colnames()):
+            coord_ra = catalog[1]["RA"][:]
+            coord_dec = catalog[1]["DEC"][:]
+            coord_z = catalog[1]['Z'][:]
+            coord = np.vstack([coord_ra,coord_dec,coord_z]).transpose()
+            primary_key = catalog[1]["THING_ID"][:]
+            confidence = catalog[1]['CONF'][:]
+            standard_deviation = catalog[1]["STD"][:]
+            magnitude = catalog[1]["MAG"][:]
+            catalog_type = "sky"
+            Catalog.close(catalog)
+            return(cls(name=name,
+                       coord=coord,
+                       primary_key=primary_key,
+                       confidence=confidence,
+                       standard_deviation=standard_deviation,
+                       magnitude=magnitude,
+                       catalog_type=catalog_type))
+                       
+        if("X" in catalog[1].get_colnames()):
+            coord_ra = catalog[1]["X"][:]
+            coord_dec = catalog[1]["Y"][:]
+            coord_z = catalog[1]['Z'][:]
+            coord = np.vstack([coord_ra,coord_dec,coord_z]).transpose()
+            primary_key = catalog[1]["THING_ID"][:]
+            standard_deviation = catalog[1]['STD'][:]
+            catalog_type = "cartesian"
+            Catalog.close(catalog)
+            return(cls(name=name,
+                       coord=coord,
+                       primary_key=primary_key,
+                       standard_deviation=standard_deviation,
+                       catalog_type=catalog_type))
+
+    @classmethod
+    def init_from_hst_cat(cls,name):
         catalog = Catalog.load_from_fits(name)
         dec = np.array(catalog[1]["dec"][:])
         ra = np.array(catalog[1]["ra"][:])
@@ -1715,7 +1769,13 @@ class GalaxyCatalog(Catalog):
         magnitude = np.array(catalog[1]["z_cmodel_mag"][:])
         Catalog.close(catalog)
         catalog_type = "sky"
-        return(cls(name=None,coord=coord,primary_key=primary_key,confidence=confidence,standard_deviation=standard_deviation,magnitude=magnitude,catalog_type=catalog_type))
+        return(cls(name=name,
+                   coord=coord,
+                   primary_key=primary_key,
+                   confidence=confidence,
+                   standard_deviation=standard_deviation,
+                   magnitude=magnitude,
+                   catalog_type=catalog_type))
 
 
 
@@ -1746,7 +1806,28 @@ class GalaxyCatalog(Catalog):
         if(self.magnitude is not None):
             self.magnitude = self.magnitude[mask]
 
-
+    def write(self):
+        fits = fitsio.FITS(self.name,'rw',clobber=True)
+        nrows = self.coord.shape[0]
+        head = self.return_header()
+        if(self.catalog_type == "sky"):
+            h = np.zeros(nrows, dtype=[('RA','f8'),('DEC','f8'),('Z','f8'),('THING_ID','i8'),('CONF','i4'),('STD','i4'),('MAG','i2')])
+            h['RA'] = self.coord[:,0]
+            h['DEC'] = self.coord[:,1]
+            h['Z'] = self.coord[:,2]
+            h['THING_ID'] =self.primary_key
+            h['CONF'] =self.confidence
+            h['STD'] = self.standard_deviation
+            h['MAG'] =self.magnitude
+        elif(self.catalog_type == "cartesian"):
+            h = np.zeros(nrows, dtype=[('X','f8'),('Y','f8'),('Z','f8'),('STD','f8'),('THING_ID','i8')])
+            h['X'] = self.coord[:,0]
+            h['Y'] = self.coord[:,1]
+            h['Z'] = self.coord[:,2]
+            h['STD'] = self.standard_deviation
+            h['THING_ID'] =self.primary_key
+        fits.write(h,header=head)
+        fits.close()
 
 
 class VoidCatalog(Catalog):

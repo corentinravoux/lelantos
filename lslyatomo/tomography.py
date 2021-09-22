@@ -109,7 +109,7 @@ class TomographyPlot(object):
         if(void is not None):
             void_catalog = tomographic_objects.VoidCatalog.init_from_fits(void)
         if(galaxy is not None):
-            void_catalog = tomographic_objects.GalaxyCatalog.init_from_fits(galaxy)
+            galaxy_catalog = tomographic_objects.GalaxyCatalog.init_from_fits(galaxy)
         if(distance_mask is not None):
             dist_map = tomographic_objects.DistanceMap.init_from_tomographic_map(tomographic_map,name=distance_mask)
             dist_map.read()
@@ -252,11 +252,11 @@ class TomographyPlot(object):
                 void_bis_in = void_in[~mask_void]
                 void_in = void_in[mask_void]
         if(galaxy_catalog is not None):
-            mask_galaxy_in = self.select_void_in(center_mpc,space_mpc,void_catalog,index_direction)
+            mask_galaxy_in = self.select_galaxy_in(center_mpc,space_mpc,galaxy_catalog,index_direction)
             galaxy_in = np.transpose(np.vstack([galaxy_catalog.coord[:,0],
                                                 galaxy_catalog.coord[:,1],
                                                 galaxy_catalog.coord[:,2],
-                                                galaxy_catalog.error_z]))[mask_galaxy_in]
+                                                galaxy_catalog.standard_deviation]))[mask_galaxy_in]
 
         name_plot = f"{name}_direction_{direction}_mpc_{center_mpc}"
         TomographyPlot.plot_slice(self.pwd,
@@ -327,7 +327,18 @@ class TomographyPlot(object):
 
 
     @staticmethod
-    def add_elements(map_slice,extentmap,x_index,y_index,pixel_in=None,pixel_bis_in=None,qso_in=None,qso_bis_in=None,void_in=None,void_bis_in=None,galaxy_in=None,**kwargs):
+    def add_elements(map_slice,
+                     extentmap,
+                     x_index,
+                     y_index,
+                     pixel_in=None,
+                     pixel_bis_in=None,
+                     qso_in=None,
+                     qso_bis_in=None,
+                     void_in=None,
+                     void_bis_in=None,
+                     galaxy_in=None,
+                     **kwargs):
         im =plt.imshow(map_slice,
                        interpolation=utils.return_key(kwargs,"map_interpolation",'bilinear'),
                        cmap= utils.return_key(kwargs,"map_color",'jet_r'),
@@ -386,7 +397,7 @@ class TomographyPlot(object):
                                     fill=False,
                                     color=utils.return_key(kwargs,"void_bis_marker_color","k"))
                 plt.gcf().gca().add_artist(circle)
-        if(galaxy_in):
+        if(galaxy_in is not None):
             plt.plot(galaxy_in[:,x_index],galaxy_in[:,y_index],"rx")
             plt.errorbar(galaxy_in[:,x_index],galaxy_in[:,y_index],xerr=2*galaxy_in[:,3], capsize = 0.01, ecolor = 'red',fmt = 'none')
         return(im)
