@@ -4,7 +4,7 @@
 Author: Corentin Ravoux
 
 Description : Utilities including coordinate conversion and various
-interfaces with other codes
+interfaces with other codes.
 """
 
 
