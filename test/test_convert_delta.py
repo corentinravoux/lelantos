@@ -13,8 +13,8 @@ Description:
 
 import numpy as np
 import os
-from lslyatomo import cosmology
-from lslyatomo import tomographic_objects
+from lelantos import cosmology
+from lelantos import tomographic_objects
 import pickle
 
 ################################# INPUT ######################################

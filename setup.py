@@ -13,16 +13,16 @@ from shutil import rmtree
 from setuptools import setup, Command
 
 # Package meta-data.
-NAME = 'lslyatomo'
+NAME = 'lelantos'
 DESCRIPTION = 'Package for tomographic reconstruction of large-scale structure based on Lyman-alpha forest data'
-URL = 'https://github.com/corentinravoux/lslyatomo'
+URL = 'https://github.com/corentinravoux/lelantos'
 EMAIL = 'corentin.ravoux01@hotmail.fr'
 AUTHOR = 'Corentin Ravoux'
 REQUIRES_PYTHON = '>=3.6.0'
 VERSION = '1.0'
 
 scripts = glob.glob('scripts/*')
-packages = ['lslyatomo','lslyatomo.saclaymocks','lslyatomo.picca','lslyatomo.exec']
+packages = ['lelantos','lelantos.saclaymocks','lelantos.picca','lelantos.exec']
 
 # What packages are required for this module to be executed?
 REQUIRED = [
@@ -115,10 +115,10 @@ setup(
     #entry_points={
     #    'console_scripts': ['mycli=mymodule:cli'],
     #},
-#    package_data={'lslyatomo' :}
+#    package_data={'lelantos' :}
     install_requires=REQUIRED,
     extras_require=EXTRAS,
-    package_data={'lslyatomo.exec': ['dachshund.exe']},
+    package_data={'lelantos.exec': ['dachshund.exe']},
     include_package_data=True,
     license='MIT',
     classifiers=[
