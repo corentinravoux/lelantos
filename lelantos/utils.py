@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Date : 17/05/2019
-
 Author: Corentin Ravoux
 
-Description : Void and Over-density finder for Lya Tomographic maps.
-Watershed and Simple Spherical techniques are available.
-Tested on irene and cobalt (CCRT)
+Description : 
 """
 
 

@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Date : 17/05/2019
-
 Author: Corentin Ravoux
 
 Description :
@@ -1740,7 +1738,7 @@ class GalaxyCatalog(Catalog):
                        standard_deviation=standard_deviation,
                        magnitude=magnitude,
                        catalog_type=catalog_type))
-                       
+
         if("X" in catalog[1].get_colnames()):
             coord_ra = catalog[1]["X"][:]
             coord_dec = catalog[1]["Y"][:]

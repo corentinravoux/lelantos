@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Date : 17/05/2019
-
 Author: Corentin Ravoux
 
 Description : routines to extract a DM density box from a Saclay mocks output.
