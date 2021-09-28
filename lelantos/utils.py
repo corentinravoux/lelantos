@@ -3,7 +3,8 @@
 """
 Author: Corentin Ravoux
 
-Description : 
+Description : Utilities including coordinate conversion and various
+interfaces with other codes
 """
 
 
