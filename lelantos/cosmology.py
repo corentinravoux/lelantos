@@ -1054,6 +1054,7 @@ class DeltaConverter():
                                                                                             name=os.path.join(self.pwd,f"{self.return_qso_catalog}_sky_coordinates"),
                                                                                             coordinate_transform=self.coordinate_transform,
                                                                                             Omega_m=self.Omega_m,
+                                                                                            catalog_type="sky",
                                                                                             boundary_cartesian_coord=boundary_cartesian_coord,
                                                                                             boundary_sky_coord=boundary_sky_coord)
                 quasar_catalog_sky.write()

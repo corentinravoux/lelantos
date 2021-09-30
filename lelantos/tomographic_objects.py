@@ -1458,13 +1458,30 @@ class Catalog(object):
 
 class QSOCatalog(Catalog):
 
-    def __init__(self,name=None,coord=None,primary_key=None,plate=None,
-                      modern_julian_date=None,fiber_id=None,redshift_name="Z",
-                      catalog_type="sky",coordinate_transform=None,Omega_m=None,
-                      boundary_cartesian_coord=None,boundary_sky_coord=None):
-        super(QSOCatalog,self).__init__(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_cartesian_coord=boundary_cartesian_coord,boundary_sky_coord=boundary_sky_coord)
+    def __init__(self,name=None,
+                      coord=None,
+                      primary_key=None,
+                      plate=None,
+                      modern_julian_date=None,
+                      fiber_id=None,
+                      redshift_name="Z",
+                      catalog_type="sky",
+                      coordinate_transform=None,
+                      Omega_m=None,
+                      boundary_cartesian_coord=None,
+                      boundary_sky_coord=None,
+                      weights=None):
+        super(QSOCatalog,self).__init__(name=name,
+                                        coord=coord,
+                                        primary_key=primary_key,
+                                        catalog_type=catalog_type,
+                                        coordinate_transform=coordinate_transform,
+                                        Omega_m=Omega_m,
+                                        boundary_cartesian_coord=boundary_cartesian_coord,
+                                        boundary_sky_coord=boundary_sky_coord)
         self.redshift_name = redshift_name
         self.plate = plate
+        self.weights = weights
         self.modern_julian_date = modern_julian_date
         self.fiber_id = fiber_id
         self.object_type = "qso"
@@ -1473,7 +1490,10 @@ class QSOCatalog(Catalog):
     @classmethod
     def init_from_fits(cls,name,redshift_name="Z"):
         catalog = Catalog.load_from_fits(name)
-        (coordinate_transform,boundary_cartesian_coord,boundary_sky_coord, Omega_m) = Catalog.load_header(catalog)
+        (coordinate_transform,
+         boundary_cartesian_coord,
+         boundary_sky_coord,
+         Omega_m) = Catalog.load_header(catalog)
         if("RA" in catalog[1].get_colnames()):
             coord_ra = catalog[1]["RA"][:]
             coord_dec = catalog[1]["DEC"][:]
@@ -1485,7 +1505,18 @@ class QSOCatalog(Catalog):
             fiber_id = catalog[1]["FIBERID"][:]
             catalog_type = "sky"
             Catalog.close(catalog)
-            return(cls(name=name,coord=coord,primary_key=primary_key,plate=plate,modern_julian_date=modern_julian_date,fiber_id=fiber_id,redshift_name=redshift_name,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
+            return(cls(name=name,
+                       coord=coord,
+                       primary_key=primary_key,
+                       plate=plate,
+                       modern_julian_date=modern_julian_date,
+                       fiber_id=fiber_id,
+                       redshift_name=redshift_name,
+                       catalog_type=catalog_type,
+                       coordinate_transform=coordinate_transform,
+                       Omega_m=Omega_m,
+                       boundary_sky_coord=boundary_sky_coord,
+                       boundary_cartesian_coord=boundary_cartesian_coord))
         if("X" in catalog[1].get_colnames()):
             coord_ra = catalog[1]["X"][:]
             coord_dec = catalog[1]["Y"][:]
@@ -1494,21 +1525,54 @@ class QSOCatalog(Catalog):
             primary_key = catalog[1]["THING_ID"][:]
             catalog_type = "cartesian"
             Catalog.close(catalog)
-            return(cls(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
+            return(cls(name=name,
+                       coord=coord,
+                       primary_key=primary_key,
+                       catalog_type=catalog_type,
+                       coordinate_transform=coordinate_transform,
+                       Omega_m=Omega_m,
+                       boundary_sky_coord=boundary_sky_coord,
+                       boundary_cartesian_coord=boundary_cartesian_coord))
 
     @classmethod
-    def init_from_pixel_catalog(cls,quasar_pixels,name=None,coordinate_transform=None,Omega_m=None,boundary_cartesian_coord=None,boundary_sky_coord=None):
+    def init_from_pixel_catalog(cls,
+                                quasar_pixels,
+                                name=None,
+                                coordinate_transform=None,
+                                Omega_m=None,
+                                boundary_cartesian_coord=None,
+                                boundary_sky_coord=None,
+                                catalog_type="cartesian"):
         if(name is None): name ="qso_catalog.fits"
         coord_ra = quasar_pixels[:,0]
         coord_dec = quasar_pixels[:,1]
         coord_z = quasar_pixels[:,2]
         coord = np.vstack([coord_ra,coord_dec,coord_z]).transpose()
         primary_key = quasar_pixels[:,3]
-        catalog_type = "cartesian"
-        return(cls(name=name,coord=coord,primary_key=primary_key,catalog_type=catalog_type,coordinate_transform=coordinate_transform,Omega_m=Omega_m,boundary_sky_coord=boundary_sky_coord,boundary_cartesian_coord=boundary_cartesian_coord))
+        if(catalog_type =="sky"):
+            plate = np.asarray(['1' + '{0:09d}'.format(i) for i in range(len(primary_key))]).astype("i8")
+            mjd = np.asarray(['1' + '{0:09d}'.format(i) for i in range(len(primary_key))]).astype("i8")
+            fiber = np.asarray(['1' + '{0:09d}'.format(i) for i in range(len(primary_key))]).astype("i8")
+            weights = np.asarray([1.0 for i in range(len(primary_key))])
+        else:
+            plate, mjd, fiber, weights = None, None, None, None
+        return(cls(name=name,
+                   coord=coord,
+                   primary_key=primary_key,
+                   catalog_type=catalog_type,
+                   coordinate_transform=coordinate_transform,
+                   Omega_m=Omega_m,
+                   boundary_sky_coord=boundary_sky_coord,
+                   boundary_cartesian_coord=boundary_cartesian_coord,
+                   plate=plate,
+                   modern_julian_date=mjd,
+                   fiber_id=fiber,
+                   weights=weights))
 
     def cut_catalog_qso(self,coord_min=None,coord_max=None):
-        mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=True)
+        mask_select = self.cut_catalog(coord_min=coord_min,
+                                       coord_max=coord_max,
+                                       center_x_coord=True)
         self.apply_mask(mask_select)
 
 
@@ -1523,14 +1587,24 @@ class QSOCatalog(Catalog):
             self.modern_julian_date = self.modern_julian_date[mask]
         if(self.fiber_id is not None):
             self.fiber_id = self.fiber_id[mask]
-
+        if(self.weights is not None):
+            self.weights = self.weights[mask]
 
     def write(self):
         fits = fitsio.FITS(self.name,'rw',clobber=True)
         nrows = self.coord.shape[0]
         head = self.return_header()
         if(self.catalog_type == "sky"):
-            h = np.zeros(nrows, dtype=[('RA','f8'),('DEC','f8'),(self.redshift_name,'f8'),('THING_ID','i8'),('PLATE','i4'),('MJD','i4'),('FIBERID','i2')])
+            dtype=[('RA','f8'),
+                   ('DEC','f8'),
+                   (self.redshift_name,'f8'),
+                   ('THING_ID','i8'),
+                   ('PLATE','i4'),
+                   ('MJD','i4'),
+                   ('FIBERID','i2')]
+            if(self.weights is not None):
+                dtype.append(('WEIGHTS','f8'))
+            h = np.zeros(nrows, dtype = dtype)
             h['RA'] = self.coord[:,0]
             h['DEC'] = self.coord[:,1]
             h[self.redshift_name] = self.coord[:,2]
@@ -1538,6 +1612,8 @@ class QSOCatalog(Catalog):
             h['PLATE'] =self.plate
             h['MJD'] = self.modern_julian_date
             h['FIBERID'] =self.fiber_id
+            if(self.weights is not None):
+                h['WEIGHTS'] =self.weights
         elif(self.catalog_type == "cartesian"):
             h = np.zeros(nrows, dtype=[('X','f8'),('Y','f8'),('Z','f8'),('THING_ID','i8')])
             h['X'] = self.coord[:,0]
