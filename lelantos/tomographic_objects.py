@@ -1454,6 +1454,11 @@ class Catalog(object):
         else:
             return(log)
 
+    def convert_to_cross_corr_radec(self):
+        if self.catalog_type == "cartesian":
+            self.convert_to_sky()
+        self.convert_coordinates(decenter=True,degree=True)
+
 
 
 class QSOCatalog(Catalog):
@@ -1595,6 +1600,7 @@ class QSOCatalog(Catalog):
         nrows = self.coord.shape[0]
         head = self.return_header()
         if(self.catalog_type == "sky"):
+            self.convert_to_cross_corr_radec()
             dtype=[('RA','f8'),
                    ('DEC','f8'),
                    (self.redshift_name,'f8'),
@@ -1603,7 +1609,7 @@ class QSOCatalog(Catalog):
                    ('MJD','i4'),
                    ('FIBERID','i2')]
             if(self.weights is not None):
-                dtype.append(('WEIGHTS','f8'))
+                dtype.append(('WEIGHT','f8'))
             h = np.zeros(nrows, dtype = dtype)
             h['RA'] = self.coord[:,0]
             h['DEC'] = self.coord[:,1]
@@ -1613,7 +1619,7 @@ class QSOCatalog(Catalog):
             h['MJD'] = self.modern_julian_date
             h['FIBERID'] =self.fiber_id
             if(self.weights is not None):
-                h['WEIGHTS'] =self.weights
+                h['WEIGHT'] =self.weights
         elif(self.catalog_type == "cartesian"):
             h = np.zeros(nrows, dtype=[('X','f8'),('Y','f8'),('Z','f8'),('THING_ID','i8')])
             h['X'] = self.coord[:,0]
@@ -2366,10 +2372,7 @@ class VoidCatalog(Catalog):
 
 
 
-    def convert_to_cross_corr_radec(self):
-        if self.catalog_type == "cartesian":
-            self.convert_to_sky()
-        self.convert_coordinates(decenter=True,degree=True)
+
 
 
     def get_delta_void(self,rmin,rmax,nr,nameout,name_map,map_property_file):
