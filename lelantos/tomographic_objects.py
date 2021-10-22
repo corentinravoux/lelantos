@@ -1595,12 +1595,13 @@ class QSOCatalog(Catalog):
         if(self.weights is not None):
             self.weights = self.weights[mask]
 
-    def write(self):
+    def write(self,convert=True):
         fits = fitsio.FITS(self.name,'rw',clobber=True)
         nrows = self.coord.shape[0]
         head = self.return_header()
         if(self.catalog_type == "sky"):
-            self.convert_to_cross_corr_radec()
+            if(convert):
+                self.convert_to_cross_corr_radec()
             dtype=[('RA','f8'),
                    ('DEC','f8'),
                    (self.redshift_name,'f8'),

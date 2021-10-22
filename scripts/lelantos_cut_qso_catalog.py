@@ -33,4 +33,4 @@ cat.apply_mask(mask)
 print("Number of quasars after cut", cat.coord.shape[0])
 
 cat.name = args["output"]
-cat.write()
+cat.write(convert=False)
