@@ -827,7 +827,8 @@ def save_redshift_dependence(pwd,value,redshift,value_name,name,
 def plot_ra_dec(ra,dec,name,**kwargs):
 
     nb_cut = return_key(kwargs,"nb_cut",None)
-    plt.figure(figsize=(7,3.5))
+    figsize = return_key(kwargs,"ra_dec_figsize",(7,3.5))
+    plt.figure(figsize=figsize)
 
     if(nb_cut is not None):
         ramax,ramin,decmax,decmin = np.max(ra),np.min(ra),np.max(dec),np.min(dec)
@@ -847,6 +848,11 @@ def plot_ra_dec(ra,dec,name,**kwargs):
 def save_ra_dec(pwd,ra,dec,name,
                 comparison_ra=None,comparison_dec=None,
                 comparison_legend=None,**kwargs):
+
+    print(kwargs)
+    grid = return_key(kwargs,"ra_dec_grid",True)
+    fontsize = return_key(kwargs,"ra_dec_fontsize",13)
+    fontsize_scale = return_key(kwargs,"ra_dec_fontscalesize",13)
     ra_min_lim = return_key(kwargs,"ra_dec_ra_min_lim",np.min(ra))
     ra_max_lim = return_key(kwargs,"ra_dec_ra_max_lim",np.max(ra))
     dec_min_lim = return_key(kwargs,"ra_dec_dec_min_lim",np.min(dec))
@@ -865,9 +871,14 @@ def save_ra_dec(pwd,ra,dec,name,
             plot_redshift_dependence(comparison_ra[i],comparison_dec[i],name,**kwargs)
         if(comparison_legend is not None):
             plt.legend(comparison_legend)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    plt.xlabel(xlabel, fontsize=fontsize)
+    plt.ylabel(ylabel, fontsize=fontsize)
+    ax = plt.gca()
+    ax.tick_params(axis='x', labelsize=fontsize_scale)
+    ax.tick_params(axis='y', labelsize=fontsize_scale)
     plt.xlim([ra_min_lim,ra_max_lim])
     plt.ylim([dec_min_lim,dec_max_lim])
-    plt.grid()
+    if(grid):
+        plt.grid()
+    plt.tight_layout()
     plt.savefig(os.path.join(pwd,f"{name_out}_RA-DEC_diagram.pdf"), format ="pdf")

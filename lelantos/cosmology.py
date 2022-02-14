@@ -1376,6 +1376,10 @@ class DeltaAnalyzer(object):
              print_stats=False,
              **kwargs):
 
+        style = utils.return_key(kwargs,"style",None)
+        if(style is not None):
+            plt.style.use(style)
+
         (ra,
          dec,
          redshift,
