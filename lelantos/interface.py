@@ -454,7 +454,7 @@ def plot_tomography(plot_tomography_path,
                    rotate = tomography_plot_config.getboolean("rotate"),
                    minimal_void_crossing = tomography_plot_config.getfloat("minimal_void_crossing"),
                    redshift_axis=tomography_plot_config.getboolean("redshift_axis"),
-                   cut_plot=tomography_plot_config.gettupleint("cut_plot"))
+                   cut_plot=tomography_plot_config.gettuplefloat("cut_plot"))
 
     if(tomography_plot_config.getboolean("plot_delta_histogram")):
         Treat.plot_delta_histogram(f"{main_config.getstr('name')}_histogram_deltas",
@@ -464,6 +464,18 @@ def plot_tomography(plot_tomography_path,
                                    distance_mask=os.path.join(tomo_abs_path,tomography_process_config.getstr("name_dist_map")),
                                    criteria_distance_mask=tomography_plot_config.getfloat("criteria_distance_mask_histo"),
                                    log_scale=tomography_plot_config.getboolean("log_scale"))
+
+    if(tomography_plot_config.getboolean("plot_delta_histogram_comparison")):
+        Treat.plot_delta_histogram_comparison(f"{main_config.getstr('name')}_histogram_deltas",
+                                              tomography_plot_config.getint("map_comparison"),
+                                              tomography_plot_config.getint("nb_bins"),
+                                              list(tomography_plot_config.gettuplestr("legend_comparison")),
+                                              gauss_fit=tomography_plot_config.getboolean("gauss_fit"),
+                                              norm=tomography_plot_config.getboolean("normalization"),
+                                              distance_mask=os.path.join(tomo_abs_path,tomography_process_config.getstr("name_dist_map")),
+                                              distance_mask2=tomography_plot_config.getstr('distance_mask_comparison'),
+                                              criteria_distance_mask=tomography_plot_config.getfloat("criteria_distance_mask_histo"),
+                                              log_scale=tomography_plot_config.getboolean("log_scale"))
 
     if(tomography_plot_config.getboolean("plot_integrated_map")):
         Treat.plot_integrate_image(tomography_plot_config.getfloat("zmin_integrated_map"),
