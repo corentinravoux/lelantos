@@ -203,8 +203,8 @@ class TomographyPlot(object):
         if(rotate):extentmap = [0,size_map[x_index],0,size_map[y_index]]
         else:extentmap = [0,size_map[x_index],size_map[y_index],0]
 
-        xlab = f"Relative comoving distance in the {index_dict[x_index]} direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
-        ylab = f"Relative comoving distance in the {index_dict[y_index]} direction [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]"
+        xlab = f"Relative comoving distance in the {index_dict[f'{index_dict[x_index]}_lab']} direction [" + r"$h^{-1}$" + r"$\cdot$" + "Mpc" + "]"
+        ylab = f"Relative comoving distance in the {index_dict[f'{index_dict[y_index]}_lab']} direction [" + r"$h^{-1}$" + r"$\cdot$" + "Mpc" + "]"
 
         return(x_index, y_index, index_direction, extentmap, xlab, ylab)
 
@@ -302,7 +302,7 @@ class TomographyPlot(object):
                             orientation=orientation_color_bar,
                             fraction=utils.return_key(kwargs,"color_bar_fraction",0.1))
         cbar.set_label(utils.return_key(kwargs,"color_bar_label",
-                                        "Flux contrast " + r"$\delta_{Fmap}$"))
+                                        "Reconstructed Ly" + r"$\alpha$" +" contrast " + r"$\delta_{Fmap}$"))
 
         xlim_min = utils.return_key(kwargs,"map_xlim_min",extentmap[0])
         xlim_max = utils.return_key(kwargs,"map_xlim_max",extentmap[1])
@@ -428,12 +428,12 @@ class TomographyPlot(object):
             ax2.set_yticks(tick_position)
             ax2.set_yticklabels(redshift_to_plot)
             ax2.tick_params(labelright='on', right='on',labelbottom=None,labelleft=None, bottom=None, left=None)
-            ax2.set_ylabel('Redshift')
+            ax2.set_ylabel('Redshift $z$')
         else:
             ax2.set_xticks(tick_position)
             ax2.set_xticklabels(redshift_to_plot)
             ax2.tick_params(labeltop='on', top='on',labelbottom=None,labelleft=None, bottom=None, left=None)
-            ax2.set_xlabel('Redshift')
+            ax2.set_xlabel('Redshift $z$')
 
 
         position_redshift_axe = utils.return_key(kwargs, "position_redshift_axe", "other")
@@ -503,7 +503,7 @@ class TomographyPlot(object):
         tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(qso=qso,void=void,galaxy=galaxy,distance_mask = distance_mask,cut_plot=cut_plot)
         mask_void = self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask, minimal_void_crossing = minimal_void_crossing)
         center_mpc = space/2
-        index_dict = {"x":0,"y":1,"z":2,"ra":0,"dec":1,"redshift":2}
+        index_dict = {"x":0,"y":1,"z":2,"ra":0,"dec":1,"redshift":2,"x_lab":"X","y_lab":"Y","z_lab":"Z"}
         while(center_mpc + space/2 <tomographic_map.size[index_dict[direction]]):
             self.print_one_slice(name,tomographic_map,direction,space,center_mpc,pixel=pixel,quasar_catalog=quasar_catalog,void_catalog=void_catalog,mask_void=mask_void,galaxy_catalog=galaxy_catalog,rotate = rotate,redshift_axis=redshift_axis)
             center_mpc += space
@@ -587,7 +587,15 @@ class TomographyPlot(object):
 
 
 
-    def plot_delta_histogram(self,name,nb_bins,gauss_fit=True,norm=True,distance_mask=None,criteria_distance_mask=None,log_scale=True,cut_plot=None):
+    def plot_delta_histogram(self,
+                             name,
+                             nb_bins,
+                             gauss_fit=True,
+                             norm=True,
+                             distance_mask=None,
+                             criteria_distance_mask=None,
+                             log_scale=True,
+                             cut_plot=None):
         tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask,cut_plot=cut_plot)
         self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask)
         listdeltas = tomographic_map.map_array.ravel()
@@ -605,7 +613,18 @@ class TomographyPlot(object):
 
 
 
-    def plot_delta_histogram_comparison(self,name,name_second_map,nb_bins,legend,gauss_fit=True,norm=True,distance_mask=None,distance_mask2=None,criteria_distance_mask=None,log_scale=True,cut_plot=None):
+    def plot_delta_histogram_comparison(self,
+                                        name,
+                                        name_second_map,
+                                        nb_bins,
+                                        legend,
+                                        gauss_fit=True,
+                                        norm=True,
+                                        distance_mask=None,
+                                        distance_mask2=None,
+                                        criteria_distance_mask=None,
+                                        log_scale=True,
+                                        cut_plot=None):
 
         tomographic_map,pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = self.load_tomographic_objects(distance_mask = distance_mask,cut_plot=cut_plot)
         self.mask_tomographic_objects(void_catalog,dist_map,tomographic_map,criteria_distance_mask = criteria_distance_mask)

@@ -161,7 +161,7 @@ def get_direction_indexes(direction,rotate):
     elif (direction.lower() == "z")|(direction.lower() == "redshift"):
         x_index, y_index, index_direction = 1, 0, 2
     if(rotate): x_index,y_index = y_index,x_index
-    index_dict = {0:"x",1:"y",2:"z"}
+    index_dict = {0:"x",1:"y",2:"z","x_lab":"X","y_lab":"Y","z_lab":"Z"}
     return(x_index,y_index,index_direction,index_dict)
 
 
@@ -849,7 +849,6 @@ def save_ra_dec(pwd,ra,dec,name,
                 comparison_ra=None,comparison_dec=None,
                 comparison_legend=None,**kwargs):
 
-    print(kwargs)
     grid = return_key(kwargs,"ra_dec_grid",True)
     fontsize = return_key(kwargs,"ra_dec_fontsize",13)
     fontsize_scale = return_key(kwargs,"ra_dec_fontscalesize",13)
@@ -862,8 +861,8 @@ def save_ra_dec(pwd,ra,dec,name,
         label_angle = "deg"
     else:
         label_angle = "rad"
-    ylabel = return_key(kwargs,"ra_dec_xlabel",f"DEC [{label_angle}] (J2000)")
-    xlabel = return_key(kwargs,"ra_dec_ylabel",f"RA [{label_angle}] (J2000)")
+    ylabel = return_key(kwargs,"ra_dec_ylabel",f"DEC [{label_angle}] (J2000)")
+    xlabel = return_key(kwargs,"ra_dec_xlabel",f"RA [{label_angle}] (J2000)")
 
     name_out = plot_ra_dec(ra,dec,name,**kwargs)
     if(comparison_ra is not None):

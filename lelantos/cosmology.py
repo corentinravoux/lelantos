@@ -1158,24 +1158,61 @@ class PixelAnalizer(object):
 
 
     @staticmethod
-    def plot_mean_distance_density(zpar,dperpz,densityz,nameout,coupled_plot=False,comparison=False,dperp_comparison=None,density_comparison=None,zpar_comparison=None,legend=None,dperp_other=None,density_other=None):
+    def plot_mean_distance_density(zpar,
+                                   dperpz,
+                                   densityz,
+                                   nameout,
+                                   coupled_plot=False,
+                                   comparison=False,
+                                   dperp_comparison=None,
+                                   density_comparison=None,
+                                   zpar_comparison=None,
+                                   legend=None,
+                                   dperp_other=None,
+                                   density_other=None,
+                                   **kwargs):
         if(coupled_plot):
-            PixelAnalizer.plot_mean_distance_density_coupled(zpar,dperpz,densityz,nameout,comparison=comparison,
-                                               dperp_comparison=dperp_comparison,
-                                               density_comparison=density_comparison,
-                                               zpar_comparison=zpar_comparison,legend=legend,
-                                               dperp_other=dperp_other,density_other=density_other)
+            PixelAnalizer.plot_mean_distance_density_coupled(zpar,
+                                                             dperpz,
+                                                             densityz,
+                                                             nameout,
+                                                             comparison=comparison,
+                                                             dperp_comparison=dperp_comparison,
+                                                             density_comparison=density_comparison,
+                                                             zpar_comparison=zpar_comparison,
+                                                             legend=legend,
+                                                             dperp_other=dperp_other,
+                                                             density_other=density_other,
+                                                             **kwargs)
         else:
-            PixelAnalizer.plot_mean_distance_density_not_coupled(zpar,dperpz,densityz,nameout,comparison=comparison,
-                                               dperp_comparison=dperp_comparison,
-                                               density_comparison=density_comparison,
-                                               zpar_comparison=zpar_comparison,legend=legend,
-                                               dperp_other=dperp_other,density_other=density_other)
+            PixelAnalizer.plot_mean_distance_density_not_coupled(zpar,
+                                                                 dperpz,
+                                                                 densityz,
+                                                                 nameout,
+                                                                 comparison=comparison,
+                                                                 dperp_comparison=dperp_comparison,
+                                                                 density_comparison=density_comparison,
+                                                                 zpar_comparison=zpar_comparison,
+                                                                 legend=legend,
+                                                                 dperp_other=dperp_other,
+                                                                 density_other=density_other,
+                                                                 **kwargs)
 
 
 
     @staticmethod
-    def plot_mean_distance_density_not_coupled(zpar,dperpz,densityz,nameout,comparison=False,dperp_comparison=None,density_comparison=None,zpar_comparison=None,legend=None,dperp_other=None,density_other=None):
+    def plot_mean_distance_density_not_coupled(zpar,
+                                               dperpz,
+                                               densityz,
+                                               nameout,
+                                               comparison=False,
+                                               dperp_comparison=None,
+                                               density_comparison=None,
+                                               zpar_comparison=None,
+                                               legend=None,
+                                               dperp_other=None,
+                                               density_other=None,
+                                               **kwargs):
         plt.figure()
         plt.xlabel("Redshift")
         plt.ylabel("Mean los separation [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]")
@@ -1204,13 +1241,36 @@ class PixelAnalizer(object):
 
 
     @staticmethod
-    def plot_mean_distance_density_coupled(zpar,dperpz,densityz,nameout,comparison=False,dperp_comparison=None,density_comparison=None,zpar_comparison=None,legend=None,dperp_other=None,density_other=None):
-        fig, ax1 = plt.subplots()
+    def plot_mean_distance_density_coupled(zpar,
+                                           dperpz,
+                                           densityz,
+                                           nameout,
+                                           comparison=False,
+                                           dperp_comparison=None,
+                                           density_comparison=None,
+                                           zpar_comparison=None,
+                                           legend=None,
+                                           dperp_other=None,
+                                           density_other=None,
+                                           **kwargs):
+        figsize = utils.return_key(kwargs,"figsize",(8,6))
+        grid = utils.return_key(kwargs,"grid",True)
+        fontsize = utils.return_key(kwargs,"fontsize",13)
+        fontsize_scale = utils.return_key(kwargs,"fontscalesize",13)
+        ylabel1 = utils.return_key(kwargs,"ylabel1","Mean separation between nearest los [" + r"$h^{-1}$" + r"$\cdot$" + "Mpc" + "]")
+        ylabel2 = utils.return_key(kwargs,"ylabel2","Density [" + r"$\mathrm{deg}^{-2}$" + "]")
+        xlabel = utils.return_key(kwargs,"xlabel",r"Redshift $z$")
+
+        fig, ax1 = plt.subplots(1,1,figsize=figsize)
+        if(grid):
+            ax1.grid()
         line = ["dotted","dashdot","densely dashdotdotted"]
 
-        color = 'tab:blue'
-        ax1.set_xlabel("Redshift z")
-        ax1.set_ylabel("Mean separation [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]", color=color)
+        color = 'C0'
+        ax1.set_xlabel(xlabel, fontsize=fontsize)
+        ax1.set_ylabel(ylabel1, color=color, fontsize=fontsize)
+        ax1.tick_params(axis='x', labelsize=fontsize_scale)
+        ax1.tick_params(axis='y', labelsize=fontsize_scale)
         ax1.plot(zpar,dperpz, color=color)
         if(comparison):
             ax1.plot(zpar_comparison,dperp_comparison, color=color,linestyle ="--")
@@ -1220,9 +1280,11 @@ class PixelAnalizer(object):
         ax1.tick_params(axis='y', labelcolor=color)
 
         ax2 = ax1.twinx()
-
-        color = 'tab:orange'
-        ax2.set_ylabel("Density [" + r"$\mathrm{deg^{-2}}$" + "]", color=color)
+        if(grid):
+            ax2.grid()
+        color = 'C1'
+        ax2.set_ylabel(ylabel2, color=color, fontsize=fontsize)
+        ax2.tick_params(axis='y', labelsize=fontsize_scale)
         ax2.plot(zpar,densityz, color=color)
         if(comparison):
             ax2.plot(zpar_comparison,density_comparison, color=color,linestyle ="--")
@@ -1244,7 +1306,14 @@ class PixelAnalizer(object):
 
 
     @staticmethod
-    def plot_histo_mean_distance_comparison(dpername1,dpername2,densityname1,densityname2,nameout,legend,coupled_plot=False):
+    def plot_histo_mean_distance_comparison(dpername1,
+                                            dpername2,
+                                            densityname1,
+                                            densityname2,
+                                            nameout,
+                                            legend,
+                                            coupled_plot=False,
+                                            **kwargs):
         if(type(dpername1) is str):
             zpar, dperp = PixelAnalizer.read_dperp_file(dpername1)
             zpar_comparison, dperp_comparison = PixelAnalizer.read_dperp_file(dpername2)
@@ -1255,7 +1324,17 @@ class PixelAnalizer(object):
             zpar_comparison, dperp_comparison = np.mean([PixelAnalizer.read_dperp_file(dpername2[i]) for i in range(len(dpername2))],axis=0)
             zpar, density = np.mean([PixelAnalizer.read_density_file(densityname1[i]) for i in range(len(densityname1))],axis=0)
             zpar_comparison, density_comparison = np.mean([PixelAnalizer.read_density_file(densityname2[i]) for i in range(len(densityname2))],axis=0)
-        PixelAnalizer.plot_mean_distance_density(zpar,dperp,density,nameout,coupled_plot=coupled_plot,comparison=True,dperp_comparison=dperp_comparison,density_comparison=density_comparison,zpar_comparison=zpar_comparison,legend=legend)
+        PixelAnalizer.plot_mean_distance_density(zpar,
+                                                 dperp,
+                                                 density,
+                                                 nameout,
+                                                 coupled_plot=coupled_plot,
+                                                 comparison=True,
+                                                 dperp_comparison=dperp_comparison,
+                                                 density_comparison=density_comparison,
+                                                 zpar_comparison=zpar_comparison,
+                                                 legend=legend,
+                                                 **kwargs)
 
 
     def compute_plot_histo_mean_distance(self,zpar,name_histo):
