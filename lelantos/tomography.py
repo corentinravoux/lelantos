@@ -88,8 +88,9 @@ class TomographyPlot(object):
         self.pixel_name = pixel_name
         self.property_file = property_file
         self.kwargs = kwargs
-
-
+        style = utils.return_key(kwargs,"style",None)
+        if(style is not None):
+            plt.style.use(style)
 
     def load_tomographic_objects(self,qso=None,void=None,galaxy=None,distance_mask=None,cut_plot=None):
         tomographic_map = tomographic_objects.TomographicMap.init_classic(name=self.map_name,shape=self.map_shape,property_file=self.property_file)
@@ -162,7 +163,7 @@ class TomographyPlot(object):
         return(mask_void)
 
     def delta_histogram(self,listdeltas,nb_bins,norm=True,gauss_fit=True,alpha=1):
-        data, bins , patches = plt.hist(listdeltas,nb_bins,density=norm,alpha=alpha)
+        data, bins , patches = plt.hist(listdeltas,nb_bins,density=norm,alpha=alpha,range=(-0.4,0.4))
         if(gauss_fit):
             bin_centers= np.array([0.5 * (bins[i] + bins[i+1]) for i in range(len(bins)-1)])
             fit_function = lambda x,A,mu,sigma : A * np.exp(-1.0 * (x - mu)**2 / (2 * sigma**2))
@@ -601,10 +602,6 @@ class TomographyPlot(object):
         listdeltas = tomographic_map.map_array.ravel()
         plt.figure()
         self.delta_histogram(listdeltas,nb_bins,norm=norm,gauss_fit=gauss_fit)
-        if(norm):
-            plt.title("Histogram of deltas normalized")
-        else:
-            plt.title("Histogram of deltas")
         if(log_scale):
             plt.yscale("log")
         plt.grid()
@@ -638,10 +635,6 @@ class TomographyPlot(object):
         plt.figure()
         self.delta_histogram(listdeltas,nb_bins,norm=norm,gauss_fit=gauss_fit,alpha=0.5)
         self.delta_histogram(listdeltas2,nb_bins,norm=norm,gauss_fit=gauss_fit,alpha=0.5)
-        if(norm):
-            plt.title("Histogram of deltas normalized")
-        else:
-            plt.title("Histogram of deltas")
         if(log_scale):
             plt.yscale("log")
         plt.legend(legend)

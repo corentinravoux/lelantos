@@ -698,17 +698,26 @@ def save_histo(pwd,value,value_name,name,comparison=None,comparison_legend=None,
     ylabel = return_key(kwargs,f"{value_name}_ylabel","#")
     min_lim = return_key(kwargs,f"{value_name}_min_lim",None)
     max_lim = return_key(kwargs,f"{value_name}_max_lim",None)
-    plt.figure()
+    fontsize = return_key(kwargs,f"{value_name}_fontsize",14)
+    fontsize_scale = return_key(kwargs,f"{value_name}_fontscalesize",14)
+    figsize = return_key(kwargs,f"{value_name}_figsize",(8,5))
+    plt.figure(figsize=figsize)
     name_out, n, bins, patches = plot_histo(value,value_name,name,**kwargs)
     if(comparison is not None):
         for i in range(len(comparison)):
             plot_histo(comparison[i],value_name,name,**kwargs)
         if(comparison_legend is not None):
-            plt.legend(comparison_legend)
-    plt.ylabel(ylabel)
-    plt.xlabel(xlabel)
+            plt.legend(comparison_legend,fontsize=fontsize)
+    plt.ylabel(ylabel,fontsize=fontsize)
+    plt.xlabel(xlabel,fontsize=fontsize)
+    ax = plt.gca()
+    ax.tick_params(axis='x', labelsize=fontsize_scale)
+    ax.tick_params(axis='y', labelsize=fontsize_scale)
+
     if((min_lim is not None)&(max_lim is not None)):
         plt.xlim([min_lim,max_lim])
+        
+    plt.tight_layout()
     plt.savefig(os.path.join(pwd,f"{name_out}_histo_{value_name}.pdf"), format ="pdf")
 
 

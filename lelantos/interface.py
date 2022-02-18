@@ -467,7 +467,7 @@ def plot_tomography(plot_tomography_path,
 
     if(tomography_plot_config.getboolean("plot_delta_histogram_comparison")):
         Treat.plot_delta_histogram_comparison(f"{main_config.getstr('name')}_histogram_deltas",
-                                              tomography_plot_config.getint("map_comparison"),
+                                              tomography_plot_config.getstr("map_comparison"),
                                               tomography_plot_config.getint("nb_bins"),
                                               list(tomography_plot_config.gettuplestr("legend_comparison")),
                                               gauss_fit=tomography_plot_config.getboolean("gauss_fit"),
