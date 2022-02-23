@@ -637,8 +637,11 @@ class TomographyPlot(object):
         self.delta_histogram(listdeltas2,nb_bins,norm=norm,gauss_fit=gauss_fit,alpha=0.5)
         if(log_scale):
             plt.yscale("log")
-        plt.legend(legend)
-        plt.xlabel("$\delta_{Fmap}$")
+        plt.legend(legend,fontsize=15)
+        plt.xlabel(r"$\delta_{F\mathrm{map}}$",fontsize=15)
+        plt.ylabel("#",fontsize=15)
+        plt.gca().tick_params(axis='x', labelsize=15)
+        plt.gca().tick_params(axis='y', labelsize=15)
         plt.grid()
         plt.savefig(os.path.join(self.pwd,"{}.pdf".format(name)),format = "pdf")
 

@@ -664,14 +664,22 @@ def hist_profile(x, y, bins, range_x,range_y,outlier_insensitive=False):
 
 #### PLOT ####
 
-def plot_histo(value,value_name,name,**kwargs):
+def plot_histo(value,value_name,name,dotted=False,**kwargs):
     nb_bins = return_key(kwargs,f"{value_name}_bins",50)
-    value_min = return_key(kwargs,f"{value_name}_value_min",None)
-    value_max = return_key(kwargs,f"{value_name}_value_max",None)
+    value_min = return_key(kwargs,f"{value_name}_value_min",np.min(value))
+    value_max = return_key(kwargs,f"{value_name}_value_max",np.max(value))
     alpha = return_key(kwargs,f"{value_name}_alpha",1.0)
     histtype=return_key(kwargs,f"{value_name}_histtype",'bar')
     linestyle=return_key(kwargs,f"{value_name}_linestyle",None)
-    ec=return_key(kwargs,f"{value_name}_color",None)
+    lw=return_key(kwargs,f"{value_name}_linewidth",0)
+    ec=return_key(kwargs,f"{value_name}_edgecolor",None)
+    color=return_key(kwargs,f"{value_name}_color",None)
+    if(dotted):
+        linestyle = "dashed"
+        color = None
+        facecolor="None"
+        lw = 2
+        ec = "k"
 
     norm = return_key(kwargs,f"{value_name}_norm",False)
     cumulative = return_key(kwargs,f"{value_name}_cumulative",False)
@@ -686,26 +694,36 @@ def plot_histo(value,value_name,name,**kwargs):
         bins = nb_bins
     else:
         bins = np.linspace(value_min,value_max, nb_bins)
-    (n, bins, patches) = plt.hist(value, bins, alpha=alpha,histtype=histtype,
-                                  linestyle=linestyle,ec=ec,
-                                  density=norm,cumulative=cumulative,
-                                  log=log)
-
+    if(dotted):
+        (n, bins, patches) = plt.hist(value, bins, alpha=alpha,histtype=histtype,
+                                      linestyle=linestyle,ec=ec,
+                                      density=norm,cumulative=cumulative,facecolor=facecolor,
+                                      log=log,color=color,lw=lw)
+    else:
+        (n, bins, patches) = plt.hist(value, bins, alpha=alpha,histtype=histtype,
+                                      linestyle=linestyle,ec=ec,
+                                      density=norm,cumulative=cumulative,
+                                      log=log,color=color,lw=lw)
     return(name, n, bins, patches)
 
 def save_histo(pwd,value,value_name,name,comparison=None,comparison_legend=None,**kwargs):
     xlabel = return_key(kwargs,f"{value_name}_xlabel",value_name)
     ylabel = return_key(kwargs,f"{value_name}_ylabel","#")
-    min_lim = return_key(kwargs,f"{value_name}_min_lim",None)
-    max_lim = return_key(kwargs,f"{value_name}_max_lim",None)
+    min_lim = return_key(kwargs,f"{value_name}_min_lim",np.min(value))
+    max_lim = return_key(kwargs,f"{value_name}_max_lim",np.max(value))
     fontsize = return_key(kwargs,f"{value_name}_fontsize",14)
     fontsize_scale = return_key(kwargs,f"{value_name}_fontscalesize",14)
     figsize = return_key(kwargs,f"{value_name}_figsize",(8,5))
+    comparison_dotted = return_key(kwargs,f"{value_name}_comparison_dotted",None)
     plt.figure(figsize=figsize)
     name_out, n, bins, patches = plot_histo(value,value_name,name,**kwargs)
     if(comparison is not None):
         for i in range(len(comparison)):
-            plot_histo(comparison[i],value_name,name,**kwargs)
+            dotted=False
+            if(comparison_dotted is not None):
+                if(comparison_dotted == i):
+                    dotted=True
+            plot_histo(comparison[i],value_name,name,dotted=dotted,**kwargs)
         if(comparison_legend is not None):
             plt.legend(comparison_legend,fontsize=fontsize)
     plt.ylabel(ylabel,fontsize=fontsize)
@@ -716,7 +734,7 @@ def save_histo(pwd,value,value_name,name,comparison=None,comparison_legend=None,
 
     if((min_lim is not None)&(max_lim is not None)):
         plt.xlim([min_lim,max_lim])
-        
+
     plt.tight_layout()
     plt.savefig(os.path.join(pwd,f"{name_out}_histo_{value_name}.pdf"), format ="pdf")
 

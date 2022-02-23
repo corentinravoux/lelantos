@@ -820,6 +820,11 @@ class PlotVoid(object):
              histo=True,mean_z_dependence=True,
              z_dependence=True,
              **kwargs):
+
+        style = utils.return_key(kwargs,"style",None)
+        if(style is not None):
+            plt.style.use(style)
+
         for value_name in value_names:
             (value,comparison_value,comparison_redshift) = self.load_catalog(comparison,value_name)
             if(histo):
@@ -846,7 +851,7 @@ class PlotVoid(object):
 
 
     def compute_ks_stat(self,comparison):
-        (radius,comparison) = self.load_catalog(comparison,"radius")
+        (radius,comparison,comparison_redshift) = self.load_catalog(comparison,"radius")
         KS_stat, p_value = ks_2samp(radius,comparison[0])
         return(KS_stat,p_value)
 
@@ -855,7 +860,7 @@ class PlotVoid(object):
     def plot_radius_histo_fit_expo(self,expo_fit_rmin=0,comparison=None,**kwargs):
         fit_function = lambda x,a,b : np.exp(a*x+b)
 
-        (radius,comparison) = self.load_catalog(comparison,"radius")
+        (radius,comparison,comparison_redshift) = self.load_catalog(comparison,"radius")
         (name, n, bins, patches) = utils.plot_histo(radius,"radius","",**kwargs)
         bin_center = (bins[1:] + bins[0:-1]) / 2
         mask = bin_center>expo_fit_rmin
