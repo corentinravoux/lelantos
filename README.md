@@ -1,6 +1,6 @@
 # LELANTOS - Large-scalE LymAN-alpha TOmography Suite
 
-LELANTOS - Greak titan associated to hunt and air.
+LELANTOS - Greak titan associated to hunt and air (name found after discussion with [E. Chaussidon](https://github.com/echaussidon))
 
 Package to create and manipulate large-scale Lyman-alpha tomographic maps.
 
