@@ -22,11 +22,11 @@ REQUIRES_PYTHON = '>=3.6.0'
 VERSION = '1.0'
 
 scripts = glob.glob('scripts/*')
-packages = ['lelantos','lelantos.saclaymocks','lelantos.picca','lelantos.exec']
+packages = ['lelantos','lelantos.saclaymocks','lelantos.exec']
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-     'fitsio', 'numpy', 'scipy','matplotlib'
+     'fitsio', 'numpy', 'scipy','matplotlib','picca'
 ]
 
 # What packages are optional?
