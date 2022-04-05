@@ -1093,20 +1093,62 @@ class DeltaConverter():
                         number_chunks=None,
                         overlaping=None,
                         shape_sub_map=None):
-        (cartesian_deltas,cartesian_qso_catalog,cartesian_dla_catalog,sky_deltas,sky_qso_catalog,sky_dla_catalog,properties_map_pixels) = self.transform_delta_to_pixel_file(rebin=rebin,sigma_min=sigma_min,sigma_max=sigma_max,z_cut_min=z_cut_min,z_cut_max=z_cut_max,dec_cut_min=dec_cut_min,dec_cut_max=dec_cut_max,ra_cut_min=ra_cut_min,ra_cut_max=ra_cut_max)
+        (cartesian_deltas,
+         cartesian_qso_catalog,
+         cartesian_dla_catalog,
+         sky_deltas,
+         sky_qso_catalog,
+         sky_dla_catalog,
+         properties_map_pixels) = self.transform_delta_to_pixel_file(rebin=rebin,
+                                                                     sigma_min=sigma_min,
+                                                                     sigma_max=sigma_max,
+                                                                     z_cut_min=z_cut_min,
+                                                                     z_cut_max=z_cut_max,
+                                                                     dec_cut_min=dec_cut_min,
+                                                                     dec_cut_max=dec_cut_max,
+                                                                     ra_cut_min=ra_cut_min,
+                                                                     ra_cut_max=ra_cut_max)
         if(mode.lower() == "serial"):
-            shape = self.create_serial_input(nameout,properties,cartesian_deltas,sky_deltas)
+            shape = self.create_serial_input(nameout,
+                                             properties,
+                                             cartesian_deltas,
+                                             sky_deltas)
         elif(mode.lower() == "parallel"):
-            (parallel_launcher_params,filename,chunks,shape) = self.create_parallel_input(properties,cartesian_deltas,number_chunks,overlaping,shape_sub_map)
-            self.write_parallel_input(cartesian_deltas,parallel_launcher_params,filename,chunks,properties,nameout,number_chunks,overlaping)
+            (parallel_launcher_params,
+             filename,
+             chunks,
+             shape) = self.create_parallel_input(properties,
+                                                 cartesian_deltas,
+                                                 number_chunks,
+                                                 overlaping,
+                                                 shape_sub_map)
+            self.write_parallel_input(cartesian_deltas,
+                                      parallel_launcher_params,
+                                      filename,
+                                      chunks,
+                                      properties,
+                                      nameout,
+                                      number_chunks,
+                                      overlaping)
         else:
             raise KeyError("Please choose a mode between serial and parallel")
-        property_file = self.create_dachshund_map_pixel_property_file(property_file_name,cartesian_deltas,sky_deltas,shape,properties_map_pixels)
+        property_file = self.create_dachshund_map_pixel_property_file(property_file_name,
+                                                                      cartesian_deltas,
+                                                                      sky_deltas,shape,
+                                                                      properties_map_pixels)
         property_file.write()
-        self.create_additional_catalogs(cartesian_qso_catalog,cartesian_dla_catalog,sky_qso_catalog,sky_dla_catalog,properties_map_pixels)
+        self.create_additional_catalogs(cartesian_qso_catalog,
+                                        cartesian_dla_catalog,
+                                        sky_qso_catalog,
+                                        sky_dla_catalog,
+                                        properties_map_pixels)
         if(self.plot_pixel_properties):
-            pixel_analyzer = PixelAnalizer(pixel=os.path.join(self.pwd,properties["name_pixel"]),property_file=os.path.join(self.pwd,property_file_name))
-            pixel_analyzer.analyze_pixels(False,True,name_dperp=os.path.join(self.pwd,nameout),coupled_plot=True)
+            pixel_analyzer = PixelAnalizer(pixel=os.path.join(self.pwd,properties["name_pixel"]),
+                                           property_file=os.path.join(self.pwd,property_file_name))
+            pixel_analyzer.analyze_pixels(False,
+                                          True,
+                                          name_dperp=os.path.join(self.pwd,nameout),
+                                          coupled_plot=True)
 
 
 
