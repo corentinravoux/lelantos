@@ -1043,14 +1043,18 @@ class Delta(object):
         ra, dec, z, delta, sigma,zqso,id = [],[],[],[],[],[],[]
         for i in range(len(self.delta_array)):
             zqso.append(Delta.z_qso(self.delta_array[i]))
-            if((Delta.ra(self.delta_array[i]) > np.pi)&(center_ra)):ra.append(Delta.ra(self.delta_array[i])-2*np.pi)
-            else : ra.append(Delta.ra(self.delta_array[i]))
+            if((Delta.ra(self.delta_array[i]) > np.pi)&(center_ra)):
+                ra.append(Delta.ra(self.delta_array[i])-2*np.pi)
+            else :
+                ra.append(Delta.ra(self.delta_array[i]))
             dec.append(Delta.dec(self.delta_array[i]))
-            if(Delta.ivar(self.delta_array[i]) is not None): sigma.append(1/np.sqrt(np.asarray(Delta.ivar(self.delta_array[i]))))
-            else : sigma.append(np.array([0.0 for i in range(len(Delta.delta(self.delta_array[i])))]))
-            delta.append(Delta.delta(self.delta_array[i]))
-            id.append(Delta.thingid(self.delta_array[i]))
-            z.append(((10**Delta.log_lambda(self.delta_array[i]) / utils.lambdaLy)-1))
+            if(self.delta_array[i].ivar is not None):
+                sigma.append(1/np.sqrt(np.asarray(self.delta_array[i].ivar)))
+            else :
+                sigma.append(np.array([0.0 for i in range(len(self.delta_array[i].delta))]))
+            delta.append(self.delta_array[i].delta)
+            id.append(Delta.primary_key(self.delta_array[i]))
+            z.append(((10**self.delta_array[i].log_lambda / utils.lambdaLy)-1))
 
         return(np.array(ra),
                np.array(dec),
@@ -1060,6 +1064,7 @@ class Delta(object):
                sigma,
                delta)
 
+    # CR - writting need to be adapted to picca
     def write(self):
         if((self.name is None)|(self.delta_array is None)):
             raise ValueError("No delta array or name is stored in this delta class for writting")
@@ -1070,31 +1075,31 @@ class Delta(object):
             fits.write(fi,header=head,extname=str(head['THING_ID']))
 
     def create_fi(self,delta):
-        nrows = len(Delta.delta(delta))
+        nrows = len(delta.delta)
         head = {}
         if  self.pk1d_type :
             h = np.zeros(nrows, dtype=[('LOGLAM','f8'),('DELTA','f8'),('IVAR','f8'),('DIFF','f8')])
-            h['DELTA'] =Delta.delta(delta)
-            h['LOGLAM'] = Delta.log_lambda(delta)
-            h['IVAR'] = Delta.ivar(delta)
-            h['DIFF'] = Delta.exposures_diff(delta)
-            head['MEANSNR'] = Delta.mean_snr(delta)
-            head['MEANRESO'] = Delta.mean_reso(delta)
-            head['MEANZ'] = Delta.mean_z(delta)
-            head['DLL'] = Delta.delta_log_lambda(delta)
+            h['DELTA'] =delta.delta
+            h['LOGLAM'] = delta.log_lambda
+            h['IVAR'] = delta.ivar
+            h['DIFF'] = delta.exposures_diff
+            head['MEANSNR'] = delta.mean_snr
+            head['MEANRESO'] = delta.mean_reso
+            head['MEANZ'] = delta.mean_z
+            head['DLL'] = delta.delta_log_lambda
         else :
             h = np.zeros(nrows, dtype=[('LOGLAM','f8'),('DELTA','f8'),('WEIGHT','f8'),('CONT','f8')])
-            h['DELTA'] =Delta.delta(delta)
-            h['LOGLAM'] = Delta.log_lambda(delta)
-            h['WEIGHT'] = Delta.weights(delta)
-            h['CONT'] = Delta.cont(delta)
-        head['THING_ID'] = Delta.thingid(delta)
+            h['DELTA'] =delta.delta
+            h['LOGLAM'] = delta.log_lambda
+            h['WEIGHT'] = delta.weights
+            h['CONT'] = delta.cont
+        head['THING_ID'] = Delta.primary_key(delta)
         head['RA'] = Delta.ra(delta)
         head['DEC'] = Delta.dec(delta)
         head['Z']  = Delta.z_qso(delta)
-        head['PLATE'] = Delta.plate(delta)
-        head['MJD'] = Delta.mjd(delta)
-        head['FIBERID'] = Delta.fiberid(delta)
+        head['PLATE'] = delta.plate
+        head['MJD'] = delta.mjd
+        head['FIBERID'] = delta.fiberid
         return(h,head)
 
     @staticmethod
@@ -1106,97 +1111,18 @@ class Delta(object):
         return(delta.dec)
 
     @staticmethod
-    def thingid(delta):
+    def z_qso(delta):
+        return(delta.z_qso)
+
+
+    @staticmethod
+    def primary_key(delta):
         try:
-            return(delta.thid)
+            return(delta.los_id)
         except:
             return(delta.thingid)
 
-    @staticmethod
-    def z_qso(delta):
-        try:
-            return(delta.zqso)
-        except:
-            return(delta.z_qso)
 
-    @staticmethod
-    def ivar(delta):
-        try:
-            return(delta.iv)
-        except:
-            return(delta.ivar)
-
-    @staticmethod
-    def delta(delta):
-        try:
-            return(delta.de)
-        except:
-            return(delta.delta)
-
-    @staticmethod
-    def log_lambda(delta):
-        try:
-            return(delta.ll)
-        except:
-            return(delta.log_lambda)
-
-    @staticmethod
-    def exposures_diff(delta):
-        try:
-            return(delta.diff)
-        except:
-            return(delta.exposures_diff)
-
-    @staticmethod
-    def mean_snr(delta):
-        try:
-            return(delta.mean_SNR)
-        except:
-            return(delta.mean_snr)
-
-    @staticmethod
-    def mean_reso(delta):
-        return(delta.mean_reso)
-
-    @staticmethod
-    def mean_z(delta):
-        return(delta.mean_z)
-
-    @staticmethod
-    def delta_log_lambda(delta):
-        try:
-            return(delta.dll)
-        except:
-            return(delta.delta_log_lambda)
-
-    @staticmethod
-    def plate(delta):
-        return(delta.plate)
-
-    @staticmethod
-    def mjd(delta):
-        return(delta.mjd)
-
-    @staticmethod
-    def fiberid(delta):
-        try:
-            return(delta.fid)
-        except:
-            return(delta.fiberid)
-
-    @staticmethod
-    def cont(delta):
-        try:
-            return(delta.co)
-        except:
-            return(delta.cont)
-
-    @staticmethod
-    def weights(delta):
-        try:
-            return(delta.we)
-        except:
-            return(delta.weights)
 
 #############################################################################
 #############################################################################

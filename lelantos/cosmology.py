@@ -110,9 +110,9 @@ def get_merged_multiple_exposure_deltas(namefile):
         dec.append(tomographic_objects.Delta.dec(Deltas[ids[i]][0]))
         listsigmas,listz,listdelta = [],[],[]
         for j in range(len(Deltas[ids[i]])):
-            listsigmas.append(1/np.sqrt(np.asarray(tomographic_objects.Delta.ivar(Deltas[ids[i]][j]))))
-            listdelta.append(tomographic_objects.Delta.delta(Deltas[ids[i]][j]))
-            listz.append(((10**np.asarray(tomographic_objects.Delta.log_lambda(Deltas[ids[i]][j])) / utils.lambdaLy)-1))
+            listsigmas.append(1/np.sqrt(np.asarray(Deltas[ids[i]][j].ivar)))
+            listdelta.append(Deltas[ids[i]][j].delta)
+            listz.append(((10**np.asarray(Deltas[ids[i]][j].log_lambda) / utils.lambdaLy)-1))
 
         (listz,listsigmas,listdelta) = delete_los_extrema(listz,listsigmas,listdelta)
 
@@ -148,7 +148,7 @@ def get_id_list(namefile):
         delta_tomo.read()
         id = []
         for i in range(len(delta_tomo.delta_array)):
-            id.append(tomographic_objects.Delta.thingid(delta_tomo.delta_array[i]))
+            id.append(tomographic_objects.Delta.primary_key(delta_tomo.delta_array[i]))
         ids.append(id)
     ids = np.concatenate(ids)
     ids = list(set(ids))
@@ -159,7 +159,7 @@ def get_id_list(namefile):
             delta_tomo = tomographic_objects.Delta(name=namefile[j],pk1d_type=True)
             delta_tomo.read()
             for k in range(len(delta_tomo.delta_array)):
-                if(tomographic_objects.Delta.thingid(delta_tomo.delta_array[k]) == ids[i]):
+                if(tomographic_objects.Delta.primary_key(delta_tomo.delta_array[k]) == ids[i]):
                     Deltas[ids[i]].append(delta_tomo.delta_array[k])
     return(Deltas,ids)
 
@@ -343,15 +343,15 @@ class DeltaModifier(object):
                                                    pk1d_type=True)
             delta_tomo.read()
             for j in range(len(delta_tomo.delta_array)):
-                ivar.append(tomographic_objects.Delta.ivar(delta_tomo.delta_array[j]))
-                delta.append(tomographic_objects.Delta.delta(delta_tomo.delta_array[j]))
+                ivar.append(delta_tomo.delta_array[j].ivar)
+                delta.append(delta_tomo.delta_array[j].delta)
             if(namefile_other is not None):
                 delta_tomo_other = tomographic_objects.Delta(name=namefile_other[i],
                                                              pk1d_type=False)
                 delta_tomo_other.read()
                 for j in range(len(delta_tomo_other.delta_array)):
-                    weight_other.append(tomographic_objects.Delta.weights(delta_tomo_other.delta_array[j]))
-                    delta_other.append(tomographic_objects.Delta.delta(delta_tomo_other.delta_array[j]))
+                    weight_other.append(delta_tomo_other.delta_array[j].weights)
+                    delta_other.append(delta_tomo_other.delta_array[j].delta)
         ivar = np.concatenate(ivar,axis=0)
         delta = np.concatenate(delta,axis=0)
         if(namefile_other is not None):
@@ -407,20 +407,20 @@ class DeltaModifier(object):
             delta_tomo = tomographic_objects.Delta(name=namefile[i],pk1d_type=True)
             delta_tomo.read()
             for j in range(len(delta_tomo.delta_array)):
-                redshift = ((10**tomographic_objects.Delta.log_lambda(delta_tomo.delta_array[j]) / utils.lambdaLy)-1)
+                redshift = ((10**delta_tomo.delta_array[j].log_lambda / utils.lambdaLy)-1)
                 for k in range(n_cut):
                     mask = (redshift >= redshift_cut[k])&(redshift < redshift_cut[k+1])
-                    ivar[k].append(tomographic_objects.Delta.ivar(delta_tomo.delta_array[j])[mask])
-                    delta[k].append(tomographic_objects.Delta.delta(delta_tomo.delta_array[j])[mask])
+                    ivar[k].append(delta_tomo.delta_array[j].ivar[mask])
+                    delta[k].append(delta_tomo.delta_array[j].delta[mask])
             if(namefile_other is not None):
                 delta_tomo_other = tomographic_objects.Delta(name=namefile_other[i],pk1d_type=False)
                 delta_tomo_other.read()
                 for j in range(len(delta_tomo_other.delta_array)):
-                    redshift = ((10**tomographic_objects.Delta.log_lambda(delta_tomo_other.delta_array[j]) / utils.lambdaLy)-1)
+                    redshift = ((10**delta_tomo_other.delta_array[j].log_lambda / utils.lambdaLy)-1)
                     for k in range(n_cut):
                         mask = (redshift >= redshift_cut[k])&(redshift < redshift_cut[k+1])
-                        weight_other[k].append(tomographic_objects.Delta.weights(delta_tomo_other.delta_array[j])[mask])
-                        delta_other[k].append(tomographic_objects.Delta.delta(delta_tomo_other.delta_array[j])[mask])
+                        weight_other[k].append(delta_tomo_other.delta_array[j].weights[mask])
+                        delta_other[k].append(delta_tomo_other.delta_array[j].delta[mask])
         for k in range(n_cut):
             ivar[k] = np.concatenate(ivar[k],axis=0)
             delta[k] = np.concatenate(delta[k],axis=0)
@@ -441,7 +441,7 @@ class DeltaModifier(object):
             delta_tomo.read()
             delta_obj_list = []
             for j in range(len(delta_tomo.delta_array)):
-                redshift = ((10**tomographic_objects.Delta.log_lambda(delta_tomo.delta_array[j]) / utils.lambdaLy)-1)
+                redshift = ((10**delta_tomo.delta_array[j].log_lambda / utils.lambdaLy)-1)
                 for k in range(n_cut):
                     mask = (redshift >= redshift_cut[k])&(redshift < redshift_cut[k+1])
                     delta_tomo.delta_array[j].de[mask]  = delta_rand[k][ibegin[k]:ibegin[k]+len(delta_tomo.delta_array[j].de[mask])]
@@ -460,7 +460,7 @@ class DeltaModifier(object):
                 delta_tomo_other.read()
                 delta_obj_list = []
                 for j in range(len(delta_tomo_other.delta_array)):
-                    redshift = ((10**tomographic_objects.Delta.log_lambda(delta_tomo_other.delta_array[j]) / utils.lambdaLy)-1)
+                    redshift = ((10**delta_tomo_other.delta_array[j].log_lambda / utils.lambdaLy)-1)
                     for k in range(n_cut):
                         mask = (redshift >= redshift_cut[k])&(redshift < redshift_cut[k+1])
                         delta_tomo_other.delta_array[j].de[mask]  = delta_other_rand[k][ibegin[k]:ibegin[k]+len(delta_tomo_other.delta_array[j].de[mask])]
