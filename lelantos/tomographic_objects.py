@@ -24,6 +24,8 @@ from lelantos import utils
 from scipy.ndimage.filters import gaussian_filter
 import multiprocessing as mp
 from scipy.interpolate import interp1d
+from picca import data
+
 
 ### Copy to utils ####
 
@@ -1031,17 +1033,9 @@ class Delta(object):
                 delta_file.close()
 
     def read_line(self,delta_file,number_line):
-        try:
-            from picca import data
-        except:
-            import lelantos.picca.data as data
-            print("Picca might be updated, we suggest to install picca independently")
         if(delta_file is None):
             self.read()
-        try:
-            delta = data.delta.from_fitsio(delta_file[number_line],Pk1D_type=self.pk1d_type)
-        except:
-            delta = data.Delta.from_fitsio(delta_file[number_line],pk1d_type=self.pk1d_type)
+        delta = data.Delta.from_fitsio(delta_file[number_line],pk1d_type=self.pk1d_type)
         return(delta)
 
 

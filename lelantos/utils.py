@@ -28,6 +28,8 @@ import multiprocessing as mp
 from multiprocessing.reduction import ForkingPickler, AbstractReducer
 import matplotlib.pyplot as plt
 from scipy.stats import binned_statistic
+from picca import constants
+
 
 #############################################################################
 #############################################################################
@@ -52,19 +54,10 @@ def get_map_size(shape,mpc_per_pixel):
 
 
 def get_cosmo_function(Omega_m,Omega_k=0.):
-    try:
-        from picca import constants
-    except:
-        import lelantos.picca.constants as constants
-        print("Picca might be updated, we suggest to install picca independently")
-    try:
-        Cosmo = constants.cosmo(Omega_m,Ok=Omega_k)
-        rcomov = Cosmo.r_comoving
-        distang = Cosmo.dm
-    except:
-        Cosmo = constants.Cosmo(Omega_m,Ok=Omega_k)
-        rcomov = Cosmo.get_r_comov
-        distang = Cosmo.get_dist_m
+
+    Cosmo = constants.Cosmo(Omega_m,Ok=Omega_k)
+    rcomov = Cosmo.get_r_comov
+    distang = Cosmo.get_dist_m
     redshift_array = np.linspace(0,5,10000)
     R_array = rcomov(redshift_array)
     Dm_array = rcomov(redshift_array)
