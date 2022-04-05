@@ -766,7 +766,15 @@ class DeltaConverter():
 
 
         sky_deltas = np.array([[ra[i],dec[i],z[i][j],sigmas[i][j],deltas[i][j]] for i in range(len(ra)) for j in range(len(z[i]))])
-        sky_deltas = sky_deltas[utils.cut_sky_catalog(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],ramin=ra_cut_min,ramax=ra_cut_max,decmin=dec_cut_min,decmax=dec_cut_max,zmin=z_cut_min,zmax=z_cut_max)]
+        sky_deltas = sky_deltas[utils.cut_sky_catalog(sky_deltas[:,0],
+                                                      sky_deltas[:,1],
+                                                      sky_deltas[:,2],
+                                                      ramin=ra_cut_min,
+                                                      ramax=ra_cut_max,
+                                                      decmin=dec_cut_min,
+                                                      decmax=dec_cut_max,
+                                                      zmin=z_cut_min,
+                                                      zmax=z_cut_max)]
         suplementary_parameters = utils.return_suplementary_parameters(self.coordinate_transform,zmin=np.min(sky_deltas[:,2]),zmax=np.max(sky_deltas[:,2]))
         cartesian_deltas = np.zeros(sky_deltas.shape)
         cartesian_deltas[:,0],cartesian_deltas[:,1],cartesian_deltas[:,2] = utils.convert_sky_to_cartesian(sky_deltas[:,0],sky_deltas[:,1],sky_deltas[:,2],self.coordinate_transform,rcomov=rcomov,distang=distang,suplementary_parameters=suplementary_parameters)
