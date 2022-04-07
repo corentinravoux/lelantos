@@ -92,8 +92,15 @@ class TomographyPlot(object):
         if(style is not None):
             plt.style.use(style)
 
-    def load_tomographic_objects(self,qso=None,void=None,galaxy=None,distance_mask=None,cut_plot=None):
-        tomographic_map = tomographic_objects.TomographicMap.init_classic(name=self.map_name,shape=self.map_shape,property_file=self.property_file)
+    def load_tomographic_objects(self,
+                                 qso=None,
+                                 void=None,
+                                 galaxy=None,
+                                 distance_mask=None,
+                                 cut_plot=None):
+        tomographic_map = tomographic_objects.TomographicMap.init_classic(name=self.map_name,
+                                                                          shape=self.map_shape,
+                                                                          property_file=self.property_file)
         tomographic_map.read()
 
         pixel,quasar_catalog,void_catalog,galaxy_catalog,dist_map = None,None,None,None,None
@@ -809,7 +816,16 @@ class TomographyStack(object):
             if(rotate): stack_slice = np.transpose(np.flip(stack_slice,axis=1))
 
         extentmap = [-stack.size[0]/2,+stack.size[0]/2,-stack.size[0]/2,+stack.size[0]/2]
-        TomographyPlot.plot_slice(pwd,np.transpose(stack_slice),extentmap,xlab,ylab,name_plot,x_index,y_index,save_fig=False,**kwargs)
+        TomographyPlot.plot_slice(pwd,
+                                  np.transpose(stack_slice),
+                                  extentmap,
+                                  xlab,
+                                  ylab,
+                                  name_plot,
+                                  x_index,
+                                  y_index,
+                                  save_fig=False,
+                                  **kwargs)
 
         if(pixel_file_qso_distance is not None):
             TomographyStack.plot_mean_los_distance(direction,stack,pixel_file_qso_distance=pixel_file_qso_distance)

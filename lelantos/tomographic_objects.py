@@ -1742,7 +1742,7 @@ class GalaxyCatalog(Catalog):
                        magnitude=magnitude,
                        catalog_type=catalog_type))
 
-        if("X" in catalog[1].get_colnames()):
+        elif("X" in catalog[1].get_colnames()):
             coord_ra = catalog[1]["X"][:]
             coord_dec = catalog[1]["Y"][:]
             coord_z = catalog[1]['Z'][:]
