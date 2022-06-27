@@ -1380,6 +1380,34 @@ class Catalog(object):
         self.convert_coordinates(decenter=True,degree=True)
 
 
+    def create_randomized_catalog(self,
+                                  name_out,
+                                  property_file,
+                                  seed=None,
+                                  randomized_z_distribution=False):
+        prop = MapPixelProperty(name= property_file)
+        prop.read()
+        if(self.catalog_type == "sky"):
+            (minx,miny,minz) = prop.boundary_sky_coord[0]
+            (maxx,maxy,maxz) = prop.boundary_sky_coord[1]
+        elif(self.catalog_type == "cartesian"):
+            (minx,miny,minz) = prop.boundary_cartesian_coord[0]
+            (maxx,maxy,maxz) = prop.boundary_cartesian_coord[1]
+            maxx, minx = maxx - minx, 0.0
+            maxy, miny = maxy - miny, 0.0
+            maxz, minz = maxz - minz, 0.0
+        if(seed is not None):
+            np.random.seed(seed)
+        for i in range(len(self.coord)):
+            self.coord[i,0] = minx + np.random.rand()*(maxx-minx)
+            self.coord[i,1] = miny + np.random.rand()*(maxy-miny)
+            if(randomized_z_distribution):
+                self.coord[i,2] = minz + np.random.rand()*(maxz-minz)
+        self.name = name_out
+        self.write()
+
+
+
 
 class QSOCatalog(Catalog):
 
@@ -1778,13 +1806,52 @@ class GalaxyCatalog(Catalog):
                    magnitude=magnitude,
                    catalog_type=catalog_type))
 
+    def cut_catalog_galaxy(self,
+                           coord_min=None,
+                           coord_max=None,
+                           standard_deviation_max=None,
+                           confidence_min=None,
+                           magnitude_max=None,
+                           distance_map_name=None,
+                           distance_map_prop=None,
+                           distance_map_param=None):
+
+        mask_select = self.cut_catalog(coord_min=coord_min,
+                                       coord_max=coord_max,
+                                       center_x_coord=True)
+        string_to_add = ""
+        if(distance_map_name is not None):
+            if ((distance_map_name is None)|(distance_map_prop is None)|(distance_map_param is None)) is True : raise KeyError("Give a dist map parameter, map and property file please")
+            mask_select &= self.cut_distance_map(distance_map_name,
+                                                 distance_map_prop,
+                                                 distance_map_param)
+            string_to_add = string_to_add + f"_cutdistance_{distance_map_param}Mpc"
+
+
+        self.apply_mask(mask_select,
+                        standard_deviation_max=standard_deviation_max,
+                        confidence_min=confidence_min,
+                        magnitude_max=magnitude_max)
+        name_out = f"""{self.name.split(".fits")[0]}{string_to_add}.fits"""
+        return(name_out)
 
 
 
-    def cut_catalog_galaxy(self,coord_min=None,coord_max=None,standard_deviation_max=None,confidence_min=None,magnitude_max=None):
-        mask_select = self.cut_catalog(coord_min=coord_min,coord_max=coord_max,center_x_coord=True)
-        self.apply_mask(mask_select,standard_deviation_max=standard_deviation_max,confidence_min=confidence_min,magnitude_max=magnitude_max)
-
+    def cut_distance_map(self,
+                         distance_map_name,
+                         distance_map_prop,
+                         distance_map_param):
+        distance_map = DistanceMap.init_classic(name=distance_map_name,
+                                                property_file=distance_map_prop)
+        distance_map.read()
+        mask = ~distance_map.get_mask_distance(distance_map_param)
+        mask_cut = np.full(self.coord.shape[0],False)
+        for i in range(len(self.coord)):
+            x_coord = int(round((self.coord[i][0]) / distance_map.mpc_per_pixel[0],0))
+            y_coord = int(round((self.coord[i][1]) / distance_map.mpc_per_pixel[1],0))
+            z_coord = int(round((self.coord[i][2]) / distance_map.mpc_per_pixel[2],0))
+            mask_cut[i] = mask[x_coord,y_coord,z_coord]
+        return(mask_cut)
 
 
     # CR - change all apply_mask with a list of parameters & getattr(class,str)
@@ -2083,7 +2150,7 @@ class VoidCatalog(Catalog):
             mask_select &= self.cut_border()
             string_to_add = string_to_add + "_cutborder"
         if("DIST" in method_cut):
-            if ((distance_map_name is None)|(distance_map_prop is None)|(distance_map_param is None)|(distance_map_percent is None)) is None : raise KeyError("Give a dist map parameter, map and property file please")
+            if ((distance_map_name is None)|(distance_map_prop is None)|(distance_map_param is None)|(distance_map_percent is None)) is False : raise KeyError("Give a dist map parameter, map and property file please")
             mask_select &= self.cut_distance_map(distance_map_name,distance_map_prop,distance_map_param,distance_map_percent)
             string_to_add = string_to_add + f"_cutdistance_{distance_map_param}Mpc_{distance_map_percent}percent"
         self.apply_mask(mask_select)
@@ -2329,31 +2396,6 @@ class VoidCatalog(Catalog):
         h.close()
 
 
-    def create_randomized_catalog(self,
-                                  name_out,
-                                  property_file,
-                                  seed=None,
-                                  randomized_z_distribution=False):
-        prop = MapPixelProperty(name= property_file)
-        prop.read()
-        if(self.catalog_type == "sky"):
-            (minx,miny,minz) = prop.boundary_sky_coord[0]
-            (maxx,maxy,maxz) = prop.boundary_sky_coord[1]
-        elif(self.catalog_type == "cartesian"):
-            (minx,miny,minz) = prop.boundary_cartesian_coord[0]
-            (maxx,maxy,maxz) = prop.boundary_cartesian_coord[1]
-            maxx, minx = maxx - minx, 0.0
-            maxy, miny = maxy - miny, 0.0
-            maxz, minz = maxz - minz, 0.0
-        if(seed is not None):
-            np.random.seed(seed)
-        for i in range(len(self.coord)):
-            self.coord[i,0] = minx + np.random.rand()*(maxx-minx)
-            self.coord[i,1] = miny + np.random.rand()*(maxy-miny)
-            if(randomized_z_distribution):
-                self.coord[i,2] = minz + np.random.rand()*(maxz-minz)
-        self.name = name_out
-        self.write()
 
 
 
