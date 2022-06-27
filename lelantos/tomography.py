@@ -299,8 +299,12 @@ class TomographyPlot(object):
         ax = plt.gca()
         size = fig.get_size_inches()
         fig.set_size_inches(1.75*size)
-        plt.xlabel(xlab)
-        plt.ylabel(ylab)
+
+        label_size = utils.return_key(kwargs,"label_size",15)
+        font_size = utils.return_key(kwargs,"font_size",17)
+
+        plt.xlabel(xlab,fontsize=font_size)
+        plt.ylabel(ylab,fontsize=font_size)
 
         im = TomographyPlot.add_elements(map_slice,extentmap,x_index,y_index,pixel_in=pixel_in,pixel_bis_in=pixel_bis_in,qso_in=qso_in,qso_bis_in=qso_bis_in,void_in=void_in,void_bis_in=void_bis_in,galaxy_in=galaxy_in,**kwargs)
 
@@ -310,7 +314,8 @@ class TomographyPlot(object):
                             orientation=orientation_color_bar,
                             fraction=utils.return_key(kwargs,"color_bar_fraction",0.1))
         cbar.set_label(utils.return_key(kwargs,"color_bar_label",
-                                        "Reconstructed Ly" + r"$\alpha$" +" contrast " + r"$\delta_{Fmap}$"))
+                                        "Reconstructed Ly" + r"$\alpha$" +" contrast " + r"$\delta_{Fmap}$"),
+                                        fontsize=font_size)
 
         xlim_min = utils.return_key(kwargs,"map_xlim_min",extentmap[0])
         xlim_max = utils.return_key(kwargs,"map_xlim_max",extentmap[1])
@@ -318,8 +323,9 @@ class TomographyPlot(object):
         ylim_max = utils.return_key(kwargs,"map_ylim_max",extentmap[3])
         plt.xlim([xlim_min,xlim_max])
         plt.ylim([ylim_min,ylim_max])
-
-
+        plt.gca().tick_params(axis='x', labelsize=label_size)
+        plt.gca().tick_params(axis='y', labelsize=label_size)
+        cbar.ax.tick_params(labelsize=label_size)
         if(redshift_axis):
             TomographyPlot.add_reshift_axe(tomographic_map,rotate=rotate,**kwargs)
 
