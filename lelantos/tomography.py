@@ -301,7 +301,7 @@ class TomographyPlot(object):
         fig.set_size_inches(1.75*size)
 
         label_size = utils.return_key(kwargs,"label_size",15)
-        font_size = utils.return_key(kwargs,"font_size",17)
+        font_size = utils.return_key(kwargs,"font_size",15)
 
         plt.xlabel(xlab,fontsize=font_size)
         plt.ylabel(ylab,fontsize=font_size)
@@ -420,6 +420,9 @@ class TomographyPlot(object):
         if(tomographic_map.coordinate_transform != "middle"):
             return()
 
+        label_size = utils.return_key(kwargs,"label_size",15)
+        font_size = utils.return_key(kwargs,"font_size",15)
+
         fig = plt.gcf()
         ax1 = fig.axes[0]
         ax2 = fig.add_axes(ax1.get_position(), frameon=False)
@@ -442,12 +445,12 @@ class TomographyPlot(object):
             ax2.set_yticks(tick_position)
             ax2.set_yticklabels(redshift_to_plot)
             ax2.tick_params(labelright='on', right='on',labelbottom=None,labelleft=None, bottom=None, left=None)
-            ax2.set_ylabel('Redshift $z$')
+            ax2.set_ylabel('Redshift $z$',fontsize=font_size)
         else:
             ax2.set_xticks(tick_position)
             ax2.set_xticklabels(redshift_to_plot)
             ax2.tick_params(labeltop='on', top='on',labelbottom=None,labelleft=None, bottom=None, left=None)
-            ax2.set_xlabel('Redshift $z$')
+            ax2.set_xlabel('Redshift $z$',fontsize=font_size)
 
 
         position_redshift_axe = utils.return_key(kwargs, "position_redshift_axe", "other")
@@ -468,7 +471,8 @@ class TomographyPlot(object):
                 ax2.xaxis.set_label_position('bottom')
                 ax2.xaxis.set_ticks_position('bottom')
                 ax2.spines['bottom'].set_position(('outward', outward_redshift_axe))
-
+        ax2.tick_params(axis='x', labelsize=label_size)
+        ax2.tick_params(axis='y', labelsize=label_size)
 
 
 
