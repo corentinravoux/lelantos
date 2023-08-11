@@ -2150,7 +2150,7 @@ class VoidCatalog(Catalog):
             mask_select &= self.cut_border()
             string_to_add = string_to_add + "_cutborder"
         if("DIST" in method_cut):
-            if ((distance_map_name is None)|(distance_map_prop is None)|(distance_map_param is None)|(distance_map_percent is None)) is False : raise KeyError("Give a dist map parameter, map and property file please")
+            if ((distance_map_name is None)|(distance_map_prop is None)|(distance_map_param is None)|(distance_map_percent is None)) : raise KeyError("Give a dist map parameter, map and property file please")
             mask_select &= self.cut_distance_map(distance_map_name,distance_map_prop,distance_map_param,distance_map_percent)
             string_to_add = string_to_add + f"_cutdistance_{distance_map_param}Mpc_{distance_map_percent}percent"
         self.apply_mask(mask_select)
