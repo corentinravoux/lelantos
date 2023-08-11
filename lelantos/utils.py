@@ -55,7 +55,6 @@ def get_map_size(shape, mpc_per_pixel):
 
 
 def get_cosmo_function(Omega_m, Omega_k=0.0):
-
     Cosmo = constants.Cosmo(Omega_m, Ok=Omega_k)
     rcomov = Cosmo.get_r_comov
     distang = Cosmo.get_dist_m
@@ -414,7 +413,6 @@ def gaussian_smoothing(mapdata, sigma):
 
 class gaussian_fitter_2d(object):
     def __init__(self, inpdata=None):
-
         self.inpdata = inpdata
 
     def moments2D(self):
@@ -474,6 +472,7 @@ class gaussian_fitter_2d(object):
             rot
         )  # Centers in rotated coordinates
         Yc = xcenter * np.sin(rot) + ycenter * np.cos(rot)
+
         # Now lets define the 2D gaussian function
         def Gauss2D(x, y):
             """Returns the values of the defined 2d gaussian at x,y"""
@@ -1020,7 +1019,6 @@ def save_redshift_dependence(
 
 
 def plot_ra_dec(ra, dec, name, **kwargs):
-
     nb_cut = return_key(kwargs, "nb_cut", None)
     figsize = return_key(kwargs, "ra_dec_figsize", (7, 3.5))
     plt.figure(figsize=figsize)
@@ -1075,7 +1073,6 @@ def save_ra_dec(
     comparison_legend=None,
     **kwargs,
 ):
-
     grid = return_key(kwargs, "ra_dec_grid", True)
     fontsize = return_key(kwargs, "ra_dec_fontsize", 13)
     fontsize_scale = return_key(kwargs, "ra_dec_fontscalesize", 13)
