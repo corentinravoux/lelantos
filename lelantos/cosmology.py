@@ -275,6 +275,8 @@ def delete_missing_pixels(listz, listsigmas, listdelta):
             lenlists.append(len(listz[j]))
         return (listz, listsigmas, listdelta, lenlists)
 
+def get_full_shape_one_axis(overlap,shape_sub_map,number_sub_map):
+    return number_sub_map*shape_sub_map - 2*(number_sub_map-1)*0.5*overlap
 
 #############################################################################
 #############################################################################
