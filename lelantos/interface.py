@@ -17,7 +17,7 @@ treated via picca software.
 import os
 import configparser
 import ast
-from lelantos import cosmology, task_manager, tomography, voidfinder
+from lelantos import cosmology, task_manager, tomography, voidfinder, utils
 
 
 #############################################################################
@@ -694,3 +694,55 @@ def plot_stack_void(
         ),
         **stack_void_plot_config.getdict("plot_args"),
     )
+
+
+def print_approximate_shape_size_from_interface_file(input_file):
+    config = configparser.ConfigParser(
+        allow_no_value=True,
+        converters={
+            "str": parse_string,
+            "int": parse_int,
+            "float": parse_float,
+            "tupleint": parse_int_tuple,
+            "tuplefloat": parse_float_tuple,
+            "tuplestr": parse_str_tuple,
+            "dict": parse_dict,
+        },
+    )
+    config.optionxform = lambda option: option
+    config.read(input_file)
+    delta_config = config["delta convert"]
+
+    ramin = delta_config.getfloat("ra_cut_min")
+    ramax = delta_config.getfloat("ra_cut_max")
+    decmin = delta_config.getfloat("dec_cut_min")
+    decmax = delta_config.getfloat("dec_cut_max")
+    zmin = delta_config.getfloat("z_cut_min")
+    zmax = delta_config.getfloat("z_cut_max")
+    coordinate_transform = delta_config.getstr("coordinate_transform")
+    number_chunks = delta_config.gettupleint("number_chunks")
+    overlaping = delta_config.getfloat("overlaping")
+    shape_sub_map = delta_config.gettupleint("shape_sub_map")
+    Omega_m = delta_config.getfloat("Omega_m")
+
+    shape, size = cosmology.compute_shape_size_parallel_from_interface(
+        ramin,
+        ramax,
+        decmin,
+        decmax,
+        zmin,
+        zmax,
+        Omega_m,
+        coordinate_transform,
+        number_chunks,
+        overlaping,
+        shape_sub_map,
+        N_coord_edge=100,
+    )
+
+    log = utils.create_log()
+    log.add(f"Approximate shape of the associated map: {shape}")
+    log.add(f"Approximate size of the associated map: {size}")
+    log.add(f"Mpc per pixels: {utils.mpc_per_pixel(size, shape)}")
+    log.add(f"Pixels per mpc: {utils.pixel_per_mpc(size, shape)}")
+    log.close()

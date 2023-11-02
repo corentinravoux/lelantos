@@ -275,8 +275,151 @@ def delete_missing_pixels(listz, listsigmas, listdelta):
             lenlists.append(len(listz[j]))
         return (listz, listsigmas, listdelta, lenlists)
 
-def get_full_shape_one_axis(overlap,shape_sub_map,number_sub_map):
-    return number_sub_map*shape_sub_map - 2*(number_sub_map-1)*0.5*overlap
+
+def compute_shape_size_parallel(
+    extremum_coord, number_chunks, overlaping, shape_sub_map
+):
+    if overlaping is None:
+        overlaping = 0.0
+    minx, maxx = extremum_coord[0], extremum_coord[1]
+    miny, maxy = extremum_coord[2], extremum_coord[3]
+    minz, maxz = extremum_coord[4], extremum_coord[5]
+    intervalx = maxx - minx
+    intervaly = maxy - miny
+    intervalz = maxz - minz
+    subIntervalx = intervalx / number_chunks[0]
+    subIntervaly = intervaly / number_chunks[1]
+    shape_x = number_chunks[0] * shape_sub_map[0]
+    shape_y = number_chunks[1] * shape_sub_map[1]
+    remove_shape_x, remove_shape_y = 0, 0
+    for i in range(number_chunks[0]):
+        for j in range(number_chunks[1]):
+            if (i == number_chunks[0] - 1) & (i == 0):
+                intervalxChunk = [i * subIntervalx, (i + 1) * subIntervalx]
+            elif i == 0:
+                intervalxChunk = [
+                    i * subIntervalx,
+                    (i + 1) * subIntervalx + overlaping,
+                ]
+            elif i == number_chunks[0] - 1:
+                intervalxChunk = [i * subIntervalx - overlaping, intervalx]
+            else:
+                intervalxChunk = [
+                    i * subIntervalx - overlaping,
+                    (i + 1) * subIntervalx + overlaping,
+                ]
+            if (j == number_chunks[1] - 1) & (j == 0):
+                intervalyChunk = [j * subIntervaly, (j + 1) * subIntervaly]
+            elif j == 0:
+                intervalyChunk = [
+                    j * subIntervaly,
+                    (j + 1) * subIntervaly + overlaping,
+                ]
+            elif j == number_chunks[1] - 1:
+                intervalyChunk = [j * subIntervaly - overlaping, intervaly]
+            else:
+                intervalyChunk = [
+                    j * subIntervaly - overlaping,
+                    (j + 1) * subIntervaly + overlaping,
+                ]
+            size = (
+                intervalxChunk[1] - intervalxChunk[0],
+                intervalyChunk[1] - intervalyChunk[0],
+                intervalz,
+            )
+            pixel_to_remove = np.around(
+                utils.pixel_per_mpc(size, shape_sub_map) * overlaping, 0
+            ).astype(int)
+            if number_chunks[0] != 1:
+                if (i == 0) | (i == number_chunks[0] - 1):
+                    remove_shape_x = remove_shape_x + pixel_to_remove[0]
+                else:
+                    remove_shape_x = remove_shape_x + 2 * pixel_to_remove[0]
+            if number_chunks[1] != 1:
+                if (j == 0) | (j == number_chunks[1] - 1):
+                    remove_shape_y = remove_shape_y + pixel_to_remove[1]
+                else:
+                    remove_shape_y = remove_shape_y + 2 * pixel_to_remove[1]
+    shape_x = shape_x - remove_shape_x // number_chunks[1]
+    shape_y = shape_y - remove_shape_y // number_chunks[0]
+
+    size = (maxx - minx, maxy - miny, maxz - minz)
+    shape = (shape_x, shape_y, shape_sub_map[2])
+    return (shape, size)
+
+
+def compute_shape_size_parallel_from_interface(
+    ramin,
+    ramax,
+    decmin,
+    decmax,
+    zmin,
+    zmax,
+    Omega_m,
+    coordinate_transform,
+    number_chunks,
+    overlaping,
+    shape_sub_map,
+    N_coord_edge=100,
+):
+    ra = np.linspace(ramin, ramax, N_coord_edge)
+    dec = np.linspace(decmin, decmax, N_coord_edge)
+    z = np.linspace(zmin, zmax, N_coord_edge)
+
+    cube_edge_coord = np.concatenate(
+        [
+            np.array([[ra[i], decmin, zmin] for i in range(N_coord_edge)]),
+            np.array([[ramin, dec[i], zmin] for i in range(N_coord_edge)]),
+            np.array([[ramin, decmin, z[i]] for i in range(N_coord_edge)]),
+            np.array([[ramax, dec[i], zmin] for i in range(N_coord_edge)]),
+            np.array([[ramax, decmin, z[i]] for i in range(N_coord_edge)]),
+            np.array([[ra[i], decmax, zmin] for i in range(N_coord_edge)]),
+            np.array([[ramin, decmax, z[i]] for i in range(N_coord_edge)]),
+            np.array([[ra[i], decmin, zmax] for i in range(N_coord_edge)]),
+            np.array([[ramin, dec[i], zmax] for i in range(N_coord_edge)]),
+            np.array([[ra[i], decmax, zmax] for i in range(N_coord_edge)]),
+            np.array([[ramax, dec[i], zmax] for i in range(N_coord_edge)]),
+            np.array([[ramax, decmax, z[i]] for i in range(N_coord_edge)]),
+        ]
+    )
+
+    (rcomov, distang, _, _) = utils.get_cosmo_function(Omega_m)
+    suplementary_parameters = utils.return_suplementary_parameters(
+        coordinate_transform, zmin=zmin, zmax=zmax
+    )
+
+    cartesian_cube_edge_coord = np.zeros_like(cube_edge_coord)
+
+    (
+        cartesian_cube_edge_coord[:, 0],
+        cartesian_cube_edge_coord[:, 1],
+        cartesian_cube_edge_coord[:, 2],
+    ) = utils.convert_sky_to_cartesian(
+        np.radians(cube_edge_coord[:, 0]),
+        np.radians(cube_edge_coord[:, 1]),
+        cube_edge_coord[:, 2],
+        coordinate_transform,
+        rcomov=rcomov,
+        distang=distang,
+        suplementary_parameters=suplementary_parameters,
+    )
+
+    Xmin = np.min(cartesian_cube_edge_coord[:, 0])
+    Xmax = np.max(cartesian_cube_edge_coord[:, 0])
+    Ymin = np.min(cartesian_cube_edge_coord[:, 1])
+    Ymax = np.max(cartesian_cube_edge_coord[:, 1])
+    Zmin = np.min(cartesian_cube_edge_coord[:, 2])
+    Zmax = np.max(cartesian_cube_edge_coord[:, 2])
+    extremum_coord = [Xmin, Xmax, Ymin, Ymax, Zmin, Zmax]
+
+    shape, size = compute_shape_size_parallel(
+        extremum_coord,
+        number_chunks,
+        overlaping,
+        shape_sub_map,
+    )
+    return shape, size
+
 
 #############################################################################
 #############################################################################
