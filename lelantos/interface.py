@@ -584,6 +584,12 @@ def plot_tomography(
             center_mpc = tomography_plot_config.getfloat("center_mpc")
         except:
             center_mpc = tomography_plot_config.getstr("center_mpc")
+        if tomography_process_config.getstr("name_dist_map") is not None:
+            name_dist_map = os.path.join(
+                tomo_abs_path, tomography_process_config.getstr("name_dist_map")
+            )
+        else:
+            name_dist_map = None
         Treat.plot(
             main_config.getstr("name"),
             tomography_plot_config.getstr("direction"),
@@ -592,9 +598,7 @@ def plot_tomography(
             qso=os.path.join(pixel_path, delta_config.getstr("return_qso_catalog")),
             void=void_catalog_name_plot_tomo,
             galaxy=tomography_plot_config.getstr("galaxy"),
-            distance_mask=os.path.join(
-                tomo_abs_path, tomography_process_config.getstr("name_dist_map")
-            ),
+            distance_mask=name_dist_map,
             criteria_distance_mask=tomography_plot_config.getfloat(
                 "criteria_distance_mask"
             ),
