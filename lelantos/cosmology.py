@@ -46,7 +46,7 @@ def get_delta_list(delta_path):
     return delta_list
 
 
-# CR - need to rethink delta class 
+# CR - need to rethink delta class  
 def preselect_deltas(
     namefile,
     ramin=None,
