@@ -17,11 +17,12 @@ analysis.
 #############################################################################
 
 import os
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy.optimize import curve_fit
-from lelantos import tomographic_objects
-from lelantos import utils
+
+from lelantos import tomographic_objects, utils
 
 
 def create_merged_map(submap_directory, launching_file_name, map_name, property_file):
@@ -944,6 +945,118 @@ class TomographyPlot(object):
             rotate=rotate,
             **self.kwargs,
         )
+
+    def plot_2d_shell(
+        self,
+        ra_array,
+        dec_array,
+        redshift,
+        interpolation_method,
+        void=None,
+        rebin_shell=None,
+        **kwargs,
+    ):
+        (
+            tomographic_map,
+            _,
+            _,
+            void_catalog,
+            _,
+            _,
+        ) = self.load_tomographic_objects(
+            void=void,
+        )
+        tomographic_map = self.load_tomographic_objects()[0]
+        coords_ra_dec = np.moveaxis(
+            np.array(np.meshgrid(ra_array, dec_array, redshift, indexing="ij")), 0, -1
+        )
+        coords_cartesian = np.zeros(coords_ra_dec.shape)
+        suplementary_parameters = utils.return_suplementary_parameters(
+            tomographic_map.coordinate_transform, property=tomographic_map
+        )
+        (rcomov, distang, _, _) = utils.get_cosmo_function(tomographic_map.Omega_m)
+
+        (
+            coords_cartesian[:, :, :, 0],
+            coords_cartesian[:, :, :, 1],
+            coords_cartesian[:, :, :, 2],
+        ) = utils.convert_sky_to_cartesian(
+            np.radians(coords_ra_dec[:, :, :, 0]),
+            np.radians(coords_ra_dec[:, :, :, 1]),
+            coords_ra_dec[:, :, :, 2],
+            tomographic_map.coordinate_transform,
+            rcomov=rcomov,
+            distang=distang,
+            suplementary_parameters=suplementary_parameters,
+        )
+
+        (
+            coords_cartesian[:, :, :, 0],
+            coords_cartesian[:, :, :, 1],
+            coords_cartesian[:, :, :, 2],
+        ) = (
+            coords_cartesian[:, :, :, 0]
+            - tomographic_map.boundary_cartesian_coord[0][0],
+            coords_cartesian[:, :, :, 1]
+            - tomographic_map.boundary_cartesian_coord[0][1],
+            coords_cartesian[:, :, :, 2]
+            - tomographic_map.boundary_cartesian_coord[0][2],
+        )
+
+        coords_pixel = np.zeros(coords_cartesian.shape)
+
+        (
+            coords_pixel[:, :, :, 0],
+            coords_pixel[:, :, :, 1],
+            coords_pixel[:, :, :, 2],
+        ) = (
+            coords_cartesian[:, :, :, 0] / tomographic_map.mpc_per_pixel[0],
+            coords_cartesian[:, :, :, 1] / tomographic_map.mpc_per_pixel[1],
+            coords_cartesian[:, :, :, 2] / tomographic_map.mpc_per_pixel[2],
+        )
+
+        shell = utils.interpolate_map(
+            interpolation_method, tomographic_map.map_array, coords_pixel
+        )
+        shell_mean = np.mean(shell, axis=2)
+
+        extent = [
+            np.min(ra_array),
+            np.max(ra_array),
+            np.min(dec_array),
+            np.max(dec_array),
+        ]
+        plt.figure(figsize=(20, 7))
+
+        if rebin_shell:
+            shell_mean = utils.bin_ndarray(shell_mean, rebin_shell, operation="mean")
+
+        im = plt.imshow(
+            np.flip(np.transpose(shell_mean), axis=0),
+            extent=extent,
+            cmap=utils.return_key(kwargs, "map_color", "jet_r"),
+            vmin=utils.return_key(kwargs, "map_delta_min", -0.2),
+            vmax=utils.return_key(kwargs, "map_delta_max", 0.2),
+        )
+        plt.colorbar(im, fraction=0.01, pad=0.04)
+        plt.xlabel("RA")
+        plt.ylabel("DEC")
+
+        if void is not None:
+            void_catalog.cut_catalog_void(
+                [],
+                coord_min=(np.min(ra_array), np.min(dec_array), np.min(redshift)),
+                coord_max=(np.max(ra_array), np.max(dec_array), np.max(redshift)),
+            )
+            for i in range(len(void_catalog.coord)):
+                plt.scatter(
+                    void_catalog.coord[i, 0],
+                    void_catalog.coord[i, 1],
+                    color="r",
+                    marker="x",
+                )
+
+        return shell_mean, coords_ra_dec[:, :, 0, :2]
 
     def plot_catalog_centered_maps(
         self,
