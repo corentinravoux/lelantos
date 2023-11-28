@@ -14,16 +14,17 @@ Description :
 #############################################################################
 
 
-import numpy as np
-import fitsio
-import pickle
-import os
-from lelantos import utils
-from scipy.ndimage.filters import gaussian_filter
 import multiprocessing as mp
-from scipy.interpolate import interp1d
-from picca import data
+import os
+import pickle
 
+import fitsio
+import numpy as np
+from picca import data
+from scipy.interpolate import interp1d
+from scipy.ndimage.filters import gaussian_filter
+
+from lelantos import utils
 
 ### Copy to utils ####
 
@@ -42,7 +43,7 @@ def verify_file(file):
 
 #############################################################################
 #############################################################################
-############################### MAP OBJECTS #####################################
+############################### MAP OBJECTS #################################
 #############################################################################
 #############################################################################
 
