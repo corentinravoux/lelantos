@@ -14,11 +14,11 @@ treated via picca software.
 #############################################################################
 
 
-import os
-import configparser
 import ast
-from lelantos import cosmology, task_manager, tomography, voidfinder, utils
+import configparser
+import os
 
+from lelantos import cosmology, task_manager, tomography, utils, voidfinder
 
 #############################################################################
 #############################################################################
@@ -573,13 +573,15 @@ def plot_tomography(
         ),
         **tomography_plot_config.getdict("plot_args"),
     )
+
+    if tomography_plot_config.getstr("void_catalog") is not None:
+        void_catalog_name_plot_tomo = os.path.join(
+            void_path, tomography_plot_config.getstr("void_catalog")
+        )
+    else:
+        void_catalog_name_plot_tomo = void_catalog_name_default
+
     if tomography_plot_config.getboolean("plot_map"):
-        if tomography_plot_config.getstr("void_catalog") is not None:
-            void_catalog_name_plot_tomo = os.path.join(
-                void_path, tomography_plot_config.getstr("void_catalog")
-            )
-        else:
-            void_catalog_name_plot_tomo = void_catalog_name_default
         try:
             center_mpc = tomography_plot_config.getfloat("center_mpc")
         except:
@@ -648,7 +650,8 @@ def plot_tomography(
             tomography_plot_config.getfloat("zmin_integrated_map"),
             tomography_plot_config.getfloat("zmax_integrated_map"),
             f"{main_config.getstr('name')}_integrated_map",
-            rotate=tomography_plot_config.getboolean("rotate"),
+            cut_plot=tomography_plot_config.gettuplefloat("cut_plot"),
+            void=void_catalog_name_plot_tomo,
         )
 
     if tomography_plot_config.getboolean("plot_centered_maps"):

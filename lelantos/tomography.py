@@ -563,15 +563,18 @@ class TomographyPlot(object):
             extent=extentmap,
         )
         if pixel_in is not None:
-            plt.plot(
-                pixel_in[:, x_index],
-                pixel_in[:, y_index],
-                markersize=utils.return_key(kwargs, "pixel_marker_size", 2),
-                marker=utils.return_key(kwargs, "pixel_marker", "."),
-                markeredgewidth=utils.return_key(kwargs, "pixel_marker_edge_size", 1),
-                color=utils.return_key(kwargs, "pixel_marker_color", "k"),
-                linestyle="None",
-            )
+            if utils.return_key(kwargs, "pixel_on", True):
+                plt.plot(
+                    pixel_in[:, x_index],
+                    pixel_in[:, y_index],
+                    markersize=utils.return_key(kwargs, "pixel_marker_size", 2),
+                    marker=utils.return_key(kwargs, "pixel_marker", "."),
+                    markeredgewidth=utils.return_key(
+                        kwargs, "pixel_marker_edge_size", 1
+                    ),
+                    color=utils.return_key(kwargs, "pixel_marker_color", "k"),
+                    linestyle="None",
+                )
         if pixel_bis_in is not None:
             if utils.return_key(kwargs, "pixel_bis_on", True):
                 plt.plot(
@@ -597,15 +600,16 @@ class TomographyPlot(object):
                     linestyle="None",
                 )
         if qso_in is not None:
-            plt.plot(
-                qso_in[:, x_index],
-                qso_in[:, y_index],
-                marker=utils.return_key(kwargs, "qso_marker", "*"),
-                markersize=utils.return_key(kwargs, "qso_marker_size", 8),
-                markeredgewidth=utils.return_key(kwargs, "qso_marker_edge_size", 1),
-                color=utils.return_key(kwargs, "qso_marker_color", "k"),
-                linestyle="None",
-            )
+            if utils.return_key(kwargs, "qso_on", True):
+                plt.plot(
+                    qso_in[:, x_index],
+                    qso_in[:, y_index],
+                    marker=utils.return_key(kwargs, "qso_marker", "*"),
+                    markersize=utils.return_key(kwargs, "qso_marker_size", 8),
+                    markeredgewidth=utils.return_key(kwargs, "qso_marker_edge_size", 1),
+                    color=utils.return_key(kwargs, "qso_marker_color", "k"),
+                    linestyle="None",
+                )
         if qso_bis_in is not None:
             if utils.return_key(kwargs, "qso_bis_on", True):
                 plt.plot(
@@ -635,33 +639,36 @@ class TomographyPlot(object):
                     fillstyle="none",
                 )
         if void_in is not None:
-            for i in range(len(void_in)):
-                circle = plt.Circle(
-                    (void_in[i, x_index], void_in[i, y_index]),
-                    void_in[i, 3],
-                    fill=False,
-                    color=utils.return_key(kwargs, "void_marker_color", "r"),
-                )
-                plt.gcf().gca().add_artist(circle)
+            if utils.return_key(kwargs, "void_on", True):
+                for i in range(len(void_in)):
+                    circle = plt.Circle(
+                        (void_in[i, x_index], void_in[i, y_index]),
+                        void_in[i, 3],
+                        fill=False,
+                        color=utils.return_key(kwargs, "void_marker_color", "r"),
+                    )
+                    plt.gcf().gca().add_artist(circle)
         if void_bis_in is not None:
-            for i in range(len(void_bis_in)):
-                circle = plt.Circle(
-                    (void_bis_in[i, x_index], void_bis_in[i, y_index]),
-                    void_bis_in[i, 3],
-                    fill=False,
-                    color=utils.return_key(kwargs, "void_bis_marker_color", "k"),
-                )
-                plt.gcf().gca().add_artist(circle)
+            if utils.return_key(kwargs, "void_bis_on", True):
+                for i in range(len(void_bis_in)):
+                    circle = plt.Circle(
+                        (void_bis_in[i, x_index], void_bis_in[i, y_index]),
+                        void_bis_in[i, 3],
+                        fill=False,
+                        color=utils.return_key(kwargs, "void_bis_marker_color", "k"),
+                    )
+                    plt.gcf().gca().add_artist(circle)
         if galaxy_in is not None:
-            plt.plot(galaxy_in[:, x_index], galaxy_in[:, y_index], "rx")
-            plt.errorbar(
-                galaxy_in[:, x_index],
-                galaxy_in[:, y_index],
-                xerr=2 * galaxy_in[:, 3],
-                capsize=0.01,
-                ecolor="red",
-                fmt="none",
-            )
+            if utils.return_key(kwargs, "galaxy_on", True):
+                plt.plot(galaxy_in[:, x_index], galaxy_in[:, y_index], "rx")
+                plt.errorbar(
+                    galaxy_in[:, x_index],
+                    galaxy_in[:, y_index],
+                    xerr=2 * galaxy_in[:, 3],
+                    capsize=0.01,
+                    ecolor="red",
+                    fmt="none",
+                )
         return im
 
     @staticmethod
@@ -914,8 +921,18 @@ class TomographyPlot(object):
                 "Please give the distance of the slice you want to print or all"
             )
 
-    def plot_integrate_image(self, zmin, zmax, name, rotate=False, cut_plot=None):
-        tomographic_map = self.load_tomographic_objects(cut_plot=cut_plot)[0]
+    def plot_integrate_image(self, zmin, zmax, name, void=None, cut_plot=None):
+        (
+            tomographic_map,
+            _,
+            _,
+            void_catalog,
+            _,
+            _,
+        ) = self.load_tomographic_objects(
+            void=void,
+            cut_plot=cut_plot,
+        )
         (
             x_index,
             y_index,
@@ -923,7 +940,7 @@ class TomographyPlot(object):
             extentmap,
             xlab,
             ylab,
-        ) = TomographyPlot.get_direction_informations("z", rotate, tomographic_map.size)
+        ) = TomographyPlot.get_direction_informations("z", False, tomographic_map.size)
         map_data = tomographic_map.map_array
         i_pix_begin = int(
             round((zmin * tomographic_map.pixel_per_mpc[index_direction]), 0)
@@ -932,6 +949,24 @@ class TomographyPlot(object):
             round((zmax * tomographic_map.pixel_per_mpc[index_direction]), 0)
         )
         integrated_map = np.mean(map_data[:, :, i_pix_begin:i_pix_end], axis=2)
+
+        void_in = None
+        if void is not None:
+            mask_void_in = void_catalog.coord[:, 2] < zmax
+            mask_void_in &= void_catalog.coord[:, 2] >= zmin
+            void_coord_in = void_catalog.coord[mask_void_in]
+            void_radius_in = void_catalog.radius[mask_void_in]
+            void_in = np.transpose(
+                np.vstack(
+                    [
+                        void_coord_in[:, 0],
+                        void_coord_in[:, 1],
+                        void_coord_in[:, 2],
+                        void_radius_in,
+                    ]
+                )
+            )
+
         name = f"{name}_integrated_map"
         TomographyPlot.plot_slice(
             self.pwd,
@@ -942,7 +977,8 @@ class TomographyPlot(object):
             name,
             x_index,
             y_index,
-            rotate=rotate,
+            rotate=False,
+            void_in=void_in,
             **self.kwargs,
         )
 
