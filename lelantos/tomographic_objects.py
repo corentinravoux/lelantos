@@ -1000,7 +1000,6 @@ class StackMap(TomographicMap):
             gauss = utils.gaussian_fitter_2d(inpdata=sign * Slice)
             p, success = gauss.FitGauss2D()
             angle = p[5]
-            # CR - to check, conversion between shape and size need a -1
             p[1] = (p[1] - Slice.shape[0] // 2) * self.mpc_per_pixel[x_index]
             p[2] = -(p[2] - Slice.shape[1] // 2) * self.mpc_per_pixel[y_index]
             sigma1 = p[3] * np.sqrt(
@@ -1562,7 +1561,7 @@ class Delta(object):
             delta,
         )
 
-    # CR - writting need to be adapted to picca
+    # CR - All the class can be changed to be adapted to picca.
     def write(self):
         if (self.name is None) | (self.delta_array is None):
             raise ValueError(
@@ -1644,8 +1643,6 @@ class Delta(object):
 #############################################################################
 #############################################################################
 
-
-# CR - for the cutting routines, add a routine which automaticaly cut additive arrays
 
 
 class Catalog(object):
@@ -1878,7 +1875,7 @@ class Catalog(object):
             )
         self.convert_to_normalized_coordinates(property_file=property_file)
 
-    # CR - add center and degree as a catalog parameter (always centered and in radians) + add conversion in the other way
+    # CR - Add center and degree as a catalog parameter (always centered and in radians) + add conversion in the other way
     def convert_coordinates(
         self, center=False, decenter=False, degree=False, radians=True
     ):
@@ -2547,7 +2544,7 @@ class GalaxyCatalog(Catalog):
             mask_cut[i] = mask[x_coord, y_coord, z_coord]
         return mask_cut
 
-    # CR - change all apply_mask with a list of parameters & getattr(class,str)
+    # CR - Change all apply_mask with a list of parameters & getattr(class,str)
 
     def apply_mask(
         self, mask, standard_deviation_max=None, confidence_min=None, magnitude_max=None
