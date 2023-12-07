@@ -16,14 +16,16 @@ Tested on irene and cobalt (CCRT)
 #############################################################################
 
 
-import os
-import numpy as np
-import matplotlib.pyplot as plt
 import multiprocessing as mp
-from scipy.stats import ks_2samp
+import os
 from functools import partial
-from lelantos import tomographic_objects, utils
+
+import matplotlib.pyplot as plt
+import numpy as np
 from scipy.optimize import curve_fit
+from scipy.stats import ks_2samp
+
+from lelantos import tomographic_objects, utils
 
 
 def create_merged_catalog(pwd, list_catalog_name, merged_catalog_name):
@@ -225,7 +227,7 @@ class VoidFinder(object):
             other_array_name_restart = [
                 "VALUE",
                 "MEAN",
-            ]  # CR - might change in the future the treatment of other_array_name variable
+            ]
             (map_chunks, list_index_map_chunks_restart) = self.restart_calculation(
                 map_chunks, list_index_map_chunks, other_array_name_restart
             )
@@ -724,7 +726,6 @@ class VoidFinder(object):
     def iterate_overlap_deletion(
         self, mpc_per_pixel, radius, coord, other_array=None, mpc=False
     ):
-        # CR - Weird, to optimize
         if other_array is not None:
             others_arrays_copies = []
             for i in range(len(other_array)):

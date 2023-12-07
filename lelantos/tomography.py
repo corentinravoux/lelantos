@@ -1575,7 +1575,6 @@ class TomographyStack(object):
     def plot_ellipticity(
         stack_slice, ellipticity, mpx, mpy, direction, rotate, **kwargs
     ):
-        # CR - might need further tests
         if rotate:
             raise NotImplementedError(
                 "showing ellipticity with a rotate figure is not implemented, please put rotate to False"
