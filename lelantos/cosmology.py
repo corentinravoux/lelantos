@@ -33,6 +33,18 @@ from lelantos import tomographic_objects
 
 
 def get_delta_list(delta_path):
+    """List all ``delta-*.fits*`` files under one or several directories.
+
+    Args:
+        delta_path (str | list[str]): Directory, or list of directories, holding
+            picca delta files.
+
+    Returns:
+        numpy.ndarray | list: Sorted list of delta file paths.
+
+    Raises:
+        KeyError: If no delta file is found.
+    """
     if type(delta_path) == str:
         delta_list = np.sort(glob.glob(os.path.join(delta_path, "delta-*.fits*")))
     elif type(delta_path) == list:
@@ -56,6 +68,20 @@ def preselect_deltas(
     center_ra=True,
     pk1d_type=True,
 ):
+    """Keep only the delta files overlapping a sky window.
+
+    Args:
+        namefile (list[str]): Delta file paths.
+        ramin, ramax, decmin, decmax (float, optional): Sky window bounds.
+        center_ra (bool, optional): Recenter RA around 0 before comparing.
+        pk1d_type (bool, optional): Whether the deltas are in pk1d format.
+
+    Returns:
+        list[str]: The subset of files with at least one pixel in the window.
+
+    Raises:
+        KeyError: If no file falls inside the window.
+    """
     subset_namefile = []
     if (ramin is None) & (ramax is None) & (decmin is None) & (decmax is None):
         return namefile
@@ -175,6 +201,15 @@ def get_merged_multiple_exposure_deltas(namefile):
 
 
 def get_id_list(namefile):
+    """Group delta objects by their primary key (line-of-sight id).
+
+    Args:
+        namefile (list[str]): Delta file paths.
+
+    Returns:
+        tuple: ``(Deltas, ids)`` — a dict mapping each id to its list of delta
+        objects, and the list of unique ids.
+    """
     ids = []
     for i in range(len(namefile)):
         delta_tomo = tomographic_objects.Delta(name=namefile[i], pk1d_type=True)
@@ -201,6 +236,16 @@ def get_id_list(namefile):
 
 
 def delete_los_extrema(listz, listsigmas, listdelta):
+    """Trim repeated lines of sight to their common redshift range.
+
+    Args:
+        listz (list[array]): Per-exposure redshift arrays of one LOS.
+        listsigmas (list[array]): Matching sigma arrays.
+        listdelta (list[array]): Matching delta arrays.
+
+    Returns:
+        tuple: ``(listz, listsigmas, listdelta)`` trimmed to the shared z range.
+    """
     # Get the list of common elements in the pack to have minimum and maximum redshifts
     zmin, zmax = 0, 10**10
     zcommon = listz[0]
@@ -232,6 +277,17 @@ def delete_los_extrema(listz, listsigmas, listdelta):
 
 
 def delete_missing_pixels(listz, listsigmas, listdelta):
+    """Align repeated lines of sight by dropping non-shared pixels.
+
+    Args:
+        listz (list[array]): Per-exposure redshift arrays of one LOS.
+        listsigmas (list[array]): Matching sigma arrays.
+        listdelta (list[array]): Matching delta arrays.
+
+    Returns:
+        tuple: ``(listz, listsigmas, listdelta, lenlists)`` with all exposures
+        sharing the same pixels, plus their common lengths.
+    """
     # Ensuring that all LOS have the same lenght
     lenlists = []
     for j in range(len(listz)):
@@ -279,6 +335,20 @@ def delete_missing_pixels(listz, listsigmas, listdelta):
 def compute_shape_size_parallel(
     extremum_coord, number_chunks, overlaping, shape_sub_map
 ):
+    """Compute the full-map pixel shape and physical size for a tiled run.
+
+    Accounts for the pixels shared between overlapping chunks so the merged map
+    has a consistent resolution.
+
+    Args:
+        extremum_coord (sequence): ``(Xmin, Xmax, Ymin, Ymax, Zmin, Zmax)``.
+        number_chunks (tuple[int]): Chunk grid ``(nx, ny)``.
+        overlaping (float): Chunk overlap (Mpc.h^-1).
+        shape_sub_map (tuple[int]): Pixel shape of one sub-map.
+
+    Returns:
+        tuple: ``(shape, size)`` of the full merged map.
+    """
     if overlaping is None:
         overlaping = 0.0
     minx, maxx = extremum_coord[0], extremum_coord[1]
@@ -362,6 +432,25 @@ def compute_shape_size_parallel_from_interface(
     shape_sub_map,
     N_coord_edge=100,
 ):
+    """Estimate the map shape/size from a footprint and chunking config.
+
+    Samples the edges of the (RA, Dec, z) footprint, converts them to cartesian
+    coordinates, and feeds the bounding box to
+    :func:`compute_shape_size_parallel`.
+
+    Args:
+        ramin, ramax, decmin, decmax (float): Angular footprint (degrees).
+        zmin, zmax (float): Redshift window.
+        Omega_m (float): Fiducial matter density.
+        coordinate_transform (str): Sky<->cartesian transform mode.
+        number_chunks (tuple[int]): Chunk grid.
+        overlaping (float): Chunk overlap (Mpc.h^-1).
+        shape_sub_map (tuple[int]): Pixel shape of one sub-map.
+        N_coord_edge (int, optional): Number of samples per footprint edge.
+
+    Returns:
+        tuple: ``(shape, size)`` of the full merged map.
+    """
     ra = np.linspace(ramin, ramax, N_coord_edge)
     dec = np.linspace(decmin, decmax, N_coord_edge)
     z = np.linspace(zmin, zmax, N_coord_edge)
@@ -429,13 +518,33 @@ def compute_shape_size_parallel_from_interface(
 
 
 class DeltaModifier(object):
+    """Transform delta files: shuffle, redshift-cut and subsample lines of sight.
+
+    Used both to build null (shuffled) mocks and to thin the line-of-sight
+    density, optionally matching a reference density/separation profile.
+    """
+
     def __init__(self, pwd, delta_path):
+        """Store the output and input delta directories.
+
+        Args:
+            pwd (str): Output directory for the modified deltas.
+            delta_path (str): Input delta directory.
+        """
         self.pwd = pwd
         self.delta_path = delta_path
 
     # CR - need to rethink the way Delta class is done (+ add shuffle inside)
 
     def shuffle_deltas(self, other_delta_path=None, other_path_out=None, seed=None):
+        """Randomly permute all delta/ivar pixels to build a null field.
+
+        Args:
+            other_delta_path (str, optional): Second delta set shuffled in
+                lock-step (same permutation).
+            other_path_out (str, optional): Output directory for the second set.
+            seed (int, optional): RNG seed (random if None).
+        """
         namefile = get_delta_list(self.delta_path)
         namefile_other = None
         if other_delta_path is not None:
@@ -468,6 +577,16 @@ class DeltaModifier(object):
     def shuffle_deltas_cut_z(
         self, n_cut, zmin, zmax, other_delta_path=None, other_path_out=None, seed=None
     ):
+        """Shuffle delta/ivar pixels independently within redshift bins.
+
+        Args:
+            n_cut (int): Number of redshift bins the shuffling is confined to.
+            zmin (float): Minimum redshift of the binning.
+            zmax (float): Maximum redshift of the binning.
+            other_delta_path (str, optional): Second delta set (lock-step).
+            other_path_out (str, optional): Output directory for the second set.
+            seed (int, optional): RNG seed (random if None).
+        """
         namefile = get_delta_list(self.delta_path)
         namefile_other = None
         if other_delta_path is not None:
@@ -509,6 +628,16 @@ class DeltaModifier(object):
         )
 
     def get_delta_sigma_array(self, namefile, namefile_other=None):
+        """Concatenate the delta and ivar pixels of all delta files.
+
+        Args:
+            namefile (list[str]): Delta file paths.
+            namefile_other (list[str], optional): Second delta set.
+
+        Returns:
+            tuple: ``(delta, ivar, delta_other, weight_other)`` flat arrays
+            (the ``*_other`` entries are None if no second set is given).
+        """
         weight_other, delta_other = None, None
         if namefile_other is not None:
             weight_other, delta_other = [], []
@@ -545,6 +674,18 @@ class DeltaModifier(object):
         weight_other_rand=None,
         other_path_out=None,
     ):
+        """Write shuffled delta/ivar pixels back into per-file delta objects.
+
+        Args:
+            delta_rand (numpy.ndarray): Shuffled delta pixels.
+            ivar_rand (numpy.ndarray): Shuffled ivar pixels.
+            namefile (list[str]): Input delta file paths (define the LOS lengths).
+            other_delta_path (str, optional): Second delta set input directory.
+            namefile_other (list[str], optional): Second delta file paths.
+            delta_other_rand (numpy.ndarray, optional): Shuffled second deltas.
+            weight_other_rand (numpy.ndarray, optional): Shuffled second weights.
+            other_path_out (str, optional): Second delta set output directory.
+        """
         ibegin = 0
         for i in range(len(namefile)):
             delta_tomo = tomographic_objects.Delta(name=namefile[i], pk1d_type=True)
@@ -594,6 +735,17 @@ class DeltaModifier(object):
                 new_delta_tomo.write()
 
     def get_delta_sigma_array_cut_z(self, namefile, redshift_cut, namefile_other=None):
+        """Concatenate delta/ivar pixels grouped into redshift bins.
+
+        Args:
+            namefile (list[str]): Delta file paths.
+            redshift_cut (array-like): Bin edges (``n_cut + 1`` values).
+            namefile_other (list[str], optional): Second delta set.
+
+        Returns:
+            tuple: ``(delta, ivar, delta_other, weight_other)`` as lists of
+            per-bin flat arrays.
+        """
         n_cut = len(redshift_cut) - 1
         weight_other, delta_other = None, None
         if namefile_other is not None:
@@ -656,6 +808,20 @@ class DeltaModifier(object):
         weight_other_rand=None,
         other_path_out=None,
     ):
+        """Write per-redshift-bin shuffled pixels back into delta objects.
+
+        Args:
+            delta_rand (list[array]): Per-bin shuffled delta pixels.
+            ivar_rand (list[array]): Per-bin shuffled ivar pixels.
+            namefile (list[str]): Input delta file paths.
+            n_cut (int): Number of redshift bins.
+            redshift_cut (array-like): Bin edges.
+            other_delta_path (str, optional): Second delta set input directory.
+            namefile_other (list[str], optional): Second delta file paths.
+            delta_other_rand (list[array], optional): Second shuffled deltas.
+            weight_other_rand (list[array], optional): Second shuffled weights.
+            other_path_out (str, optional): Second delta set output directory.
+        """
         ibegin = [0 for i in range(n_cut)]
         for i in range(len(namefile)):
             delta_tomo = tomographic_objects.Delta(name=namefile[i], pk1d_type=True)
@@ -737,6 +903,26 @@ class DeltaModifier(object):
         z_cut_max=None,
         center_ra=True,
     ):
+        """Build a (optionally thinned) set of lines of sight split by RA.
+
+        Dispatches to a plain, randomly-thinned, or iteratively density-matched
+        selection depending on the arguments.
+
+        Args:
+            number_cut (int): Number of RA sub-regions.
+            random_density_parameter (float, optional): Target LOS density; None
+                keeps all lines of sight.
+            number_repeat (int, optional): Number of iterative selection trials.
+            iterative_selection_parameters (dict, optional): Reference density /
+                separation config for the iterative selection.
+            ra_cut_min, ra_cut_max, dec_cut_min, dec_cut_max (float, optional):
+                Sky window.
+            z_cut_min, z_cut_max (float, optional): Redshift window.
+            center_ra (bool, optional): Recenter RA around 0.
+
+        Returns:
+            dict: Per-RA-region lists of selected delta objects.
+        """
         if random_density_parameter is None:
             deltas = self.create_healpix(
                 number_cut,
@@ -790,6 +976,20 @@ class DeltaModifier(object):
         dec_cut_max=None,
         center_ra=True,
     ):
+        """Split the lines of sight into RA sub-regions, optionally thinned.
+
+        Args:
+            number_cut (int): Number of RA sub-regions.
+            random (float, optional): Target LOS density for random thinning.
+            return_len_ra (bool, optional): Also return the number of LOS.
+            ra_cut_min, ra_cut_max, dec_cut_min, dec_cut_max (float, optional):
+                Sky window.
+            center_ra (bool, optional): Recenter RA around 0.
+
+        Returns:
+            dict | tuple: The per-region delta dict, or ``(deltas, n_los)`` when
+            ``return_len_ra`` is True.
+        """
         namefile = get_delta_list(self.delta_path)
         deltas = {}
         ra_array = []
@@ -855,6 +1055,19 @@ class DeltaModifier(object):
         dec_cut_min=None,
         dec_cut_max=None,
     ):
+        """Randomly downsample the lines of sight to a target density.
+
+        Args:
+            deltas_dict (dict): Per-region delta lists.
+            random (float): Target LOS density (per deg^2).
+            number_cut (int): Number of RA sub-regions.
+            number_ra (int): Current total number of lines of sight.
+            ra_cut_min, ra_cut_max, dec_cut_min, dec_cut_max (float, optional):
+                Sky window (defines the area).
+
+        Returns:
+            dict: The thinned per-region delta lists.
+        """
         deltas = deltas_dict.copy()
         density = number_ra / ((ra_cut_max - ra_cut_min) * (dec_cut_max - dec_cut_min))
         utils.Logger.add("density before random choice =" + str(density))
@@ -888,6 +1101,26 @@ class DeltaModifier(object):
         z_cut_max=None,
         center_ra=True,
     ):
+        """Pick the random LOS thinning closest to a reference n(z)/separation.
+
+        Repeats the random selection ``number_repeat`` times and keeps the draw
+        that best matches the reference density and mean-separation profiles.
+
+        Args:
+            number_cut (int): Number of RA sub-regions.
+            random_density_parameter (float): Target LOS density.
+            number_repeat (int): Number of random trials.
+            iterative_selection_parameters (dict): Reference density/separation
+                file names, ``Om`` and coordinate transform.
+            property_file_name (str): Pixel-property file for the cartesian map.
+            ra_cut_min, ra_cut_max, dec_cut_min, dec_cut_max (float, optional):
+                Sky window.
+            z_cut_min, z_cut_max (float, optional): Redshift window.
+            center_ra (bool, optional): Recenter RA around 0.
+
+        Returns:
+            dict: The best-matching per-region delta selection.
+        """
         density_names = iterative_selection_parameters["density_names"]
         dperp_names = iterative_selection_parameters["separation_names"]
         Om = iterative_selection_parameters["Om"]
@@ -1001,6 +1234,13 @@ class DeltaModifier(object):
         return delta_to_keep
 
     def save_deltas(self, deltas, name_out, number_cut):
+        """Write each RA sub-region of selected deltas to its own FITS file.
+
+        Args:
+            deltas (dict): Per-region delta lists.
+            name_out (str): Output file base name.
+            number_cut (int): Number of RA sub-regions.
+        """
         for cut in range(number_cut):
             delta = tomographic_objects.Delta(
                 name=os.path.join(self.pwd, f"{name_out}_{cut}.fits"),
@@ -1023,6 +1263,19 @@ class DeltaModifier(object):
         z_cut_max=None,
         center_ra=True,
     ):
+        """Build a (thinned) LOS selection and write it to disk.
+
+        Args:
+            name_out (str): Output file base name.
+            number_cut (int): Number of RA sub-regions.
+            random_density_parameter (float, optional): Target LOS density.
+            number_repeat (int, optional): Number of iterative trials.
+            iterative_selection_parameters (dict, optional): Reference config.
+            ra_cut_min, ra_cut_max, dec_cut_min, dec_cut_max (float, optional):
+                Sky window.
+            z_cut_min, z_cut_max (float, optional): Redshift window.
+            center_ra (bool, optional): Recenter RA around 0.
+        """
         deltas = self.get_new_healpix(
             number_cut,
             random_density_parameter=random_density_parameter,
@@ -1040,6 +1293,13 @@ class DeltaModifier(object):
 
 
 class DeltaConverter:
+    """Convert picca delta files into a tomographic solver input.
+
+    Applies the footprint / redshift / sigma cuts, transforms sky coordinates
+    to cartesian (Mpc.h^-1), writes the pixel binary (serial or tiled parallel)
+    and the map property file, and emits the QSO/DLA sky and cartesian catalogs.
+    """
+
     def __init__(
         self,
         pwd,
@@ -1055,6 +1315,23 @@ class DeltaConverter:
         repeat=False,
         center_ra=True,
     ):
+        """Store the conversion configuration.
+
+        Args:
+            pwd (str): Output directory.
+            Omega_m (float): Fiducial matter density for the comoving transform.
+            delta_path (str): Input delta directory.
+            coordinate_transform (str): Sky<->cartesian transform mode.
+            plot_pixel_properties (bool): Produce LOS density/separation plots.
+            software (str): Solver backend (e.g. ``"dachshund"``).
+            return_qso_catalog (str, optional): Output QSO catalog file name.
+            return_dla_catalog (str, optional): Output DLA catalog file name.
+            dla_catalog (str, optional): Input DLA catalog file.
+            return_sky_catalogs (bool, optional): Also write sky-coordinate
+                catalogs.
+            repeat (bool, optional): Merge multiple exposures of each LOS.
+            center_ra (bool, optional): Recenter RA around 0.
+        """
         self.pwd = pwd
         self.delta_path = delta_path
         self.Omega_m = Omega_m
@@ -1080,6 +1357,24 @@ class DeltaConverter:
         ra_cut_min=None,
         ra_cut_max=None,
     ):
+        """Read the deltas and produce cartesian/sky pixel and catalog arrays.
+
+        Reads (optionally exposure-merged, rebinned) deltas, applies the sky /
+        redshift cuts, converts to cartesian coordinates shifted to the box
+        origin, clips sigma, and builds the matching QSO and DLA arrays.
+
+        Args:
+            rebin (int, optional): Rebin factor along each LOS.
+            sigma_min, sigma_max (float, optional): Clip the pixel noise.
+            z_cut_min, z_cut_max (float, optional): Redshift window.
+            dec_cut_min, dec_cut_max, ra_cut_min, ra_cut_max (float, optional):
+                Sky window.
+
+        Returns:
+            tuple: ``(cartesian_deltas, cartesian_qso_catalog,
+            cartesian_dla_catalog, sky_deltas, sky_qso_catalog,
+            sky_dla_catalog, properties_map_pixels)``.
+        """
         namefile = get_delta_list(self.delta_path)
         # namefile = preselect_deltas(namefile,
         #                             ramin=ra_cut_min,
@@ -1323,6 +1618,18 @@ class DeltaConverter:
         )
 
     def rebin_data(self, z, deltas, sigmas, bin_pixel, method="gauss"):
+        """Rebin each line of sight by grouping ``bin_pixel`` pixels together.
+
+        Args:
+            z (list[array]): Per-LOS redshift arrays.
+            deltas (list[array]): Per-LOS delta arrays.
+            sigmas (list[array]): Per-LOS sigma arrays.
+            bin_pixel (int): Number of pixels per output bin.
+            method (str, optional): Reduction (``"gauss"``, ``"mean"`` ...).
+
+        Returns:
+            tuple: ``(z, deltas, sigmas)`` rebinned in place.
+        """
         for i in range(len(z)):
             if len(z[i]) > 1:
                 if len(z[i]) <= bin_pixel:
@@ -1378,6 +1685,14 @@ class DeltaConverter:
     def create_input_files(
         self, coordinates_to_write, properties, name_pixel, create_launcher=None
     ):
+        """Write the solver pixel input, dispatching on the solver backend.
+
+        Args:
+            coordinates_to_write (numpy.ndarray): Pixel coordinates + values.
+            properties (dict): Solver/geometry parameters.
+            name_pixel (str): Output pixel file name.
+            create_launcher (str, optional): If set, also write the launcher.
+        """
         if self.software.lower() == "dachshund":
             self.create_dachshund_input_files(
                 coordinates_to_write,
@@ -1389,6 +1704,14 @@ class DeltaConverter:
     def create_dachshund_input_files(
         self, coordinates_to_write, properties, name_pixel, create_launcher=None
     ):
+        """Write the Dachshund pixel binary and optionally its ``.cfg`` launcher.
+
+        Args:
+            coordinates_to_write (numpy.ndarray): Pixel coordinates + values.
+            properties (dict): Solver/geometry parameters.
+            name_pixel (str): Output pixel file name.
+            create_launcher (str, optional): If set, launcher base name to write.
+        """
         pixel = tomographic_objects.Pixel(
             name=os.path.join(self.pwd, name_pixel), pixel_array=coordinates_to_write
         )
@@ -1426,6 +1749,19 @@ class DeltaConverter:
         namemap,
         nameinput,
     ):
+        """Write a Dachshund ``.cfg`` launcher describing one (sub-)map.
+
+        Args:
+            lx, ly, lz (float): Domain size in each direction (Mpc.h^-1).
+            npix (int): Total number of pixels.
+            nx, ny, nz (int): Map grid sizes.
+            sigmaf (float): Signal covariance amplitude sigma_f^2.
+            lperp (float): Transverse correlation length.
+            lpar (float): Radial correlation length.
+            namepixel (str): Input pixel binary path.
+            namemap (str): Output map binary path.
+            nameinput (str): Launcher base name (``.cfg`` appended).
+        """
         f = open(os.path.join(self.pwd, f"{nameinput}.cfg"), "w")
         f.write("#lx, ly, lz: the domain size in each direction.\n")
         f.write("#num_pixels: the *total* number of pixels.\n")
@@ -1474,6 +1810,18 @@ class DeltaConverter:
         shape,
         properties_map_pixels,
     ):
+        """Build the map pixel-property object from the conversion metadata.
+
+        Args:
+            name_out (str): Output property file name.
+            cartesian_coordinates (numpy.ndarray): Cartesian pixel coordinates.
+            sky_coordinates (numpy.ndarray): Sky pixel coordinates.
+            shape (tuple[int]): Map pixel shape.
+            properties_map_pixels (dict): Cartesian/sky bounds of the box.
+
+        Returns:
+            tomographic_objects.MapPixelProperty: The property object (unwritten).
+        """
         size = (
             np.max(cartesian_coordinates[:, 0]),
             np.max(cartesian_coordinates[:, 1]),
@@ -1516,6 +1864,17 @@ class DeltaConverter:
         return property_file
 
     def create_serial_input(self, nameout, properties, cartesian_deltas, sky_deltas):
+        """Write the single-box (serial) solver input and optional sky pixels.
+
+        Args:
+            nameout (str): Launcher base name.
+            properties (dict): Solver/geometry parameters.
+            cartesian_deltas (numpy.ndarray): Cartesian pixels.
+            sky_deltas (numpy.ndarray): Sky pixels (written if configured).
+
+        Returns:
+            tuple[int]: The map pixel shape.
+        """
         self.create_input_files(
             cartesian_deltas,
             properties,
@@ -1532,6 +1891,18 @@ class DeltaConverter:
         return properties["shape"]
 
     def cut_in_chunks(self, cartesian_deltas, number_chunks, overlaping, shape_sub_map):
+        """Split the cartesian pixels into overlapping transverse chunks.
+
+        Args:
+            cartesian_deltas (numpy.ndarray): Cartesian pixels + values.
+            number_chunks (tuple[int]): Chunk grid ``(nx, ny)``.
+            overlaping (float): Chunk overlap (Mpc.h^-1).
+            shape_sub_map (tuple[int]): Pixel shape of one sub-map.
+
+        Returns:
+            tuple: ``(Chunks, (shape_x, shape_y))`` — per-chunk pixel arrays and
+            limits, and the merged transverse pixel shape.
+        """
         if overlaping is None:
             overlaping = 0.0
         minx, maxx = np.min(cartesian_deltas[:, 0]), np.max(cartesian_deltas[:, 0])
@@ -1626,6 +1997,18 @@ class DeltaConverter:
     def create_parallel_input(
         self, properties, cartesian_deltas, number_chunks, overlaping, shape_sub_map
     ):
+        """Build the per-chunk launcher parameters for a tiled solver run.
+
+        Args:
+            properties (dict): Solver parameters (sigma_f, l_perp, l_par ...).
+            cartesian_deltas (numpy.ndarray): Cartesian pixels + values.
+            number_chunks (tuple[int]): Chunk grid.
+            overlaping (float): Chunk overlap (Mpc.h^-1).
+            shape_sub_map (tuple[int]): Pixel shape of one sub-map.
+
+        Returns:
+            tuple: ``(parallel_launcher_params, filename, chunks, shape)``.
+        """
         chunks, shape = self.cut_in_chunks(
             cartesian_deltas, number_chunks, overlaping, shape_sub_map
         )
@@ -1679,6 +2062,18 @@ class DeltaConverter:
         number_chunks,
         overlaping,
     ):
+        """Write the full and per-chunk pixel files and the launch pickle.
+
+        Args:
+            cartesian_deltas (numpy.ndarray): Full cartesian pixel set.
+            parallel_launcher_params (list[dict]): Per-chunk solver params.
+            filename (list[str]): Per-chunk keys.
+            chunks (dict): Per-chunk pixel arrays.
+            properties (dict): Solver parameters.
+            nameout (str): Base name for the launch pickle.
+            number_chunks (tuple[int]): Chunk grid.
+            overlaping (float): Chunk overlap (Mpc.h^-1).
+        """
         self.create_input_files(
             cartesian_deltas, properties, properties["name_pixel"], create_launcher=None
         )
@@ -1704,6 +2099,15 @@ class DeltaConverter:
         sky_dla_catalog,
         properties_map_pixels,
     ):
+        """Build and write the QSO and DLA catalogs (cartesian and sky).
+
+        Args:
+            cartesian_qso_catalog (numpy.ndarray | None): Cartesian QSO array.
+            cartesian_dla_catalog (numpy.ndarray | None): Cartesian DLA array.
+            sky_qso_catalog (numpy.ndarray | None): Sky QSO array.
+            sky_dla_catalog (numpy.ndarray | None): Sky DLA array.
+            properties_map_pixels (dict): Cartesian/sky bounds of the box.
+        """
         boundary_cartesian_coord = (
             (
                 properties_map_pixels["minx"],
@@ -1789,6 +2193,14 @@ class DeltaConverter:
         quasar_catalog_sky,
         quasar_catalog_cartesian,
     ):
+        """Write any provided QSO/DLA catalog objects to disk.
+
+        Args:
+            dla_catalog_sky: Sky DLA catalog object or None.
+            dla_catalog_cartesian: Cartesian DLA catalog object or None.
+            quasar_catalog_sky: Sky QSO catalog object or None.
+            quasar_catalog_cartesian: Cartesian QSO catalog object or None.
+        """
         if dla_catalog_sky is not None:
             dla_catalog_sky.write()
         if dla_catalog_cartesian is not None:
@@ -1819,6 +2231,29 @@ class DeltaConverter:
         overlaping=None,
         shape_sub_map=None,
     ):
+        """Full delta->solver-input conversion (main entry point).
+
+        Reads and cuts the deltas, writes the serial or parallel solver input,
+        writes the map property file and QSO/DLA catalogs, and optionally
+        produces the LOS density/separation diagnostic plots.
+
+        Args:
+            mode (str): ``"serial"`` or ``"parallel"``.
+            nameout (str): Run base name (launcher / launch pickle).
+            properties (dict): Solver parameters.
+            property_file_name (str): Output map property file name.
+            rebin (int, optional): Rebin factor along each LOS.
+            sigma_min, sigma_max (float, optional): Clip the pixel noise.
+            z_cut_min, z_cut_max (float, optional): Redshift window.
+            dec_cut_min, dec_cut_max, ra_cut_min, ra_cut_max (float, optional):
+                Sky window.
+            number_chunks (tuple[int], optional): Chunk grid (parallel mode).
+            overlaping (float, optional): Chunk overlap (parallel mode).
+            shape_sub_map (tuple[int], optional): Sub-map shape (parallel mode).
+
+        Raises:
+            KeyError: If ``mode`` is neither ``"serial"`` nor ``"parallel"``.
+        """
         (
             cartesian_deltas,
             cartesian_qso_catalog,
@@ -1892,7 +2327,19 @@ class DeltaConverter:
 
 
 class PixelAnalizer(object):
+    """Analyse a pixel file: line-of-sight density and mean separation.
+
+    Computes and plots the redshift dependence of the mean nearest-LOS
+    separation and the LOS surface density, and can compare two datasets.
+    """
+
     def __init__(self, pixel=None, property_file=None):
+        """Load the pixel object to analyse.
+
+        Args:
+            pixel (str | Pixel, optional): Pixel file path or a Pixel object.
+            property_file (str, optional): Property file (if ``pixel`` is a path).
+        """
         if type(pixel) == str:
             pixel_class = tomographic_objects.Pixel.init_from_property_files(
                 property_file, name=pixel
@@ -1904,24 +2351,62 @@ class PixelAnalizer(object):
 
     @staticmethod
     def write_density_file(z, dperp, name):
+        """Pickle a ``(z, density)`` profile to disk.
+
+        Args:
+            z (array-like): Redshift bin centres.
+            dperp (array-like): Profile values (density here).
+            name (str): Output pickle file.
+        """
         pickle.dump([z, dperp], open(name, "wb"))
 
     @staticmethod
     def write_dperp_file(z, dperp, name):
+        """Pickle a ``(z, mean-separation)`` profile to disk.
+
+        Args:
+            z (array-like): Redshift bin centres.
+            dperp (array-like): Mean nearest-LOS separation per bin.
+            name (str): Output pickle file.
+        """
         pickle.dump([z, dperp], open(name, "wb"))
 
     @staticmethod
     def read_density_file(name):
+        """Read a pickled ``(z, density)`` profile.
+
+        Args:
+            name (str): Pickle file.
+
+        Returns:
+            tuple: ``(z, density)``.
+        """
         a = pickle.load(open(name, "rb"))
         return (a[0], a[1])
 
     @staticmethod
     def read_dperp_file(name):
+        """Read a pickled ``(z, mean-separation)`` profile.
+
+        Args:
+            name (str): Pickle file.
+
+        Returns:
+            tuple: ``(z, dperp)``.
+        """
         a = pickle.load(open(name, "rb"))
         return (a[0], a[1])
 
     @staticmethod
     def plot_histogram_mean_distance(zpar, dmin, name_histo, nb_bins=50):
+        """Plot the histogram of nearest-LOS distances at a fixed redshift.
+
+        Args:
+            zpar (float): Redshift of the slab.
+            dmin (array-like): Nearest-LOS distances.
+            name_histo (str): Output figure base name.
+            nb_bins (int, optional): Number of histogram bins.
+        """
         plt.figure()
         plt.hist(dmin, nb_bins)
         plt.xlabel("minimal distance histogram at Z={}".format(zpar))
@@ -1943,6 +2428,21 @@ class PixelAnalizer(object):
         density_other=None,
         **kwargs,
     ):
+        """Plot mean LOS separation and density vs redshift (coupled or not).
+
+        Args:
+            zpar (array-like): Redshift bin centres.
+            dperpz (array-like): Mean nearest-LOS separation per bin.
+            densityz (array-like): LOS density per bin.
+            nameout (str): Output figure base name.
+            coupled_plot (bool, optional): Draw both curves on twin axes.
+            comparison (bool, optional): Overlay a comparison dataset.
+            dperp_comparison, density_comparison, zpar_comparison (optional):
+                Comparison profiles.
+            legend (list[str], optional): Legend labels.
+            dperp_other, density_other (optional): Extra comparison profiles.
+            **kwargs: Styling options.
+        """
         if coupled_plot:
             PixelAnalizer.plot_mean_distance_density_coupled(
                 zpar,
@@ -1989,6 +2489,20 @@ class PixelAnalizer(object):
         density_other=None,
         **kwargs,
     ):
+        """Plot LOS separation and density vs redshift on separate figures.
+
+        Args:
+            zpar (array-like): Redshift bin centres.
+            dperpz (array-like): Mean nearest-LOS separation per bin.
+            densityz (array-like): LOS density per bin.
+            nameout (str): Output figure base name.
+            comparison (bool, optional): Overlay a comparison dataset.
+            dperp_comparison, density_comparison, zpar_comparison (optional):
+                Comparison profiles.
+            legend (list[str], optional): Legend labels.
+            dperp_other, density_other (optional): Extra comparison profiles.
+            **kwargs: Styling options.
+        """
         plt.figure()
         plt.xlabel("Redshift")
         plt.ylabel("Mean los separation [" + r"$\mathrm{Mpc\cdot h^{-1}}$" + "]")
@@ -2030,6 +2544,20 @@ class PixelAnalizer(object):
         density_other=None,
         **kwargs,
     ):
+        """Plot LOS separation and density vs redshift on shared twin axes.
+
+        Args:
+            zpar (array-like): Redshift bin centres.
+            dperpz (array-like): Mean nearest-LOS separation per bin.
+            densityz (array-like): LOS density per bin.
+            nameout (str): Output figure base name.
+            comparison (bool, optional): Overlay a comparison dataset.
+            dperp_comparison, density_comparison, zpar_comparison (optional):
+                Comparison profiles.
+            legend (list[str], optional): Legend labels.
+            dperp_other, density_other (optional): Extra comparison profiles.
+            **kwargs: Styling options.
+        """
         figsize = utils.return_key(kwargs, "figsize", (8, 6))
         grid = utils.return_key(kwargs, "grid", True)
         fontsize = utils.return_key(kwargs, "fontsize", 13)
@@ -2123,6 +2651,17 @@ class PixelAnalizer(object):
         coupled_plot=False,
         **kwargs,
     ):
+        """Compare the separation/density profiles of two datasets from files.
+
+        Args:
+            dpername1, dpername2 (str | list[str]): Separation profile file(s)
+                for datasets 1 and 2 (averaged if lists).
+            densityname1, densityname2 (str | list[str]): Density profile file(s).
+            nameout (str): Output figure base name.
+            legend (list[str]): Legend labels.
+            coupled_plot (bool, optional): Draw both curves on twin axes.
+            **kwargs: Styling options.
+        """
         if type(dpername1) is str:
             zpar, dperp = PixelAnalizer.read_dperp_file(dpername1)
             zpar_comparison, dperp_comparison = PixelAnalizer.read_dperp_file(dpername2)
@@ -2174,10 +2713,26 @@ class PixelAnalizer(object):
         )
 
     def compute_plot_histo_mean_distance(self, zpar, name_histo):
+        """Compute and plot the nearest-LOS distance histogram at a redshift.
+
+        Args:
+            zpar (float): Redshift of the slab.
+            name_histo (str): Output figure base name.
+        """
         dmin = self.pixel.compute_mean_distance_histogram(zpar)
         PixelAnalizer.plot_histogram_mean_distance(zpar, dmin, name_histo, nb_bins=50)
 
     def compute_plot_mean_distance_density(self, nameout, coupled=False, plot=True):
+        """Compute (and optionally plot/save) the separation/density profiles.
+
+        Args:
+            nameout (str): Output base name for the figures/pickles.
+            coupled (bool, optional): Coupled twin-axes plot.
+            plot (bool, optional): Write the profiles and figures.
+
+        Returns:
+            tuple: ``(zpar, dperpz, densityz)``.
+        """
         (zpar, dperpz, densityz) = self.pixel.compute_mean_distance_density()
         if plot:
             PixelAnalizer.write_dperp_file(zpar, dperpz, f"{nameout}_dperp_file.pickle")
@@ -2198,6 +2753,16 @@ class PixelAnalizer(object):
         name_dperp="density_mean_distance",
         coupled_plot=False,
     ):
+        """Run the requested pixel analyses (histogram and/or profiles).
+
+        Args:
+            compute_histo (bool): Compute the nearest-LOS distance histogram.
+            compute_mean_distance_density (bool): Compute the profiles.
+            histo_zpar (float, optional): Redshift for the histogram.
+            name_histo (str, optional): Histogram figure base name.
+            name_dperp (str, optional): Profile figure base name.
+            coupled_plot (bool, optional): Coupled twin-axes profile plot.
+        """
         if compute_histo:
             self.compute_plot_histo_mean_distance(histo_zpar, name_histo)
         if compute_mean_distance_density:
@@ -2205,6 +2770,13 @@ class PixelAnalizer(object):
 
 
 class DeltaAnalyzer(object):
+    """Diagnostic plots of picca delta files (histograms, sky maps, trends).
+
+    Reads the deltas within a sky/redshift window and plots the distribution
+    and redshift dependence of the delta, sigma, SNR and redshift quantities,
+    plus RA/Dec and LOS-density diagrams, with optional dataset comparisons.
+    """
+
     def __init__(
         self,
         pwd,
@@ -2219,6 +2791,18 @@ class DeltaAnalyzer(object):
         degree=True,
         pk1d_type=True,
     ):
+        """Store the delta path, sky/redshift window and plotting options.
+
+        Args:
+            pwd (str): Output directory for the figures.
+            delta_path (str): Input delta directory.
+            center_ra (bool, optional): Recenter RA around 0.
+            z_cut_min, z_cut_max (float, optional): Redshift window.
+            dec_cut_min, dec_cut_max, ra_cut_min, ra_cut_max (float, optional):
+                Sky window.
+            degree (bool, optional): Report/plot angles in degrees.
+            pk1d_type (bool, optional): Whether the deltas are in pk1d format.
+        """
         self.pwd = pwd
         self.delta_path = delta_path
         self.center_ra = center_ra
@@ -2278,6 +2862,15 @@ class DeltaAnalyzer(object):
         return (ra, dec, redshift, redshift_qso, id, sigma, delta, snr)
 
     def get_ra_dec_comparison(self, comparison):
+        """Read the plotting quantities for each comparison delta set.
+
+        Args:
+            comparison (list[str] | None): Comparison delta paths.
+
+        Returns:
+            tuple: Per-comparison lists of ``(ra, dec, redshift, redshift_qso,
+            id, sigma, delta, snr)`` (all None if ``comparison`` is None).
+        """
         if comparison is None:
             return (None, None, None, None, None, None, None, None)
         (
@@ -2326,6 +2919,21 @@ class DeltaAnalyzer(object):
         print_stats=False,
         **kwargs,
     ):
+        """Produce the requested delta diagnostic plots for several quantities.
+
+        Args:
+            value_names (list[str]): Quantities to plot (``delta``, ``sigma``,
+                ``snr``, ``redshift`` ...).
+            name (str): Output figure base name.
+            comparison (list[str], optional): Comparison delta paths.
+            comparison_legend (list[str], optional): Legend labels.
+            histo (bool, optional): Draw histograms.
+            mean_z_dependence (bool, optional): Draw mean-vs-redshift plots.
+            z_dependence (bool, optional): Draw value-vs-redshift plots.
+            ra_dec_plots (bool, optional): Draw the RA/Dec and LOS-density plots.
+            print_stats (bool, optional): Print comparison statistics.
+            **kwargs: Styling options.
+        """
         style = utils.return_key(kwargs, "style", None)
         if style is not None:
             plt.style.use(style)
@@ -2404,6 +3012,16 @@ class DeltaAnalyzer(object):
         comparison_legend=None,
         **kwargs,
     ):
+        """Plot the RA/Dec diagram and the LOS-density-vs-RA curve.
+
+        Args:
+            ra, dec (array-like): Object sky angles.
+            name (str): Output figure base name.
+            comparison_ra, comparison_dec (list[array], optional): Comparison
+                sky coordinates.
+            comparison_legend (list[str], optional): Legend labels.
+            **kwargs: Styling options.
+        """
         utils.save_ra_dec(
             self.pwd,
             ra,
@@ -2420,6 +3038,13 @@ class DeltaAnalyzer(object):
     def stat_comparison(
         self, redshift, redshift_comp, sigma, sigma_comp, delta, delta_comp
     ):
+        """Print redshift-range, sigma and delta statistics for main vs comps.
+
+        Args:
+            redshift, sigma, delta (array-like): Main-dataset quantities.
+            redshift_comp, sigma_comp, delta_comp (list[array]): Per-comparison
+                quantities.
+        """
         print("Redshift interval =", np.max(redshift), np.min(redshift))
         for i in range(len(redshift_comp)):
             print(
@@ -2442,6 +3067,15 @@ class DeltaAnalyzer(object):
 
     @staticmethod
     def plot_los_density(pwd, ra, dec, plot_name, **kwargs):
+        """Plot the line-of-sight surface density as a function of RA.
+
+        Args:
+            pwd (str): Output directory.
+            ra, dec (array-like): Object sky angles.
+            plot_name (str): Output figure base name.
+            **kwargs: ``nb_interval`` (RA bins) and ``different_sign_region``
+                (split by Dec sign) options.
+        """
         nb_interval = utils.return_key(kwargs, "nb_interval", 20)
         different_sign_region = utils.return_key(kwargs, "different_sign_region", False)
 
@@ -2486,6 +3120,14 @@ class DeltaAnalyzer(object):
 
     @staticmethod
     def plot_delta_gaussian_fit(pwd, delta, plot_name, **kwargs):
+        """Plot the delta histogram with an overlaid Gaussian fit.
+
+        Args:
+            pwd (str): Output directory.
+            delta (array-like): Delta values.
+            plot_name (str): Output figure base name.
+            **kwargs: Histogram styling options.
+        """
         (name, data, bins, patches) = utils.plot_histo(delta, "delta", "", **kwargs)
         bin_centers = np.array(
             [0.5 * (bins[i] + bins[i + 1]) for i in range(len(bins) - 1)]

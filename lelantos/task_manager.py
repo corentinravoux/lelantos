@@ -30,18 +30,54 @@ from functools import partial
 
 
 class Machine(object):
+    """Base class for a compute backend that launches solver jobs.
+
+    A machine knows how to write a launcher script, submit it, and detect job
+    completion/errors from the solver log files. Concrete subclasses are
+    :class:`Nersc`, :class:`Irene` (SLURM/MSUB clusters) and :class:`Bash`
+    (local execution).
+
+    Attributes:
+        ending_str (str): Log line marking a successful job end.
+        error_str (list[str]): Tokens whose presence in a log flags an error.
+        wait_check (bool): Whether the manager should poll for completion.
+    """
+
     def __init__(self, ending_str, error_str, wait_check):
+        """Initialise the machine.
+
+        Args:
+            ending_str (str): Log line marking successful completion.
+            error_str (list[str]): First-token markers indicating an error.
+            wait_check (bool): Whether to wait/poll for job completion.
+        """
         self.ending_str = ending_str
         self.error_str = error_str
         self.wait_check = wait_check
 
     def is_finished(self, f):
+        """Return True if the log lines contain the completion marker.
+
+        Args:
+            f (list[str]): Lines of a solver output/log file.
+
+        Returns:
+            bool: True if ``ending_str`` is found.
+        """
         for i in range(len(f)):
             if f[i].strip() == self.ending_str:
                 return True
         return False
 
     def gives_error(self, f):
+        """Return True if the log lines contain an error marker.
+
+        Args:
+            f (list[str]): Lines of a solver error/log file.
+
+        Returns:
+            bool: True if the first token of any line matches ``error_str``.
+        """
         for i in range(len(f)):
             for j in range(len(self.error_str)):
                 if f[i].strip().split()[0] == self.error_str[j]:
@@ -49,6 +85,12 @@ class Machine(object):
         return False
 
     def load_cluster_optional_arguments(self):
+        """Read the (N, n, c) SLURM resource counts from ``kwargs``.
+
+        Returns:
+            tuple[int, int, int]: ``(N, n, c)`` = number of nodes, tasks and
+            cpus-per-task, each defaulting to 1.
+        """
         N = utils.return_key(self.kwargs, "N", 1)
         n = utils.return_key(self.kwargs, "n", 1)
         c = utils.return_key(self.kwargs, "c", 1)
@@ -56,7 +98,20 @@ class Machine(object):
 
 
 class Nersc(Machine):
+    """SLURM (sbatch) launcher for the NERSC cluster.
+
+    Supports two launch modes selected by the ``mode`` kwarg: ``"separated"``
+    (one sbatch job per sub-map) or ``"unified"`` (a single job running all
+    sub-maps with ``srun ... &`` + ``wait``).
+    """
+
     def __init__(self, **kwargs):
+        """Initialise the NERSC machine.
+
+        Args:
+            **kwargs: Optional SLURM parameters (``mode``, ``queue``,
+                ``partition``, ``time``, ``N``, ``n``, ``c``).
+        """
         ending_str = "Execution Sum Up"
         error_str = ["srun:"]
         wait_check = True
@@ -71,6 +126,14 @@ class Nersc(Machine):
         self.kwargs = kwargs
 
     def create_launcher(self, pwd, dir_paths, software_command_lines, software_name):
+        """Write the SLURM launcher(s), dispatching on the launch mode.
+
+        Args:
+            pwd (str): Working directory (used for the unified launcher).
+            dir_paths (list[str]): Per-sub-map run directories.
+            software_command_lines (list[str]): Solver command per sub-map.
+            software_name (str): Job name / solver identifier.
+        """
         if self.launch_mode == "separated":
             self.create_launcher_separated(
                 dir_paths, software_command_lines, software_name
@@ -83,6 +146,13 @@ class Nersc(Machine):
     def create_launcher_separated(
         self, dir_paths, software_command_lines, software_name
     ):
+        """Write one SLURM batch script per sub-map directory.
+
+        Args:
+            dir_paths (list[str]): Per-sub-map run directories.
+            software_command_lines (list[str]): Solver command per sub-map.
+            software_name (str): Job name / solver identifier.
+        """
         queue = utils.return_key(self.kwargs, "queue", "regular")
         partition = utils.return_key(self.kwargs, "partition", "knl")
         (N, n, c) = self.load_cluster_optional_arguments()
@@ -115,6 +185,14 @@ class Nersc(Machine):
     def create_launcher_unified(
         self, pwd, dir_paths, software_command_lines, software_name
     ):
+        """Write a single SLURM script running all sub-maps concurrently.
+
+        Args:
+            pwd (str): Directory where the unified launcher is written.
+            dir_paths (list[str]): Per-sub-map run directories.
+            software_command_lines (list[str]): Solver command per sub-map.
+            software_name (str): Job name / solver identifier.
+        """
         queue = utils.return_key(self.kwargs, "queue", "regular")
         partition = utils.return_key(self.kwargs, "partition", "knl")
         (N, n, c) = self.load_cluster_optional_arguments()
@@ -142,15 +220,33 @@ class Nersc(Machine):
         f.write("wait")
 
     def launch_unified(self, pwd):
+        """Submit the single unified SLURM launcher via ``sbatch``.
+
+        Args:
+            pwd (str): Directory containing the unified launcher.
+        """
         call(["sbatch", os.path.join(pwd, self.launcher_name)])
 
     def launch_separated(self, dir_paths):
+        """Submit one SLURM job per sub-map directory via ``sbatch``.
+
+        Args:
+            dir_paths (list[str]): Per-sub-map run directories.
+        """
         for i in range(len(dir_paths)):
             call(["sbatch", os.path.join(dir_paths[i], self.launcher_name)])
 
     def launch(
         self, dir_paths=None, pwd=None, software_command_lines=None, software_name=None
     ):
+        """Submit the NERSC job(s), dispatching on the launch mode.
+
+        Args:
+            dir_paths (list[str], optional): Per-sub-map run directories.
+            pwd (str, optional): Working directory (unified mode).
+            software_command_lines (list[str], optional): Unused here.
+            software_name (str, optional): Unused here.
+        """
         if self.launch_mode == "separated":
             self.launch_separated(dir_paths)
         elif self.launch_mode == "unified":
@@ -158,7 +254,15 @@ class Nersc(Machine):
 
 
 class Irene(Machine):
+    """MSUB (ccc_msub) launcher for the TGCC Irene cluster."""
+
     def __init__(self, **kwargs):
+        """Initialise the Irene machine.
+
+        Args:
+            **kwargs: Optional scheduler parameters (``partition``, ``time``,
+                ``N``, ``n``, ``c``).
+        """
         ending_str = ""
         error_str = ["srun:"]
         wait_check = True
@@ -171,6 +275,14 @@ class Irene(Machine):
         self.kwargs = kwargs
 
     def create_launcher(self, pwd, dir_paths, software_command_lines, software_name):
+        """Write one MSUB batch script per sub-map directory.
+
+        Args:
+            pwd (str): Unused (kept for interface parity with other machines).
+            dir_paths (list[str]): Per-sub-map run directories.
+            software_command_lines (list[str]): Solver command per sub-map.
+            software_name (str): Job name / solver identifier.
+        """
         (N, n, c) = self.load_cluster_optional_arguments()
         partition = utils.return_key(self.kwargs, "partition", "rome")
         time = utils.return_key(self.kwargs, "time", "60000")
@@ -203,12 +315,33 @@ class Irene(Machine):
     def launch(
         self, dir_paths=None, pwd=None, software_command_lines=None, software_name=None
     ):
+        """Submit one MSUB job per sub-map directory via ``ccc_msub``.
+
+        Args:
+            dir_paths (list[str], optional): Per-sub-map run directories.
+            pwd (str, optional): Unused.
+            software_command_lines (list[str], optional): Unused.
+            software_name (str, optional): Unused.
+        """
         for i in range(len(dir_paths)):
             call(["ccc_msub", os.path.join(dir_paths[i], self.launcher_name)])
 
 
 class Bash(Machine):
+    """Local (no scheduler) launcher running the solver via ``subprocess``.
+
+    Runs jobs serially, or in parallel with a :mod:`multiprocessing` pool when
+    the ``n`` kwarg is greater than 1.
+    """
+
     def __init__(self, ending_str="", error_str=[], **kwargs):
+        """Initialise the Bash machine.
+
+        Args:
+            ending_str (str): Completion marker (usually taken from the solver).
+            error_str (list[str]): Error markers.
+            **kwargs: Optional parameters; ``n`` sets the number of processes.
+        """
         wait_check = False
         super(Bash, self).__init__(ending_str, error_str, wait_check)
 
@@ -217,11 +350,25 @@ class Bash(Machine):
         self.kwargs = kwargs
 
     def create_launcher(self, pwd, dir_path, command_line, software_name):
+        """No-op: local execution needs no launcher script.
+
+        Returns:
+            tuple: An empty tuple.
+        """
         return ()
 
     def launch(
         self, dir_paths=None, pwd=None, software_command_lines=None, software_name=None
     ):
+        """Run the solver locally, serially or in parallel.
+
+        Args:
+            dir_paths (list[str], optional): Per-sub-map run directories.
+            pwd (str, optional): Unused.
+            software_command_lines (list[str], optional): Solver command per
+                sub-map.
+            software_name (str, optional): Solver identifier (log file names).
+        """
         number_process = utils.return_key(self.kwargs, "n", 1)
         if number_process == 1:
             self.launch_serial(
@@ -247,6 +394,16 @@ class Bash(Machine):
         software_command_lines=None,
         software_name=None,
     ):
+        """Run the sub-map solver jobs concurrently in a process pool.
+
+        Args:
+            number_process (int): Pool size.
+            dir_paths (list[str], optional): Per-sub-map run directories.
+            pwd (str, optional): Unused.
+            software_command_lines (list[str], optional): Solver command per
+                sub-map.
+            software_name (str, optional): Solver identifier (log file names).
+        """
         list_launch = [
             [dir_paths[i], software_command_lines[i]] for i in range(len(dir_paths))
         ]
@@ -255,6 +412,12 @@ class Bash(Machine):
             pool.map(func, list_launch)
 
     def launch_single(self, software_name, param_launch):
+        """Run one solver command, redirecting stdout/stderr to log files.
+
+        Args:
+            software_name (str): Solver identifier (used for log file names).
+            param_launch (list): ``[run_directory, command_line]`` pair.
+        """
         dir_paths, software_command_lines = param_launch[0], param_launch[1]
         out_name = os.path.join(dir_paths, self.out_file_name.format(software_name))
         err_name = os.path.join(dir_paths, self.error_file_name.format(software_name))
@@ -269,6 +432,15 @@ class Bash(Machine):
     def launch_serial(
         self, dir_paths=None, pwd=None, software_command_lines=None, software_name=None
     ):
+        """Run the sub-map solver jobs one after another.
+
+        Args:
+            dir_paths (list[str], optional): Per-sub-map run directories.
+            pwd (str, optional): Unused.
+            software_command_lines (list[str], optional): Solver command per
+                sub-map.
+            software_name (str, optional): Solver identifier (log file names).
+        """
         for i in range(len(dir_paths)):
             out_name = os.path.join(
                 dir_paths[i], self.out_file_name.format(software_name)
@@ -285,14 +457,28 @@ class Bash(Machine):
 
 
 class TomographySoftware(object):
+    """Base class for a tomographic solver wrapped by the manager.
+
+    Attributes:
+        exec_file (str): Path to the solver executable.
+    """
+
     def __init__(self, exec_file):
+        """Initialise the solver wrapper.
+
+        Args:
+            exec_file (str): Path to the solver executable.
+        """
         self.exec_file = exec_file
 
 
 class Other(TomographySoftware):
+    """Placeholder solver backend (``other.exe``) for a custom algorithm."""
+
     name = "other"
 
     def __init__(self):
+        """Locate the ``other.exe`` executable in the package ``exec`` folder."""
         source_path = os.path.dirname(os.path.realpath(__file__))
         name_exec = "other.exe"
         exec_file = os.path.join(source_path, "exec", name_exec)
@@ -301,13 +487,21 @@ class Other(TomographySoftware):
         self.command_line = self.exec_file + " {}"
 
     def create_input(self, dir_path, launcher_params, name):
+        """No-op input writer for the placeholder solver.
+
+        Returns:
+            tuple: An empty tuple.
+        """
         return ()
 
 
 class Dachshund(TomographySoftware):
+    """Wrapper for the Dachshund Wiener-filter tomography solver."""
+
     name = "dachshund"
 
     def __init__(self):
+        """Locate the ``dachshund.exe`` executable in the package ``exec`` folder."""
         source_path = os.path.dirname(os.path.realpath(__file__))
         name_exec = "dachshund.exe"
         exec_file = os.path.join(source_path, "exec", name_exec)
@@ -317,6 +511,19 @@ class Dachshund(TomographySoftware):
         self.ending_str = "Total time"
 
     def create_input(self, dir_paths, launcher_params, launcher_names):
+        """Write the Dachshund ``.cfg`` input file for each sub-map.
+
+        Each file declares the box size, pixel count, map grid, signal
+        covariance (sigma_f, l_perp, l_par), PCG solver settings and the
+        input/output binary paths.
+
+        Args:
+            dir_paths (list[str]): Per-sub-map run directories.
+            launcher_params (list[dict]): Per-sub-map geometry/solver params
+                (keys ``lx, ly, lz, npix, nx, ny, nz, sigmaf, lperp, lpar,
+                namepixel, namemap``).
+            launcher_names (list[str]): Config file name for each sub-map.
+        """
         for i in range(len(dir_paths)):
             name = os.path.join(dir_paths[i], launcher_names[i])
             (lx, ly, lz, npix, nx, ny, nz, sigmaf, lperp, lpar, namepixel, namemap) = (
@@ -377,6 +584,18 @@ class Dachshund(TomographySoftware):
 
 
 class TomographyManager(object):
+    """Orchestrate tomographic solver runs on a chosen machine.
+
+    Loads the launch description (a pickle listing sub-map names and their
+    solver parameters), sets up temporary run directories, writes the solver
+    inputs and machine launchers, submits the jobs, waits for completion,
+    checks for errors and copies the resulting maps back.
+
+    Attributes:
+        available_software (tuple[str]): Supported solver names.
+        available_machine (tuple[str]): Supported machine names.
+    """
+
     available_software = ("dachshund", "other")
     available_machine = ("irene", "nersc", "bash")
 
@@ -390,6 +609,18 @@ class TomographyManager(object):
         symlink_folder=None,
         **kwargs,
     ):
+        """Initialise the manager and its machine/software backends.
+
+        Args:
+            pwd (str): Run/output directory for the tomography.
+            software (str): Solver name (``"dachshund"`` or ``"other"``).
+            machine (str): Machine name (``"irene"``, ``"nersc"`` or ``"bash"``).
+            name_pixel (str): Path to the input pixel binary.
+            launch_file (str): Pickle listing sub-map names and solver params.
+            symlink_folder (str, optional): If set, run inside a symlink to this
+                folder (e.g. cluster scratch).
+            **kwargs: Machine-specific options (e.g. ``n`` for bash processes).
+        """
         self.pwd = pwd
         if symlink_folder is not None:
             self.link_tomography_folder(symlink_folder)
@@ -404,6 +635,15 @@ class TomographyManager(object):
             self.machine.ending_str = self.software.ending_str
 
     def init_sofware(self, software):
+        """Instantiate the solver backend selected by name.
+
+        Args:
+            software (str): Solver name (case-insensitive).
+
+        Returns:
+            TomographySoftware: The solver wrapper, or a ``KeyError`` instance
+            if the name is unknown.
+        """
         if software.lower() == "dachshund":
             return Dachshund()
         elif software.lower() == "other":
@@ -414,6 +654,16 @@ class TomographyManager(object):
             )
 
     def init_machine(self, machine, **kwargs):
+        """Instantiate the machine backend selected by name.
+
+        Args:
+            machine (str): Machine name (case-insensitive).
+            **kwargs: Machine-specific options.
+
+        Returns:
+            Machine: The machine backend, or a ``KeyError`` instance if the
+            name is unknown.
+        """
         if machine.lower() == "irene":
             return Irene(**kwargs)
         if machine.lower() == "nersc":
@@ -427,11 +677,22 @@ class TomographyManager(object):
 
     @staticmethod
     def create_python_dir(pwd):
+        """Create the ``Tmp`` working sub-directory if absent.
+
+        Args:
+            pwd (str): Parent directory.
+        """
         if os.path.isdir(os.path.join(pwd, "Tmp")) == False:
             os.mkdir(os.path.join(pwd, "Tmp"))
 
     @staticmethod
     def create_dir(pwd, dirnames):
+        """Create one ``Tmp/<name>`` run directory per sub-map.
+
+        Args:
+            pwd (str): Parent directory.
+            dirnames (list[str]): Sub-map directory names.
+        """
         for i in range(len(dirnames)):
             dir_path = os.path.join(pwd, "Tmp", dirnames[i])
             if os.path.isdir(dir_path) == False:
@@ -439,18 +700,45 @@ class TomographyManager(object):
 
     @staticmethod
     def create_file(name):
+        """Create a placeholder log file containing ``"wait"`` if absent.
+
+        Args:
+            name (str): File path.
+        """
         if os.path.isfile(name) == False:
             f = open(name, "w")
             f.write("wait")
             f.close()
 
     def is_finished(self, file_lines):
+        """Delegate completion detection to the machine backend.
+
+        Args:
+            file_lines (list[str]): Lines of a solver output file.
+
+        Returns:
+            bool: True if the job completed.
+        """
         return self.machine.is_finished(file_lines)
 
     def gives_error(self, file_lines):
+        """Delegate error detection to the machine backend.
+
+        Args:
+            file_lines (list[str]): Lines of a solver error file.
+
+        Returns:
+            bool: True if the log signals an error.
+        """
         return self.machine.gives_error(file_lines)
 
     def wait_until_finished(self, pwd, listname):
+        """Poll the sub-map output files until every job has completed.
+
+        Args:
+            pwd (str): Parent run directory.
+            listname (list[str]): Sub-map directory names to monitor.
+        """
         list_finished = [False for i in range(len(listname))]
         out_file_name = self.machine.out_file_name.format(self.software.name)
         while self.all_finished(list_finished) == False:
@@ -465,6 +753,12 @@ class TomographyManager(object):
         self.log.add("All calculation are finished")
 
     def check_errors(self, pwd, listname):
+        """Scan each sub-map error file and log whether it reported an error.
+
+        Args:
+            pwd (str): Parent run directory.
+            listname (list[str]): Sub-map directory names to check.
+        """
         list_error = [False for i in range(len(listname))]
         error_file_name = self.machine.error_file_name.format(self.software.name)
         self.log.add("List of errors :")
@@ -479,6 +773,14 @@ class TomographyManager(object):
             self.log.add(f"The file {listname[i]} gave an error : {list_error[i]}")
 
     def all_finished(self, listFinished):
+        """Return True only if every entry of the status list is True.
+
+        Args:
+            listFinished (list[bool]): Per-sub-map completion flags.
+
+        Returns:
+            bool: True if all jobs are finished.
+        """
         allFinished = True
         for i in range(len(listFinished)):
             if listFinished[i] == False:
@@ -487,6 +789,12 @@ class TomographyManager(object):
 
     # CR - make it software dependent
     def copy_files(self, dir_paths, listname):
+        """Copy each sub-map's pixel input into its run directory.
+
+        Args:
+            dir_paths (list[str]): Per-sub-map run directories.
+            listname (list[str]): Sub-map names (pixel file suffixes).
+        """
         for i in range(len(listname)):
             call(
                 [
@@ -497,6 +805,12 @@ class TomographyManager(object):
             )
 
     def create_machine_launcher(self, dir_paths, launcher_params):
+        """Write the solver inputs and the machine launcher scripts.
+
+        Args:
+            dir_paths (list[str]): Per-sub-map run directories.
+            launcher_params (list[dict]): Per-sub-map solver parameters.
+        """
         launcher_names = [
             launcher_params[i]["nameinput"] for i in range(len(launcher_params))
         ]
@@ -512,6 +826,12 @@ class TomographyManager(object):
         )
 
     def launch(self, dir_paths, launcher_params):
+        """Submit the solver jobs on the configured machine.
+
+        Args:
+            dir_paths (list[str]): Per-sub-map run directories.
+            launcher_params (list[dict]): Per-sub-map solver parameters.
+        """
         launcher_names = [
             launcher_params[i]["nameinput"] for i in range(len(launcher_params))
         ]
@@ -529,6 +849,12 @@ class TomographyManager(object):
         )
 
     def treat_launch(self, pwd, listname):
+        """Optionally wait for completion, then check for errors.
+
+        Args:
+            pwd (str): Parent run directory.
+            listname (list[str]): Sub-map directory names.
+        """
         wait_check = self.machine.wait_check
         if wait_check:
             self.wait_until_finished(pwd, listname)
@@ -537,6 +863,12 @@ class TomographyManager(object):
     ### Main routine
 
     def launch_all(self):
+        """Run the full launch sequence for all sub-maps.
+
+        Loads the launch pickle, creates the temporary run directories, copies
+        inputs, writes launchers, submits the jobs, logs them and finally waits
+        for completion / checks for errors.
+        """
         launching_file = pickle.load(open(self.launch_file, "rb"))
         listname, launcher_params = launching_file[0], launching_file[1]
         TomographyManager.create_python_dir(self.pwd)
@@ -553,6 +885,7 @@ class TomographyManager(object):
         self.treat_launch(self.pwd, listname)
 
     def copy(self):
+        """Copy each sub-map's output map from ``Tmp`` back to ``pwd``."""
         launching_file = pickle.load(open(self.launch_file, "rb"))
         listname, launcher_params = launching_file[0], launching_file[1]
         for i in range(len(listname)):
@@ -569,9 +902,16 @@ class TomographyManager(object):
             )
 
     def remove_tmp(self):
+        """Delete the temporary ``Tmp`` run directory tree."""
         shutil.rmtree(os.path.join(self.pwd, "Tmp"), ignore_errors=True)
 
     def link_tomography_folder(self, symlink_folder):
+        """Replace ``pwd`` with a symlink to an external folder.
+
+        Args:
+            symlink_folder (str): Target directory (created if missing); the
+                run directory ``pwd`` becomes a symlink to it.
+        """
         os.makedirs(symlink_folder, exist_ok=True)
         if os.path.isdir(self.pwd):
             try:
