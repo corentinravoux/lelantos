@@ -3,7 +3,18 @@
 """
 Author: Corentin Ravoux
 
-Description :
+Description : Core data objects of the lelantos tomography pipeline.
+
+Defines the read/write and manipulation classes for every tomographic object
+handled by lelantos:
+
+* :class:`TomographicMap` and its subclasses :class:`DistanceMap` (voxel to
+  nearest line-of-sight distance) and :class:`StackMap` (catalog stacks);
+* :class:`Pixel` (solver line-of-sight input) and :class:`MapPixelProperty`
+  (box geometry / cosmology metadata);
+* :class:`Delta` (picca flux-contrast files);
+* :class:`Catalog` and its subclasses :class:`QSOCatalog`,
+  :class:`DLACatalog`, :class:`GalaxyCatalog` and :class:`VoidCatalog`.
 """
 
 
@@ -30,6 +41,14 @@ from lelantos import utils
 
 
 def verify_file(file):
+    """Raise if a property file does not exist.
+
+    Args:
+        file (str): Path to check.
+
+    Raises:
+        ValueError: If ``file`` is not an existing file.
+    """
     if not (os.path.isfile(file)):
         raise ValueError("No property file {} was found".format(file))
 
@@ -49,6 +68,15 @@ def verify_file(file):
 
 
 class TomographicMap(object):
+    """A 3D tomographic map with its geometry and cosmology metadata.
+
+    Wraps the reconstructed flux-contrast field stored as a raw float64 binary,
+    together with its pixel shape, physical size (Mpc.h^-1), cartesian/sky
+    bounding boxes, coordinate transform and fiducial Omega_m. Provides
+    read/write, merging of tiled sub-maps, rebinning, smoothing, distance
+    masking and 3D power-spectrum estimation.
+    """
+
     def __init__(
         self,
         map_array=None,
@@ -61,6 +89,19 @@ class TomographicMap(object):
         property_file=None,
         Omega_m=None,
     ):
+        """Store the map array and its metadata.
+
+        Args:
+            map_array (numpy.ndarray, optional): The 3D map values.
+            name (str, optional): Map binary file path.
+            shape (tuple[int], optional): Pixel shape.
+            size (tuple[float], optional): Physical size (Mpc.h^-1).
+            boundary_cartesian_coord (optional): Cartesian bounding box.
+            boundary_sky_coord (optional): Sky bounding box.
+            coordinate_transform (str, optional): Sky<->cartesian transform mode.
+            property_file (str, optional): Associated property file path.
+            Omega_m (float, optional): Fiducial matter density.
+        """
         self.name = name
         self.shape = shape
         self.size = size
@@ -84,6 +125,19 @@ class TomographicMap(object):
         property_file=None,
         Omega_m=None,
     ):
+        """Construct a map either from a property file or from explicit metadata.
+
+        Args:
+            map_array (numpy.ndarray, optional): The 3D map values.
+            name (str, optional): Map binary file path.
+            shape, size, boundary_cartesian_coord, boundary_sky_coord,
+                coordinate_transform, Omega_m (optional): Explicit metadata used
+                when no ``property_file`` is given.
+            property_file (str, optional): If set, metadata is read from it.
+
+        Returns:
+            TomographicMap: The constructed map.
+        """
         if property_file is not None:
             return cls.init_from_property_files(
                 property_file, map_array=map_array, name=name
@@ -103,6 +157,16 @@ class TomographicMap(object):
 
     @classmethod
     def init_from_property_files(cls, property_file, map_array=None, name=None):
+        """Construct a map, reading its geometry/cosmology from a property file.
+
+        Args:
+            property_file (str): Property file path.
+            map_array (numpy.ndarray, optional): The 3D map values.
+            name (str, optional): Map binary file path.
+
+        Returns:
+            TomographicMap: The constructed map.
+        """
         Property = MapPixelProperty(name=property_file)
         verify_file(property_file)
         (
@@ -142,7 +206,23 @@ class TomographicMap(object):
     def init_by_merging(
         cls, submap_directory, launching_file_name, name_map, property_file
     ):
-        """Need to generalized (maybe in the task manager class for reading and writting launching files) + naming filename must not be define there"""
+        """Merge tiled solver sub-maps into a single map.
+
+        Reads the launch pickle to recover the chunk layout, loads each sub-map,
+        trims the overlap borders and concatenates the chunks into the full map.
+
+        Note:
+            Needs to be generalised (chunk-file naming is hard-coded here).
+
+        Args:
+            submap_directory (str): Directory holding the per-chunk maps.
+            launching_file_name (str): Launch pickle describing the tiling.
+            name_map (str): Output merged-map file name.
+            property_file (str): Map property file for the merged geometry.
+
+        Returns:
+            TomographicMap: The merged map.
+        """
         a = pickle.load(open(os.path.join(launching_file_name), "rb"))
         listname, dachshund_params, number_chunks, overlaping = a[0], a[1], a[2], a[3]
         map_chunks, sizemap, shapemap = {}, {}, {}
@@ -218,13 +298,20 @@ class TomographicMap(object):
 
     @property
     def mpc_per_pixel(self):
+        """numpy.ndarray: Mpc.h^-1 per pixel along each axis."""
         return utils.mpc_per_pixel(self.size, self.shape)
 
     @property
     def pixel_per_mpc(self):
+        """numpy.ndarray: Pixels per Mpc.h^-1 along each axis."""
         return utils.pixel_per_mpc(self.size, self.shape)
 
     def read(self):
+        """Read the map binary from ``name`` into ``map_array``.
+
+        Raises:
+            ValueError: If ``name`` or ``shape`` is missing.
+        """
         if self.name is None:
             raise ValueError("No name was provided for reading map")
         if self.shape is None:
@@ -234,12 +321,18 @@ class TomographicMap(object):
                 self.map_array = np.fromfile(f, dtype=np.float64).reshape(self.shape)
 
     def write(self):
+        """Write ``map_array`` to the ``name`` binary file.
+
+        Raises:
+            ValueError: If no map array is stored.
+        """
         if self.map_array.all() == None:
             raise ValueError("No map array is stored in this map class for writting")
         listmap = np.ravel(self.map_array)
         listmap.tofile(self.name)
 
     def write_in_vtk(self):
+        """Write the map as a VTK structured grid (needs ``pyevtk``)."""
         from pyevtk.hl import gridToVTK
 
         nx, ny, nz = self.shape
@@ -259,6 +352,11 @@ class TomographicMap(object):
         gridToVTK(self.name, x, y, z, pointData={"DeltaF": self.map_array})
 
     def write_property_file(self, property_file_name):
+        """Write a :class:`MapPixelProperty` file for this map's geometry.
+
+        Args:
+            property_file_name (str): Output property file path.
+        """
         property_file = MapPixelProperty(
             name=property_file_name,
             size=self.size,
@@ -271,22 +369,45 @@ class TomographicMap(object):
         property_file.write()
 
     def rebin_map(self, new_shape, operation="mean"):
+        """Rebin the map to a new pixel shape in place.
+
+        Args:
+            new_shape (tuple[int]): Target pixel shape.
+            operation (str, optional): Reduction (``"mean"``, ``"sum"`` ...).
+        """
         self.map_array = utils.bin_ndarray(
             self.map_array, new_shape, operation=operation
         )
         self.shape = new_shape
 
     def smooth(self, sigma_mpc):
+        """Gaussian-smooth the map in place.
+
+        Args:
+            sigma_mpc (float): Smoothing scale (Mpc.h^-1).
+        """
         sigma = sigma_mpc / self.pixel_per_mpc
         self.map_array = gaussian_filter(self.map_array, sigma)
 
     def mask_map(self, distance_name, distance):
+        """Zero out voxels farther than ``distance`` from any line of sight.
+
+        Args:
+            distance_name (str): Distance-map file.
+            distance (float): Distance-to-LOS threshold (Mpc.h^-1).
+        """
         distance_map = DistanceMap.init_from_tomographic_map(self, name=distance_name)
         distance_map.read()
         mask = distance_map.get_mask_distance(distance)
         self.map_array[mask] = 0
 
     def mask_map_from_name(self, distance_map_name, distance):
+        """Masked-array mask the map by distance-to-LOS from a distance-map file.
+
+        Args:
+            distance_map_name (str): Distance-map file.
+            distance (float): Distance-to-LOS threshold (Mpc.h^-1).
+        """
         distance_map = DistanceMap.init_from_tomographic_map(
             self, name=distance_map_name
         )
@@ -294,12 +415,32 @@ class TomographicMap(object):
         self.map_array = np.ma.masked_where(mask, self.map_array)
 
     def mask_map_from_mask(self, mask):
+        """Apply a boolean mask to the map as a masked array.
+
+        Args:
+            mask (numpy.ndarray): Boolean mask (True = masked out).
+        """
         self.map_array = np.ma.masked_where(mask, self.map_array)
 
     def compute_pk3d(
         self, kmin, kmax, n_k, distance_map=None, criteria_distance_mask=None, log=False
     ):
-        """Never tested properly, might be false in term of mpc per pixel conversion"""
+        """Estimate the 3D power spectrum of the map by FFT.
+
+        Warning:
+            Never tested properly; the Mpc-per-pixel normalisation may be wrong.
+
+        Args:
+            kmin (float): Minimum wavenumber (log10 if ``log``).
+            kmax (float): Maximum wavenumber (log10 if ``log``).
+            n_k (int): Number of k bins.
+            distance_map (str, optional): Distance-map file for masking.
+            criteria_distance_mask (float, optional): Distance-to-LOS threshold.
+            log (bool, optional): Use log-spaced k bins.
+
+        Returns:
+            tuple: ``(k_space, Pk_3D)``.
+        """
         if (distance_map is not None) & (criteria_distance_mask is not None):
             self.mask_map_from_name(distance_map, criteria_distance_mask)
 
@@ -348,6 +489,25 @@ class TomographicMap(object):
         qso=None,
         qso_out=None,
     ):
+        """Re-centre the map (and optionally pixel/QSO/distance) onto a new box.
+
+        Shifts the map into the frame of another property file (same shape) and
+        writes the displaced map, optionally applying the same shift to a
+        distance map, a pixel file and a QSO catalog.
+
+        Args:
+            property_file_name_to_center (str): Target-frame property file.
+            name_out_map (str): Output displaced-map file (via ``self.name``).
+            dist_map (str, optional): Distance-map file to displace.
+            name_dist_map_out (str, optional): Output distance-map file.
+            pixel (str, optional): Pixel file to displace.
+            pixel_out (str, optional): Output pixel file.
+            qso (str, optional): QSO catalog to displace.
+            qso_out (str, optional): Output QSO catalog.
+
+        Raises:
+            KeyError: If the two maps have different shapes.
+        """
         prop = MapPixelProperty(name=property_file_name_to_center)
         prop.read()
         if self.shape != prop.shape:
@@ -443,6 +603,12 @@ class TomographicMap(object):
 
 
 class DistanceMap(TomographicMap):
+    """A map of the distance from each voxel to the nearest line of sight.
+
+    Built from a :class:`Pixel` file and a reference :class:`TomographicMap`;
+    used to mask poorly-sampled regions of the reconstruction and to cut voids.
+    """
+
     def __init__(
         self,
         map_array=None,
@@ -455,6 +621,7 @@ class DistanceMap(TomographicMap):
         property_file=None,
         Omega_m=None,
     ):
+        """Initialise a distance map (same signature as :class:`TomographicMap`)."""
         super(DistanceMap, self).__init__(
             map_array=map_array,
             name=name,
@@ -469,6 +636,16 @@ class DistanceMap(TomographicMap):
 
     @classmethod
     def init_from_tomographic_map(cls, tomographic_map, name=None, map_array=None):
+        """Construct a distance map sharing a map's geometry.
+
+        Args:
+            tomographic_map (TomographicMap): Reference map (geometry source).
+            name (str, optional): Distance-map file path.
+            map_array (numpy.ndarray, optional): Precomputed distance array.
+
+        Returns:
+            DistanceMap: The distance map.
+        """
         return cls(
             map_array=map_array,
             name=name,
@@ -484,6 +661,18 @@ class DistanceMap(TomographicMap):
     def init_by_computing(
         cls, pixel, tomographic_map, name_map, nb_process=1, radius_local=50
     ):
+        """Compute the distance map from a pixel file and reference map.
+
+        Args:
+            pixel (Pixel): Line-of-sight pixel object.
+            tomographic_map (TomographicMap): Reference map (geometry source).
+            name_map (str): Output distance-map file.
+            nb_process (int, optional): Number of parallel processes.
+            radius_local (float, optional): Local search radius (Mpc.h^-1).
+
+        Returns:
+            DistanceMap: The computed distance map.
+        """
         cls.log = utils.create_report_log(name=os.path.join("Python_Report"))
         if tomographic_map.coordinate_transform.lower() == "middle":
             distance_map = cls.create_mask_aligned_los(
@@ -504,6 +693,20 @@ class DistanceMap(TomographicMap):
     def create_mask_aligned_los(
         cls, pixel, tomographic_map, nb_process=1, radius_local=50
     ):
+        """Compute the distance array, dispatching serial or parallel.
+
+        Args:
+            pixel (Pixel): Line-of-sight pixel object.
+            tomographic_map (TomographicMap): Reference map.
+            nb_process (int, optional): Number of parallel processes.
+            radius_local (float, optional): Local search radius (Mpc.h^-1).
+
+        Returns:
+            numpy.ndarray: The distance array.
+
+        Raises:
+            KeyError: If the map size/shape or the pixel array is missing.
+        """
         if (tomographic_map.size is None) | (tomographic_map.shape is None):
             raise KeyError("Please provide map size and shape")
         if pixel.pixel_array.all() is None:
@@ -520,6 +723,17 @@ class DistanceMap(TomographicMap):
 
     @classmethod
     def create_distance_map_serial(cls, pixel, tomographic_map, radius_local=50):
+        """Compute the nearest-LOS distance array serially (per-LOS local box).
+
+        Args:
+            pixel (Pixel): Line-of-sight pixel object.
+            tomographic_map (TomographicMap): Reference map.
+            radius_local (float, optional): Local search radius (Mpc.h^-1);
+                also the fill value for voxels no LOS reaches.
+
+        Returns:
+            numpy.ndarray: The distance array.
+        """
         x, y, z = pixel.repack_by_los()
         pixels = [[[x[i], y[i]], z[i]] for i in range(len(x))]
         distance_array = np.full(tomographic_map.shape, np.inf)
@@ -633,6 +847,18 @@ class DistanceMap(TomographicMap):
 
     @classmethod
     def create_distance_map_parallel(cls, pixel, tomographic_map, nb_process):
+        """Compute the nearest-LOS distance array with a process pool.
+
+        Uses a shared array reduced with a min over per-LOS workers.
+
+        Args:
+            pixel (Pixel): Line-of-sight pixel object.
+            tomographic_map (TomographicMap): Reference map.
+            nb_process (int): Number of parallel processes.
+
+        Returns:
+            numpy.ndarray: The distance array.
+        """
         cls.log.add("Creation of global variables")
         x, y, z = pixel.repack_by_los()
         pixels = [[[x[i], y[i]], z[i]] for i in range(len(x))]
@@ -655,6 +881,12 @@ class DistanceMap(TomographicMap):
 
     @classmethod
     def worker_create_distance_map(cls, pixels, shape):
+        """Pool worker: fold one line of sight into the shared distance array.
+
+        Args:
+            pixels (list): ``[[x, y], z_array]`` of one line of sight.
+            shape (tuple[int]): Map pixel shape.
+        """
         cls.log.add("Creation of the dist map for one LOS")
         LOS_range = np.full(shape, np.inf)
         mask1 = (dist_map[:, :, :, 2] < np.min(pixels[1])) | (
@@ -680,9 +912,29 @@ class DistanceMap(TomographicMap):
         del LOS_range
 
     def get_mask_distance(self, distance):
+        """Boolean mask of voxels beyond a distance-to-LOS threshold.
+
+        Args:
+            distance (float): Threshold (Mpc.h^-1).
+
+        Returns:
+            numpy.ndarray: True where the voxel is farther than ``distance``.
+        """
         return self.map_array > distance
 
     def give_redshift_cut(self, distance_criteria, percent_criteria):
+        """Return the redshift where the well-sampled fraction drops below a level.
+
+        Args:
+            distance_criteria (float): Distance-to-LOS threshold (Mpc.h^-1).
+            percent_criteria (float): Required well-sampled fraction per z slice.
+
+        Returns:
+            float: The redshift of the first failing slice.
+
+        Raises:
+            KeyError: If the coordinate transform is not ``"middle"``.
+        """
         if self.coordinate_transform != "middle":
             raise KeyError("Only implemented for middle coordinate transformation")
         mask_distance = self.get_mask_distance(distance_criteria)
@@ -702,6 +954,13 @@ class DistanceMap(TomographicMap):
 
 
 class StackMap(TomographicMap):
+    """A mean map cut-out stacked at catalog positions.
+
+    Built by averaging fixed-size map cut-outs around each catalog object
+    (optionally radius-normalised); supports merging several stacks, an
+    ellipticity fit and a mean line-of-sight distance measurement.
+    """
+
     def __init__(
         self,
         map_array=None,
@@ -718,6 +977,17 @@ class StackMap(TomographicMap):
         ellipticity=None,
         mean_los_distance=None,
     ):
+        """Initialise a stack map.
+
+        Args:
+            map_array, name, shape, size, boundary_cartesian_coord,
+                boundary_sky_coord, coordinate_transform, property_file,
+                Omega_m: See :class:`TomographicMap`.
+            tomographic_map (TomographicMap, optional): Source map.
+            catalog (Catalog, optional): Catalog stacked on.
+            ellipticity (dict, optional): Cached ellipticity fit.
+            mean_los_distance (float, optional): Cached mean LOS distance.
+        """
         super(StackMap, self).__init__(
             map_array=map_array,
             name=name,
@@ -737,6 +1007,17 @@ class StackMap(TomographicMap):
 
     @classmethod
     def init_by_merging(cls, stack_name, property_stack_name, name, property_name):
+        """Merge several stacks by concatenating their cut-outs.
+
+        Args:
+            stack_name (list[str]): Stack binary files.
+            property_stack_name (list[str]): Their property files.
+            name (str): Output merged stack file.
+            property_name (str): Output merged property file.
+
+        Returns:
+            StackMap: The merged stack.
+        """
         mean_stack = []
         for i in range(len(stack_name)):
             stack = cls.init_stack_by_property_file(
@@ -768,6 +1049,19 @@ class StackMap(TomographicMap):
         catalog_name=None,
         type_catalog=None,
     ):
+        """Construct a stack from a property file, optionally with map/catalog.
+
+        Args:
+            property_file_name (str): Stack property file.
+            name (str, optional): Stack binary file.
+            tomographic_map_name (str, optional): Source map file.
+            property_file_map (str, optional): Source map property file.
+            catalog_name (str, optional): Catalog file.
+            type_catalog (str, optional): Catalog type.
+
+        Returns:
+            StackMap: The stack.
+        """
         tomographic_map, catalog = None, None
         if (tomographic_map_name is not None) & (property_file_map is not None):
             tomographic_map = TomographicMap.init_from_property_files(
@@ -794,6 +1088,26 @@ class StackMap(TomographicMap):
         normalized=False,
         coordinate_convert=None,
     ):
+        """Build the stack by averaging map cut-outs at catalog positions.
+
+        For each catalog object, interpolates a cube of the map around it
+        (optionally radius-scaled and coordinate-converted), skips objects whose
+        cube falls outside the map, and averages the surviving cubes.
+
+        Args:
+            tomographic_map (TomographicMap): Source map.
+            catalog (Catalog): Catalog stacked on.
+            size_stack (float): Half-size of the cube (Mpc.h^-1).
+            shape_stack (tuple[int]): Half pixel shape of the cube.
+            property_file (str): Output stack property file.
+            name (str, optional): Output stack binary file.
+            interpolation_method (str, optional): ``"NEAREST"``/``"LINEAR"``.
+            normalized (bool, optional): Radius-scale the cubes (voids only).
+            coordinate_convert (str, optional): Coordinate conversion.
+
+        Returns:
+            StackMap: The stack.
+        """
         (coord, radius, min_radius) = cls.initiate_stack(
             coordinate_convert, normalized, tomographic_map, catalog
         )
@@ -863,6 +1177,22 @@ class StackMap(TomographicMap):
 
     @classmethod
     def initiate_stack(cls, coordinate_convert, normalized, tomographic_map, catalog):
+        """Select the catalog coordinates (and radii) to stack on.
+
+        Args:
+            coordinate_convert (str | None): Requested coordinate conversion.
+            normalized (bool | float): If truthy, minimum radius to keep (voids).
+            tomographic_map (TomographicMap): Source map.
+            catalog (Catalog): Catalog stacked on.
+
+        Returns:
+            tuple: ``(coord, radius, min_radius)`` (radius/min_radius are None
+            when not normalising).
+
+        Raises:
+            ValueError: If ``coordinate_convert`` equals the map transform.
+            KeyError: If normalising a non-void catalog.
+        """
         if coordinate_convert is not None:
             if coordinate_convert.lower() == tomographic_map.coordinate_transform:
                 raise ValueError(
@@ -882,6 +1212,15 @@ class StackMap(TomographicMap):
 
     @classmethod
     def create_init_stack_coordinates(cls, shape_stack, size_stack):
+        """Build the centred coordinate grid of one stack cube.
+
+        Args:
+            shape_stack (tuple[int]): Half pixel shape per axis.
+            size_stack (float): Half-size of the cube (Mpc.h^-1).
+
+        Returns:
+            numpy.ndarray: Grid of shape ``(nx, ny, nz, 3)`` centred on 0.
+        """
         x_array = np.linspace(-size_stack, size_stack, 2 * shape_stack[0] + 1)
         y_array = np.linspace(-size_stack, size_stack, 2 * shape_stack[1] + 1)
         z_array = np.linspace(-size_stack, size_stack, 2 * shape_stack[2] + 1)
@@ -893,6 +1232,20 @@ class StackMap(TomographicMap):
     def convert_coord(
         cls, coord_stack_local, coordinate_transform, coordinate_convert, property
     ):
+        """Re-project stack coordinates between two coordinate transforms.
+
+        Converts cartesian -> sky under ``coordinate_convert`` then sky ->
+        cartesian under ``coordinate_transform``.
+
+        Args:
+            coord_stack_local (numpy.ndarray): Cartesian stack coordinates.
+            coordinate_transform (str): Target cartesian transform.
+            coordinate_convert (str): Source transform used for the sky step.
+            property (MapPixelProperty): Geometry/cosmology source.
+
+        Returns:
+            numpy.ndarray: The re-projected coordinates.
+        """
         coord_converted = np.zeros(coord_stack_local.shape)
         suplementary_parameters = utils.return_suplementary_parameters(
             coordinate_convert, property=property
@@ -936,6 +1289,17 @@ class StackMap(TomographicMap):
     def inv_convert_center(
         cls, coord, coordinate_transform, coordinate_convert, property
     ):
+        """Re-project a single centre coordinate between two transforms.
+
+        Args:
+            coord (sequence): Cartesian ``(x, y, z)`` centre.
+            coordinate_transform (str): Source cartesian transform.
+            coordinate_convert (str): Target cartesian transform.
+            property (MapPixelProperty): Geometry/cosmology source.
+
+        Returns:
+            numpy.ndarray: The re-projected ``(X, Y, Z)`` centre.
+        """
         suplementary_parameters = utils.return_suplementary_parameters(
             coordinate_transform, property=property
         )
@@ -967,6 +1331,11 @@ class StackMap(TomographicMap):
         return np.array([X, Y, Z])
 
     def compute_distance_to_los(self, pixel_name):
+        """Compute and cache the mean radial distance from objects to LOS ends.
+
+        Args:
+            pixel_name (str): Pixel (line-of-sight) file.
+        """
         pixel = Pixel(name=pixel_name)
         pixel.read()
         x, y, z = pixel.repack_by_los()
@@ -981,6 +1350,15 @@ class StackMap(TomographicMap):
         self.mean_los_distance = np.mean(diffz)
 
     def compute_stack_ellipticity(self, sign=1):
+        """Fit a 2D Gaussian to each central slice and cache the ellipticities.
+
+        For the x, y and z central slices, fits a rotated 2D Gaussian, converts
+        its widths to Mpc.h^-1 and stores the axis ratio and fit parameters in
+        ``self.ellipticity``.
+
+        Args:
+            sign (int, optional): Overridden internally by the central-voxel sign.
+        """
         ellipticity = {}
         sign = np.sign(
             self.map_array[
@@ -1034,6 +1412,11 @@ class StackMap(TomographicMap):
         self.ellipticity = ellipticity
 
     def add_ellipticity_errors(self, ellipticities):
+        """Add jackknife errors on the ellipticities.
+
+        Args:
+            ellipticities (list[dict]): Per-jackknife-sample ellipticity dicts.
+        """
         for direction in ["x", "y", "z"]:
             sum_ellipticity = 0
             for i in range(len(ellipticities)):
@@ -1047,6 +1430,13 @@ class StackMap(TomographicMap):
 
 
 class Pixel(object):
+    """Line-of-sight pixel data: the tomographic solver's input.
+
+    Stores an ``(N, 5)`` array of ``(x, y, z, sigma, delta)`` per pixel plus the
+    box geometry, and provides read/write, per-LOS repacking and line-of-sight
+    density / mean-separation diagnostics.
+    """
+
     def __init__(
         self,
         pixel_array=None,
@@ -1057,6 +1447,17 @@ class Pixel(object):
         property_file=None,
         Omega_m=None,
     ):
+        """Store the pixel array and its metadata.
+
+        Args:
+            pixel_array (numpy.ndarray, optional): ``(N, 5)`` pixel data.
+            name (str, optional): Pixel binary file path.
+            boundary_cartesian_coord (optional): Cartesian bounding box.
+            boundary_sky_coord (optional): Sky bounding box.
+            coordinate_transform (str, optional): Sky<->cartesian transform mode.
+            property_file (str, optional): Associated property file.
+            Omega_m (float, optional): Fiducial matter density.
+        """
         self.name = name
         self.pixel_array = pixel_array
         self.boundary_cartesian_coord = boundary_cartesian_coord
@@ -1071,6 +1472,16 @@ class Pixel(object):
 
     @classmethod
     def init_from_property_files(cls, property_file, pixel_array=None, name=None):
+        """Construct a pixel object, reading geometry from a property file.
+
+        Args:
+            property_file (str): Property file path.
+            pixel_array (numpy.ndarray, optional): ``(N, 5)`` pixel data.
+            name (str, optional): Pixel binary file path.
+
+        Returns:
+            Pixel: The pixel object.
+        """
         Property = MapPixelProperty(name=property_file)
         verify_file(property_file)
         Property.read()
@@ -1098,6 +1509,11 @@ class Pixel(object):
         )
 
     def read(self):
+        """Read the pixel binary into an ``(N, 5)`` array.
+
+        Raises:
+            ValueError: If ``name`` is missing.
+        """
         if self.name is None:
             raise ValueError("No name was provided for reading pixel")
         else:
@@ -1106,6 +1522,11 @@ class Pixel(object):
                 self.pixel_array = pixel_data.reshape((len(pixel_data) // 5, 5))
 
     def write(self):
+        """Write the pixel array to the ``name`` binary file.
+
+        Raises:
+            ValueError: If no pixel array is stored.
+        """
         if self.pixel_array is None:
             raise ValueError(
                 "No pixel array is stored in this pixel class for writting"
@@ -1114,11 +1535,17 @@ class Pixel(object):
         listpixel.tofile(self.name)
 
     def writetxt(self, name_out):
+        """Write per-LOS endpoints ``(x, y, z_first, z_last)`` to a text file.
+
+        Args:
+            name_out (str): Output text file.
+        """
         x, y, z = self.repack_by_los()
         coord = np.array([[x[i], y[i], z[i][0], z[i][-1]] for i in range(len(x))])
         np.savetxt(name_out, coord)
 
     def print_prop(self):
+        """Log the pixel array statistics and box geometry metadata."""
         log = utils.create_log()
         if self.name is not None:
             log.add(f"Arguments of the property file {self.name}")
@@ -1145,6 +1572,12 @@ class Pixel(object):
         log.close()
 
     def repack_by_los(self):
+        """Group the pixels by line of sight (unique transverse position).
+
+        Returns:
+            tuple: ``(x, y, z)`` where ``x``/``y`` are the unique LOS positions
+            and ``z`` is a list of the redshift arrays of each LOS.
+        """
         coord = self.pixel_array[:, 0:3]
         unique_coord = np.unique(coord[:, 0:2], axis=0)
         z = []
@@ -1155,6 +1588,11 @@ class Pixel(object):
         return (unique_coord[:, 0], unique_coord[:, 1], z)
 
     def compute_mean_separation(self):
+        """Mean spacing between consecutive pixels (outliers rejected).
+
+        Returns:
+            float: The mean pixel separation (Mpc.h^-1).
+        """
         coord_pixels = self.pixel_array[:, 0:3]
         coord_distance = coord_pixels[1:, :] - coord_pixels[0:-1, :]
         distance = np.sqrt(
@@ -1167,6 +1605,17 @@ class Pixel(object):
 
     @staticmethod
     def compute_mean_distance(x, y, return_array=False):
+        """Mean (or per-point) nearest-neighbour transverse distance.
+
+        Args:
+            x, y (numpy.ndarray): Transverse coordinates of the lines of sight.
+            return_array (bool, optional): Return the per-point array instead of
+                the mean.
+
+        Returns:
+            float | numpy.ndarray | None: Mean distance, per-point array, or
+            None if empty.
+        """
         dmin = np.zeros(x.shape)
         dist_map = np.zeros(x.shape)
         for i in range(len(x)):
@@ -1183,6 +1632,16 @@ class Pixel(object):
 
     @staticmethod
     def compute_mean_distance_density_at_z(zpar, x, y, mini_los, maxi_los):
+        """Mean nearest-LOS distance and LOS count in a redshift plane.
+
+        Args:
+            zpar (float): Redshift of the plane.
+            x, y (numpy.ndarray): Transverse LOS positions.
+            mini_los, maxi_los (numpy.ndarray): Per-LOS redshift extents.
+
+        Returns:
+            tuple: ``(mean_distance, n_los)`` in the plane.
+        """
         mask = (zpar > mini_los) & (zpar < maxi_los)
         xintheplane = x[mask]
         yintheplane = y[mask]
@@ -1190,6 +1649,17 @@ class Pixel(object):
 
     @staticmethod
     def return_mean_distance_density(x, y, z, minra, maxra, mindec, maxdec, minz, maxz):
+        """Redshift profiles of mean LOS separation and surface density.
+
+        Args:
+            x, y (numpy.ndarray): Transverse LOS positions.
+            z (list[array]): Per-LOS redshift arrays.
+            minra, maxra, mindec, maxdec (float): Sky footprint (radians).
+            minz, maxz (float): Radial extent used to build the z sampling.
+
+        Returns:
+            tuple: ``(zpar, dperpz, densityz)``.
+        """
         zpar = np.linspace(1.05 * minz, 0.95 * maxz, 100)
         mini_los = np.array([np.min(z[i]) for i in range(len(z))])
         maxi_los = np.array([np.max(z[i]) for i in range(len(z))])
@@ -1205,6 +1675,15 @@ class Pixel(object):
         return (zpar[1:], dperpz, densityz)
 
     def compute_mean_distance_density(self):
+        """Compute (and cache) the LOS separation/density redshift profiles.
+
+        Returns:
+            tuple: ``(z_array, dperp_array, density_array)`` (redshift, mean
+            separation, surface density).
+
+        Raises:
+            KeyError: If the coordinate transform is not ``"middle"``.
+        """
         if self.coordinate_transform != "middle":
             raise KeyError(
                 "Mean density and separation only implemented for middle coodinate transformation"
@@ -1238,6 +1717,14 @@ class Pixel(object):
         return (self.z_array, self.dperp_array, self.density_array)
 
     def compute_mean_distance_histogram(self, z_value):
+        """Per-LOS nearest-neighbour distances in a redshift plane.
+
+        Args:
+            z_value (float): Redshift of the plane.
+
+        Returns:
+            numpy.ndarray: The nearest-LOS distance of each LOS in the plane.
+        """
         x, y, z = self.repack_by_los()
         mini_los = np.array([np.min(z[i]) for i in range(len(z))])
         maxi_los = np.array([np.max(z[i]) for i in range(len(z))])
@@ -1259,6 +1746,25 @@ class Pixel(object):
         qso_files=None,
         name_qso_out=None,
     ):
+        """Concatenate several adjacent maps and pixel/QSO sets into one box.
+
+        Note:
+            Legacy routine (relies on attributes set elsewhere); to be replaced
+            by a proper initialisation.
+
+        Args:
+            extremum_list (list[str]): Per-sub-box bound pickles.
+            name_map_out (str): Output merged-map file.
+            name_pixel_out (str): Output merged-pixel file.
+            size_maps (list): Per-sub-box sizes.
+            mask_maps (list, optional): Per-sub-box distance-mask files.
+            criteria_mask (float, optional): Distance-mask threshold.
+            qso_files (list[str], optional): Per-sub-box QSO pickles.
+            name_qso_out (str, optional): Output merged QSO text file.
+
+        Returns:
+            tuple: The output map size.
+        """
         map_out = []
         pixel_out = []
         if qso_files is not None:
@@ -1364,6 +1870,13 @@ class Pixel(object):
 
 
 class MapPixelProperty(object):
+    """Geometry and cosmology metadata shared by a map and its pixel file.
+
+    Pickled sidecar storing the box pixel shape, physical size, cartesian/sky
+    bounding boxes, coordinate transform and fiducial Omega_m. It is the
+    ``property_file`` referenced throughout the pipeline.
+    """
+
     def __init__(
         self,
         name=None,
@@ -1374,6 +1887,17 @@ class MapPixelProperty(object):
         coordinate_transform=None,
         Omega_m=None,
     ):
+        """Store the box geometry/cosmology metadata.
+
+        Args:
+            name (str, optional): Property (pickle) file path.
+            size (tuple[float], optional): Physical size (Mpc.h^-1).
+            shape (tuple[int], optional): Pixel shape.
+            boundary_cartesian_coord (optional): Cartesian bounding box.
+            boundary_sky_coord (optional): Sky bounding box.
+            coordinate_transform (str, optional): Sky<->cartesian transform mode.
+            Omega_m (float, optional): Fiducial matter density.
+        """
         self.name = name
         self.size = size
         self.shape = shape
@@ -1394,6 +1918,26 @@ class MapPixelProperty(object):
         coordinate_transform,
         name="property_file.pickle",
     ):
+        """Build a property file from a corner, size and cosmology (middle only).
+
+        Derives the cartesian and sky bounding boxes from a minimum corner, the
+        box size and the fiducial cosmology.
+
+        Args:
+            shape (tuple[int]): Pixel shape.
+            size (tuple[float]): Physical size (Mpc.h^-1).
+            Omega_m (float): Fiducial matter density.
+            minx, miny (float): Minimum cartesian corner (Mpc.h^-1).
+            minredshift (float): Minimum redshift.
+            coordinate_transform (str): Must be ``"middle"``.
+            name (str, optional): Output property file name.
+
+        Returns:
+            MapPixelProperty: The property object.
+
+        Raises:
+            NotImplementedError: If the transform is not ``"middle"``.
+        """
         if coordinate_transform.lower() == "middle":
             (rcomov, distang, inv_rcomov, inv_distang) = utils.get_cosmo_function(
                 Omega_m
@@ -1443,13 +1987,20 @@ class MapPixelProperty(object):
 
     @property
     def mpc_per_pixel(self):
+        """numpy.ndarray: Mpc.h^-1 per pixel along each axis."""
         return utils.mpc_per_pixel(self.size, self.shape)
 
     @property
     def pixel_per_mpc(self):
+        """numpy.ndarray: Pixels per Mpc.h^-1 along each axis."""
         return utils.pixel_per_mpc(self.size, self.shape)
 
     def read(self):
+        """Read the property metadata from the pickle file.
+
+        Raises:
+            ValueError: If ``name`` is missing.
+        """
         if self.name is None:
             raise ValueError("No name was given")
         else:
@@ -1462,6 +2013,11 @@ class MapPixelProperty(object):
             self.Omega_m = file["Omega_m"]
 
     def write(self):
+        """Pickle the property metadata to the ``name`` file.
+
+        Raises:
+            ValueError: If ``name`` is missing.
+        """
         if self.name is None:
             raise ValueError("No name was given")
         else:
@@ -1476,6 +2032,7 @@ class MapPixelProperty(object):
             pickle.dump(dict_prop, open(self.name, "wb"))
 
     def print_prop(self):
+        """Log the stored box geometry and cosmology metadata."""
         log = utils.create_log()
         if self.name is not None:
             log.add(f"Arguments of the property file {self.name}")
@@ -1508,12 +2065,30 @@ class MapPixelProperty(object):
 
 
 class Delta(object):
+    """A picca flux-contrast (delta) FITS file, wrapped for lelantos.
+
+    Holds a list of picca delta objects (one per line of sight) and provides
+    read/write plus extraction of the RA/Dec/redshift/sigma/delta arrays.
+    """
+
     def __init__(self, delta_array=None, name=None, pk1d_type=True):
+        """Store the delta objects and file metadata.
+
+        Args:
+            delta_array (list, optional): List of picca delta objects.
+            name (str, optional): Delta FITS file path.
+            pk1d_type (bool, optional): Whether the file is in pk1d format.
+        """
         self.name = name
         self.delta_array = delta_array
         self.pk1d_type = pk1d_type
 
     def read(self):
+        """Read all lines of sight from the delta FITS file.
+
+        Raises:
+            ValueError: If ``name`` is missing.
+        """
         delta_array = []
         if self.name is None:
             raise ValueError("No name was provided for reading delta")
@@ -1525,6 +2100,15 @@ class Delta(object):
                 delta_file.close()
 
     def read_line(self, delta_file, number_line):
+        """Read a single line-of-sight delta from an open FITS file.
+
+        Args:
+            delta_file: Open ``fitsio.FITS`` handle (re-read if None).
+            number_line (int): HDU index of the line of sight.
+
+        Returns:
+            picca.data.Delta: The delta object.
+        """
         if delta_file is None:
             self.read()
         delta = data.Delta.from_fitsio(
@@ -1533,6 +2117,16 @@ class Delta(object):
         return delta
 
     def return_params(self, center_ra=True):
+        """Extract the per-LOS sky/redshift/delta/sigma arrays.
+
+        Args:
+            center_ra (bool, optional): Recenter RA around 0 (RA > pi wraps to
+                negative).
+
+        Returns:
+            tuple: ``(ra, dec, z, zqso, id, sigma, delta)`` where ``z``,
+            ``sigma`` and ``delta`` are lists of per-LOS arrays.
+        """
         ra, dec, z, delta, sigma, zqso, id = [], [], [], [], [], [], []
         for i in range(len(self.delta_array)):
             zqso.append(Delta.z_qso(self.delta_array[i]))
@@ -1563,6 +2157,11 @@ class Delta(object):
 
     # CR - All the class can be changed to be adapted to picca.
     def write(self):
+        """Write the delta objects to a FITS file (one HDU per line of sight).
+
+        Raises:
+            ValueError: If ``name`` or the delta array is missing.
+        """
         if (self.name is None) | (self.delta_array is None):
             raise ValueError(
                 "No delta array or name is stored in this delta class for writting"
@@ -1574,6 +2173,14 @@ class Delta(object):
             fits.write(fi, header=head, extname=str(head["THING_ID"]))
 
     def create_fi(self, delta):
+        """Build the FITS table and header for one line-of-sight delta.
+
+        Args:
+            delta (picca.data.Delta): The line-of-sight delta object.
+
+        Returns:
+            tuple: ``(record_array, header_dict)`` ready to write.
+        """
         nrows = len(delta.delta)
         head = {}
         if self.pk1d_type:
@@ -1619,18 +2226,26 @@ class Delta(object):
 
     @staticmethod
     def ra(delta):
+        """Return the RA of a picca delta object (radians)."""
         return delta.ra
 
     @staticmethod
     def dec(delta):
+        """Return the Dec of a picca delta object (radians)."""
         return delta.dec
 
     @staticmethod
     def z_qso(delta):
+        """Return the background-QSO redshift of a picca delta object."""
         return delta.z_qso
 
     @staticmethod
     def primary_key(delta):
+        """Return the line-of-sight id of a picca delta object.
+
+        Returns:
+            int: ``los_id`` if present, else the legacy ``thingid``.
+        """
         try:
             return delta.los_id
         except:
@@ -1646,6 +2261,15 @@ class Delta(object):
 
 
 class Catalog(object):
+    """Base class for point catalogs with sky/cartesian coordinate handling.
+
+    Stores ``(N, 3)`` coordinates (sky or cartesian), a primary key and the box
+    geometry/cosmology, and provides FITS I/O headers, coordinate conversions
+    (absolute/normalised, sky<->cartesian), footprint cuts and randomisation.
+    Subclasses: :class:`QSOCatalog`, :class:`DLACatalog`,
+    :class:`GalaxyCatalog`, :class:`VoidCatalog`.
+    """
+
     def __init__(
         self,
         name=None,
@@ -1657,6 +2281,18 @@ class Catalog(object):
         boundary_cartesian_coord=None,
         boundary_sky_coord=None,
     ):
+        """Store the catalog coordinates and metadata.
+
+        Args:
+            name (str, optional): Catalog file path.
+            coord (numpy.ndarray, optional): ``(N, 3)`` coordinates.
+            primary_key (numpy.ndarray, optional): Per-object id.
+            catalog_type (str, optional): ``"sky"`` or ``"cartesian"``.
+            coordinate_transform (str, optional): Sky<->cartesian transform mode.
+            Omega_m (float, optional): Fiducial matter density.
+            boundary_cartesian_coord (optional): Cartesian bounding box.
+            boundary_sky_coord (optional): Sky bounding box.
+        """
         self.name = name
         self.coord = coord
         self.primary_key = primary_key
@@ -1668,6 +2304,15 @@ class Catalog(object):
 
     @classmethod
     def init_catalog_from_fits(cls, name, type_catalog):
+        """Load the right catalog subclass from a FITS file by type.
+
+        Args:
+            name (str): Catalog FITS file.
+            type_catalog (str): ``"qso"``, ``"void"``, ``"galaxy"`` or ``"dla"``.
+
+        Returns:
+            Catalog: The loaded subclass instance.
+        """
         if type_catalog.lower() == "qso":
             return QSOCatalog.init_from_fits(name)
         if type_catalog.lower() == "void":
@@ -1679,6 +2324,17 @@ class Catalog(object):
 
     @staticmethod
     def load_from_fits(name):
+        """Open a catalog FITS file.
+
+        Args:
+            name (str): Catalog FITS file.
+
+        Returns:
+            fitsio.FITS: The open FITS handle.
+
+        Raises:
+            ValueError: If ``name`` is None.
+        """
         if name == None:
             raise ValueError("No name was provided for reading catalog")
         else:
@@ -1686,6 +2342,15 @@ class Catalog(object):
 
     @staticmethod
     def load_header(catalog):
+        """Read the geometry/cosmology metadata from a catalog header.
+
+        Args:
+            catalog (fitsio.FITS): Open catalog handle.
+
+        Returns:
+            tuple: ``(coordinate_transform, boundary_cartesian_coord,
+            boundary_sky_coord, Omega_m)`` (missing entries are None).
+        """
         coordinate_transform, boundary_cartesian_coord, boundary_sky_coord, Omega_m = (
             None,
             None,
@@ -1724,9 +2389,19 @@ class Catalog(object):
 
     @staticmethod
     def close(catalog):
+        """Close an open catalog FITS handle.
+
+        Args:
+            catalog (fitsio.FITS): Handle to close.
+        """
         catalog.close()
 
     def return_header(self):
+        """Build a FITS header dict from the geometry/cosmology metadata.
+
+        Returns:
+            dict: Header keywords (transform, Omega_m, cartesian/sky bounds).
+        """
         head = {}
         if self.coordinate_transform is not None:
             head["COORD_TRANSFORM"] = self.coordinate_transform
@@ -1749,6 +2424,12 @@ class Catalog(object):
         return head
 
     def convert_to_absolute_coordinates(self, property_file=None):
+        """Add the box origin back to the (normalised) coordinates.
+
+        Args:
+            property_file (str, optional): Property file whose bounds override
+                the catalog's.
+        """
         if property_file is not None:
             print("A property file is used instead of the parameters of the catalog")
             prop = MapPixelProperty(name=property_file)
@@ -1767,6 +2448,12 @@ class Catalog(object):
         self.coord[:, 2] = self.coord[:, 2] + boundary[0][2]
 
     def convert_to_normalized_coordinates(self, property_file=None):
+        """Subtract the box origin to get coordinates relative to the box.
+
+        Args:
+            property_file (str, optional): Property file whose bounds override
+                the catalog's.
+        """
         if property_file is not None:
             print("A property file is used instead of the parameters of the catalog")
             prop = MapPixelProperty(name=property_file)
@@ -1785,6 +2472,15 @@ class Catalog(object):
         self.coord[:, 2] = self.coord[:, 2] - boundary[0][2]
 
     def convert_to_sky(self, property_file=None):
+        """Convert cartesian coordinates to sky (RA, Dec, z) in place.
+
+        Args:
+            property_file (str, optional): Property file whose transform /
+                cosmology override the catalog's.
+
+        Raises:
+            KeyError: If the coordinate transform is unsupported.
+        """
         if property_file is not None:
             print("A property file is used instead of the parameters of the catalog")
             prop = MapPixelProperty(name=property_file)
@@ -1831,6 +2527,15 @@ class Catalog(object):
             )
 
     def convert_to_cartesian(self, property_file=None):
+        """Convert sky coordinates to cartesian (Mpc.h^-1) in place.
+
+        Args:
+            property_file (str, optional): Property file whose transform /
+                cosmology override the catalog's.
+
+        Raises:
+            KeyError: If the coordinate transform is unsupported.
+        """
         if property_file is not None:
             print("A property file is used instead of the parameters of the catalog")
             prop = MapPixelProperty(name=property_file)
@@ -1879,6 +2584,14 @@ class Catalog(object):
     def convert_coordinates(
         self, center=False, decenter=False, degree=False, radians=True
     ):
+        """Optionally unwrap RA and/or convert sky angles to degrees in place.
+
+        Args:
+            center (bool, optional): Unused placeholder.
+            decenter (bool, optional): Wrap negative RA back to ``[0, 2pi)``.
+            degree (bool, optional): Convert RA/Dec from radians to degrees.
+            radians (bool, optional): Unused placeholder.
+        """
         if self.catalog_type != "sky":
             return ()
         if decenter:
@@ -1889,11 +2602,17 @@ class Catalog(object):
             self.coord[:, 1] = np.degrees(self.coord[:, 1])
 
     def move_axis(self, moveaxis):
+        """Shift the coordinates by a per-axis offset in place.
+
+        Args:
+            moveaxis (sequence): Offset subtracted from each axis.
+        """
         for i in range(len(moveaxis)):
             self.coord[:, i] = self.coord[:, i] - moveaxis[i]
 
     @property
     def redshift(self):
+        """numpy.ndarray: The redshift of each object (converting if cartesian)."""
         if self.catalog_type == "cartesian":
             self.convert_to_sky()
             redshift = self.coord[:, 2].copy()
@@ -1903,6 +2622,19 @@ class Catalog(object):
         return redshift
 
     def cut_catalog(self, coord_min=None, coord_max=None, center_x_coord=False):
+        """Boolean mask selecting objects inside a coordinate box.
+
+        Args:
+            coord_min (sequence, optional): Lower bounds per axis.
+            coord_max (sequence, optional): Upper bounds per axis.
+            center_x_coord (bool, optional): Wrap the first axis around 180.
+
+        Returns:
+            numpy.ndarray: Boolean selection mask.
+
+        Raises:
+            ValueError: If the coordinates are not 3D.
+        """
         if self.coord.shape[1] != 3:
             raise ValueError(
                 "The catalog is not at the good shape for using this function"
@@ -1921,6 +2653,15 @@ class Catalog(object):
         return mask_select
 
     def cut_z_catalog(self, z_min=None, z_max=None):
+        """Boolean mask selecting objects within a redshift window.
+
+        Args:
+            z_min (float, optional): Lower redshift bound.
+            z_max (float, optional): Upper redshift bound.
+
+        Returns:
+            numpy.ndarray: Boolean selection mask.
+        """
         z = self.coord.copy()
         mask_select = np.full(self.coord.shape, True)
         if z_min is not None:
@@ -1930,6 +2671,14 @@ class Catalog(object):
         return mask_select
 
     def print_statistics(self, close=True):
+        """Log basic catalog statistics (type, count, coordinate ranges).
+
+        Args:
+            close (bool, optional): Close the logger; if False, return it.
+
+        Returns:
+            Logger | None: The logger when ``close`` is False.
+        """
         log = utils.create_log()
         if self.name is not None:
             log.add(f"Arguments of the catalog {self.name}")
@@ -1950,6 +2699,7 @@ class Catalog(object):
             return log
 
     def convert_to_cross_corr_radec(self):
+        """Convert to sky RA/Dec in degrees (unwrapped) for cross-correlation."""
         if self.catalog_type == "cartesian":
             self.convert_to_sky()
         self.convert_coordinates(decenter=True, degree=True)
@@ -1957,6 +2707,14 @@ class Catalog(object):
     def create_randomized_catalog(
         self, name_out, property_file, seed=None, randomized_z_distribution=False
     ):
+        """Randomise object positions within the box and write the catalog.
+
+        Args:
+            name_out (str): Output catalog file.
+            property_file (str): Property file defining the box bounds.
+            seed (int, optional): RNG seed.
+            randomized_z_distribution (bool, optional): Also randomise redshift.
+        """
         prop = MapPixelProperty(name=property_file)
         prop.read()
         if self.catalog_type == "sky":
@@ -1980,6 +2738,8 @@ class Catalog(object):
 
 
 class QSOCatalog(Catalog):
+    """Quasar catalog (RA/Dec/z or cartesian) with plate/MJD/fiber metadata."""
+
     def __init__(
         self,
         name=None,
@@ -1996,6 +2756,7 @@ class QSOCatalog(Catalog):
         boundary_sky_coord=None,
         weights=None,
     ):
+        """Store QSO coordinates plus plate/MJD/fiber/weights (see base class)."""
         super(QSOCatalog, self).__init__(
             name=name,
             coord=coord,
@@ -2015,6 +2776,15 @@ class QSOCatalog(Catalog):
 
     @classmethod
     def init_from_fits(cls, name, redshift_name="Z"):
+        """Load a QSO catalog from FITS (sky ``RA`` or cartesian ``X`` columns).
+
+        Args:
+            name (str): Catalog FITS file.
+            redshift_name (str, optional): Redshift column name.
+
+        Returns:
+            QSOCatalog: The loaded catalog.
+        """
         catalog = Catalog.load_from_fits(name)
         (
             coordinate_transform,
@@ -2077,6 +2847,20 @@ class QSOCatalog(Catalog):
         boundary_sky_coord=None,
         catalog_type="cartesian",
     ):
+        """Build a QSO catalog from a ``(N, 4)`` pixel array.
+
+        Args:
+            quasar_pixels (numpy.ndarray): ``(ra/x, dec/y, z, thing_id)`` rows.
+            name (str, optional): Output catalog file.
+            coordinate_transform (str, optional): Transform mode.
+            Omega_m (float, optional): Fiducial matter density.
+            boundary_cartesian_coord (optional): Cartesian bounding box.
+            boundary_sky_coord (optional): Sky bounding box.
+            catalog_type (str, optional): ``"cartesian"`` or ``"sky"``.
+
+        Returns:
+            QSOCatalog: The built catalog.
+        """
         if name is None:
             name = "qso_catalog.fits"
         coord_ra = quasar_pixels[:, 0]
@@ -2113,12 +2897,23 @@ class QSOCatalog(Catalog):
         )
 
     def cut_catalog_qso(self, coord_min=None, coord_max=None):
+        """Cut the QSO catalog to a coordinate box in place.
+
+        Args:
+            coord_min (sequence, optional): Lower bounds per axis.
+            coord_max (sequence, optional): Upper bounds per axis.
+        """
         mask_select = self.cut_catalog(
             coord_min=coord_min, coord_max=coord_max, center_x_coord=True
         )
         self.apply_mask(mask_select)
 
     def apply_mask(self, mask):
+        """Apply a boolean mask to all QSO arrays in place.
+
+        Args:
+            mask (numpy.ndarray): Boolean selection mask.
+        """
         if self.coord is not None:
             self.coord = self.coord[mask]
         if self.primary_key is not None:
@@ -2133,6 +2928,12 @@ class QSOCatalog(Catalog):
             self.weights = self.weights[mask]
 
     def write(self, convert=True):
+        """Write the QSO catalog to FITS (sky or cartesian layout).
+
+        Args:
+            convert (bool, optional): For sky catalogs, first convert to
+                cross-correlation RA/Dec (degrees, unwrapped).
+        """
         fits = fitsio.FITS(self.name, "rw", clobber=True)
         nrows = self.coord.shape[0]
         head = self.return_header()
@@ -2172,11 +2973,24 @@ class QSOCatalog(Catalog):
         fits.close()
 
     def writetxt(self, name_out, moveaxis=None):
+        """Write the QSO coordinates to a text file.
+
+        Args:
+            name_out (str): Output text file.
+            moveaxis (sequence, optional): Per-axis offset applied first.
+        """
         if moveaxis is not None:
             self.move_axis(moveaxis)
         np.savetxt(name_out, self.coord)
 
     def cut_write_catalog(self, name_out, coord_min, coord_max):
+        """Read, cut to a coordinate box and write the QSO catalog.
+
+        Args:
+            name_out (str): Output catalog file.
+            coord_min (sequence): Lower bounds per axis.
+            coord_max (sequence): Upper bounds per axis.
+        """
         self.read_from_fits()
         self.cut_quasars_catalogs(coord_min, coord_max)
         self.name = name_out
@@ -2184,6 +2998,8 @@ class QSOCatalog(Catalog):
 
 
 class DLACatalog(Catalog):
+    """Damped Lyman-alpha (DLA) catalog with QSO redshift, confidence and NHI."""
+
     def __init__(
         self,
         name=None,
@@ -2198,6 +3014,7 @@ class DLACatalog(Catalog):
         boundary_cartesian_coord=None,
         boundary_sky_coord=None,
     ):
+        """Store DLA coordinates plus z_qso/confidence/NHI (see base class)."""
         super(DLACatalog, self).__init__(
             name=name,
             coord=coord,
@@ -2215,6 +3032,14 @@ class DLACatalog(Catalog):
 
     @classmethod
     def init_from_fits(cls, name):
+        """Load a DLA catalog from a FITS file (``DLACAT`` HDU).
+
+        Args:
+            name (str): Catalog FITS file.
+
+        Returns:
+            DLACatalog: The loaded catalog.
+        """
         catalog = Catalog.load_from_fits(name)
         (
             coordinate_transform,
@@ -2275,6 +3100,19 @@ class DLACatalog(Catalog):
         boundary_cartesian_coord=None,
         boundary_sky_coord=None,
     ):
+        """Build a DLA catalog from a ``(N, 4)`` pixel array.
+
+        Args:
+            dla_pixels (numpy.ndarray): ``(x, y, z, z_qso)`` rows.
+            name (str, optional): Output catalog file.
+            coordinate_transform (str, optional): Transform mode.
+            Omega_m (float, optional): Fiducial matter density.
+            boundary_cartesian_coord (optional): Cartesian bounding box.
+            boundary_sky_coord (optional): Sky bounding box.
+
+        Returns:
+            DLACatalog: The built catalog.
+        """
         if name is None:
             name = "dla_catalog.fits"
         coord_ra = dla_pixels[:, 0]
@@ -2297,6 +3135,14 @@ class DLACatalog(Catalog):
     def cut_catalog_dla(
         self, coord_min=None, coord_max=None, confidence_min=None, nhi_min=None
     ):
+        """Cut the DLA catalog by coordinate/redshift, confidence and NHI.
+
+        Args:
+            coord_min (sequence | float, optional): Lower coordinate/redshift.
+            coord_max (sequence | float, optional): Upper coordinate/redshift.
+            confidence_min (float, optional): Minimum DLA confidence.
+            nhi_min (float, optional): Minimum column density.
+        """
         if self.catalog_type == "sky":
             mask_select = self.cut_z_catalog(z_min=coord_min, z_max=coord_max)
         if self.catalog_type == "cartesian":
@@ -2306,6 +3152,13 @@ class DLACatalog(Catalog):
         self.apply_mask(mask_select, confidence_min=confidence_min, nhi_min=nhi_min)
 
     def apply_mask(self, mask, confidence_min=None, nhi_min=None):
+        """Apply a mask (plus optional confidence/NHI cuts) to the DLA arrays.
+
+        Args:
+            mask (numpy.ndarray): Boolean selection mask.
+            confidence_min (float, optional): Extra minimum-confidence cut.
+            nhi_min (float, optional): Extra minimum-NHI cut.
+        """
         if confidence_min is not None:
             mask &= self.confidence > confidence_min
         if nhi_min is not None:
@@ -2322,6 +3175,7 @@ class DLACatalog(Catalog):
             self.z_qso = self.z_qso[mask]
 
     def write(self):
+        """Write the DLA catalog to FITS (``DLACAT`` HDU)."""
         fits = fitsio.FITS(self.name, "rw", clobber=True)
         nrows = self.coord.shape[0]
         head = self.return_header()
@@ -2365,6 +3219,12 @@ class DLACatalog(Catalog):
 
     @staticmethod
     def convert_old_format_to_new(input, output):
+        """Convert a legacy per-QSO DLA catalog to the flat lelantos format.
+
+        Args:
+            input (str): Legacy DLA catalog (``DLA_CAT`` HDU) file.
+            output (str): Output catalog file.
+        """
         file = fitsio.FITS(input)["DLA_CAT"]
         thid = file["THING_ID"][:]
         z = file["Z_DLA"][:]
@@ -2390,6 +3250,8 @@ class DLACatalog(Catalog):
 
 
 class GalaxyCatalog(Catalog):
+    """Galaxy catalog with photo-z confidence, standard deviation and magnitude."""
+
     def __init__(
         self,
         name=None,
@@ -2404,6 +3266,7 @@ class GalaxyCatalog(Catalog):
         magnitude=None,
         catalog_type="sky",
     ):
+        """Store galaxy coordinates plus photo-z metadata (see base class)."""
         super(GalaxyCatalog, self).__init__(
             name=name,
             coord=coord,
@@ -2422,6 +3285,14 @@ class GalaxyCatalog(Catalog):
 
     @classmethod
     def init_from_fits(cls, name):
+        """Load a galaxy catalog from FITS (sky ``RA`` or cartesian ``X``).
+
+        Args:
+            name (str): Catalog FITS file.
+
+        Returns:
+            GalaxyCatalog: The loaded catalog.
+        """
         catalog = Catalog.load_from_fits(name)
         (
             coordinate_transform,
@@ -2469,6 +3340,14 @@ class GalaxyCatalog(Catalog):
 
     @classmethod
     def init_from_hst_cat(cls, name):
+        """Load a galaxy catalog from an HST-style photo-z FITS file.
+
+        Args:
+            name (str): HST catalog FITS file.
+
+        Returns:
+            GalaxyCatalog: The loaded catalog.
+        """
         catalog = Catalog.load_from_fits(name)
         dec = np.array(catalog[1]["dec"][:])
         ra = np.array(catalog[1]["ra"][:])
@@ -2501,6 +3380,21 @@ class GalaxyCatalog(Catalog):
         distance_map_prop=None,
         distance_map_param=None,
     ):
+        """Cut the galaxy catalog by box, photo-z quality and distance mask.
+
+        Args:
+            coord_min (sequence, optional): Lower coordinate bounds.
+            coord_max (sequence, optional): Upper coordinate bounds.
+            standard_deviation_max (float, optional): Maximum photo-z std.
+            confidence_min (float, optional): Minimum photo-z confidence.
+            magnitude_max (float, optional): Maximum magnitude.
+            distance_map_name (str, optional): Distance-map file.
+            distance_map_prop (str, optional): Distance-map property file.
+            distance_map_param (float, optional): Distance-to-LOS threshold.
+
+        Returns:
+            str: Output file name encoding the applied distance cut.
+        """
         mask_select = self.cut_catalog(
             coord_min=coord_min, coord_max=coord_max, center_x_coord=True
         )
@@ -2531,6 +3425,16 @@ class GalaxyCatalog(Catalog):
     def cut_distance_map(
         self, distance_map_name, distance_map_prop, distance_map_param
     ):
+        """Mask galaxies falling in well-sampled voxels of a distance map.
+
+        Args:
+            distance_map_name (str): Distance-map file.
+            distance_map_prop (str): Distance-map property file.
+            distance_map_param (float): Distance-to-LOS threshold (Mpc.h^-1).
+
+        Returns:
+            numpy.ndarray: Boolean mask of galaxies to keep.
+        """
         distance_map = DistanceMap.init_classic(
             name=distance_map_name, property_file=distance_map_prop
         )
@@ -2549,6 +3453,14 @@ class GalaxyCatalog(Catalog):
     def apply_mask(
         self, mask, standard_deviation_max=None, confidence_min=None, magnitude_max=None
     ):
+        """Apply a mask (plus optional photo-z-quality cuts) to the galaxy arrays.
+
+        Args:
+            mask (numpy.ndarray): Boolean selection mask.
+            standard_deviation_max (float, optional): Maximum photo-z std.
+            confidence_min (float, optional): Minimum photo-z confidence.
+            magnitude_max (float, optional): Maximum magnitude.
+        """
         if standard_deviation_max is not None:
             mask &= self.standard_deviation < standard_deviation_max
         if magnitude_max is not None:
@@ -2567,6 +3479,7 @@ class GalaxyCatalog(Catalog):
             self.magnitude = self.magnitude[mask]
 
     def write(self):
+        """Write the galaxy catalog to FITS (sky or cartesian layout)."""
         fits = fitsio.FITS(self.name, "rw", clobber=True)
         nrows = self.coord.shape[0]
         head = self.return_header()
@@ -2611,6 +3524,15 @@ class GalaxyCatalog(Catalog):
 
 
 class VoidCatalog(Catalog):
+    """Void catalog with radius and per-void statistics.
+
+    Adds to :class:`Catalog` the void radius and derived quantities: pixel
+    crossing parameter, central/mean map value, line-of-sight distance,
+    per-catalog filling factor and weights. Provides FITS I/O, merging, the
+    CROSSING/RADIUS/BORDER/DIST cuts, statistics computation and coordinate
+    corrections.
+    """
+
     def __init__(
         self,
         name=None,
@@ -2629,6 +3551,7 @@ class VoidCatalog(Catalog):
         boundary_cartesian_coord=None,
         boundary_sky_coord=None,
     ):
+        """Store void coordinates, radii and per-void statistics (see base class)."""
         super(VoidCatalog, self).__init__(
             name=name,
             coord=coord,
@@ -2650,6 +3573,17 @@ class VoidCatalog(Catalog):
 
     @classmethod
     def init_from_fits(cls, name):
+        """Load a void catalog from FITS (sky ``RA`` or cartesian ``X``).
+
+        Reads the radius, primary key, weights and any available statistics
+        (crossing, central value, mean value, LOS distance, filling factor).
+
+        Args:
+            name (str): Catalog FITS file.
+
+        Returns:
+            VoidCatalog: The loaded catalog.
+        """
         catalog = Catalog.load_from_fits(name)
         (
             coordinate_transform,
@@ -2723,6 +3657,25 @@ class VoidCatalog(Catalog):
         other_array=None,
         other_array_name=None,
     ):
+        """Build a void catalog from radius/coord arrays and named extras.
+
+        Args:
+            name (str): Output catalog file.
+            radius (numpy.ndarray): Void radii.
+            coord (numpy.ndarray): Void coordinates.
+            catalog_type (str): ``"sky"`` or ``"cartesian"``.
+            coordinate_transform (str): Transform mode.
+            Omega_m (float): Fiducial matter density.
+            boundary_cartesian_coord: Cartesian bounding box.
+            boundary_sky_coord: Sky bounding box.
+            other_array (list[numpy.ndarray], optional): Extra per-void arrays.
+            other_array_name (list[str], optional): Names of the extra arrays
+                (``VALUE``/``MEAN``/``WEIGHT``/``THING_ID``/``CROSSING``/
+                ``LOS_DIST``/``FILLING_FACTOR``).
+
+        Returns:
+            VoidCatalog: The built catalog.
+        """
         (
             central_value,
             weights,
@@ -2781,6 +3734,15 @@ class VoidCatalog(Catalog):
 
     @classmethod
     def init_by_merging(cls, catalog_name, name=None):
+        """Merge several void catalogs, concatenating arrays and unioning bounds.
+
+        Args:
+            catalog_name (list[str]): Void catalog files to merge.
+            name (str, optional): Output catalog file.
+
+        Returns:
+            VoidCatalog: The merged catalog.
+        """
         catalog = [VoidCatalog.init_from_fits(name) for name in catalog_name]
         catalog_type = catalog[0].catalog_type
         (
@@ -2857,6 +3819,12 @@ class VoidCatalog(Catalog):
         )
 
     def writetxt(self, name_out, moveaxis=None):
+        """Write void ``(x, y, z, radius)`` rows to a text file.
+
+        Args:
+            name_out (str): Output text file.
+            moveaxis (sequence, optional): Per-axis offset applied first.
+        """
         if moveaxis is not None:
             self.move_axis(moveaxis)
         coord = np.transpose(
@@ -2867,6 +3835,12 @@ class VoidCatalog(Catalog):
         np.savetxt(name_out, coord)
 
     def write(self, qso_like=False):
+        """Write the void catalog to FITS (sky or cartesian layout).
+
+        Args:
+            qso_like (bool, optional): Emit QSO-like PLATE/MJD/FIBERID columns
+                for cross-correlation tools.
+        """
         fits = fitsio.FITS(self.name, "rw", clobber=True)
         head = self.return_header()
         if self.catalog_type.lower() == "sky":
@@ -2878,6 +3852,14 @@ class VoidCatalog(Catalog):
         fits.close()
 
     def create_sky_void_dictionary(self, qso_like=False):
+        """Build the sky (RA/Dec/Z) FITS column dict for the voids.
+
+        Args:
+            qso_like (bool, optional): Also add PLATE/MJD/FIBERID columns.
+
+        Returns:
+            dict: FITS column arrays.
+        """
         h = {}
         h["RA"] = (
             self.coord[:, 0].astype("f8") if self.coord.shape[0] != 0 else np.array([])
@@ -2901,6 +3883,11 @@ class VoidCatalog(Catalog):
         return h
 
     def create_cartesian_void_dictionary(self):
+        """Build the cartesian (X/Y/Z) FITS column dict for the voids.
+
+        Returns:
+            dict: FITS column arrays.
+        """
         h = {}
         h["X"] = (
             self.coord[:, 0].astype("f8") if self.coord.shape[0] != 0 else np.array([])
@@ -2914,6 +3901,12 @@ class VoidCatalog(Catalog):
         return h
 
     def update_dictionary(self, h, head):
+        """Add radius, ids, weights and any statistics to the FITS dict/header.
+
+        Args:
+            h (dict): FITS column dict (updated in place).
+            head (dict): FITS header dict (updated in place).
+        """
         h["R"] = self.radius.astype("f8")
         if self.primary_key is not None:
             h["THING_ID"] = np.array(self.primary_key).astype("i8")
@@ -2937,6 +3930,7 @@ class VoidCatalog(Catalog):
             head["FILLING_FACTOR"] = self.filling_factor
 
     def print_void_statistics(self):
+        """Log the base catalog statistics plus void-specific quantities."""
         log = self.print_statistics(close=False)
         if self.radius is not None:
             log.add_array_statistics(self.radius, "void radius")
@@ -2975,6 +3969,25 @@ class VoidCatalog(Catalog):
         distance_map_param=None,
         distance_map_percent=None,
     ):
+        """Apply the selected void cuts in place and return the output name.
+
+        Args:
+            method_cut (tuple[str] | str): Any of ``CROSSING``, ``RADIUS``,
+                ``BORDER``, ``DIST`` (``"ALL"`` selects all).
+            coord_min, coord_max (sequence, optional): Coordinate box.
+            cut_crossing_param (float, optional): CROSSING threshold.
+            cut_radius (sequence, optional): ``(rmin, rmax)`` for RADIUS.
+            distance_map_name (str, optional): Distance-map file (DIST).
+            distance_map_prop (str, optional): Distance-map property file.
+            distance_map_param (float, optional): Distance-to-LOS threshold.
+            distance_map_percent (float, optional): Required well-sampled fraction.
+
+        Returns:
+            str: Output file name encoding the applied cuts.
+
+        Raises:
+            KeyError: If a cut is requested without its required parameter.
+        """
         mask_select = self.cut_catalog(
             coord_min=coord_min, coord_max=coord_max, center_x_coord=False
         )
@@ -3028,6 +4041,11 @@ class VoidCatalog(Catalog):
         return name_out
 
     def apply_mask(self, mask):
+        """Apply a boolean mask to all void arrays in place.
+
+        Args:
+            mask (numpy.ndarray): Boolean selection mask.
+        """
         if self.radius is not None:
             self.radius = self.radius[mask]
         if self.coord is not None:
@@ -3046,14 +4064,35 @@ class VoidCatalog(Catalog):
             self.weights = self.weights[mask]
 
     def cut_crossing_parameter(self, cut_crossing_param):
+        """Mask voids whose pixel-crossing parameter exceeds a threshold.
+
+        Args:
+            cut_crossing_param (float): Minimum crossing parameter to keep.
+
+        Returns:
+            numpy.ndarray: Boolean keep-mask.
+        """
         mask = self.crossing_param > cut_crossing_param
         return mask
 
     def cut_radius(self, cut_radius):
+        """Mask voids whose radius lies within ``[rmin, rmax)``.
+
+        Args:
+            cut_radius (sequence): ``(rmin, rmax)`` in Mpc.h^-1.
+
+        Returns:
+            numpy.ndarray: Boolean keep-mask.
+        """
         mask = (self.radius >= cut_radius[0]) & (self.radius < cut_radius[1])
         return mask
 
     def cut_border(self):
+        """Mask out voids whose sphere touches the box border.
+
+        Returns:
+            numpy.ndarray: Boolean keep-mask.
+        """
         cut_border_size = np.array(self.boundary_cartesian_coord[1]) - np.array(
             self.boundary_cartesian_coord[0]
         )
@@ -3075,6 +4114,20 @@ class VoidCatalog(Catalog):
         distance_map_param,
         distance_map_percent,
     ):
+        """Mask voids whose sphere is sufficiently well sampled by lines of sight.
+
+        A void is kept if at least ``distance_map_percent`` of the voxels inside
+        its radius are within ``distance_map_param`` of a line of sight.
+
+        Args:
+            distance_map_name (str): Distance-map file.
+            distance_map_prop (str): Distance-map property file.
+            distance_map_param (float): Distance-to-LOS threshold (Mpc.h^-1).
+            distance_map_percent (float): Required well-sampled fraction (0-1).
+
+        Returns:
+            numpy.ndarray: Boolean keep-mask.
+        """
         distance_map = DistanceMap.init_classic(
             name=distance_map_name, property_file=distance_map_prop
         )
@@ -3155,6 +4208,18 @@ class VoidCatalog(Catalog):
         return mask_cut
 
     def return_array_list(self, other_array_name):
+        """Return the void attribute arrays matching a list of names.
+
+        Args:
+            other_array_name (list[str]): Names (``VALUE``/``MEAN``/``WEIGHT``/
+                ``FILLING_FACTOR``/``THING_ID``/``CROSSING``/``LOS_DIST``).
+
+        Returns:
+            list[numpy.ndarray]: The matching attribute arrays.
+
+        Raises:
+            KeyError: If a name is not a known void attribute.
+        """
         other_array = []
         if other_array_name is not None:
             for i in range(len(other_array_name)):
@@ -3181,6 +4246,7 @@ class VoidCatalog(Catalog):
     ### Computing & specific functions ###
 
     def compute_filling_factor(self):
+        """Compute and cache the void filling factor (void volume / box volume)."""
         if self.filling_factor is not None:
             return ()
         map_size = np.array(self.boundary_cartesian_coord[1]) - np.array(
@@ -3191,6 +4257,11 @@ class VoidCatalog(Catalog):
         self.filling_factor = volume_void / volume_map
 
     def compute_crossing_criteria(self, pixel_name):
+        """Compute and cache each void's line-of-sight crossing parameter.
+
+        Args:
+            pixel_name (str): Pixel (line-of-sight) file.
+        """
         if self.crossing_param is not None:
             return ()
         pixel = Pixel(name=pixel_name)
@@ -3209,6 +4280,11 @@ class VoidCatalog(Catalog):
         self.crossing_param = crossing_param
 
     def compute_los_distance(self, pixel_name):
+        """Compute and cache each void's distance to the nearest pixel.
+
+        Args:
+            pixel_name (str): Pixel (line-of-sight) file.
+        """
         if self.los_distance is not None:
             return ()
         pixel = Pixel(name=pixel_name)
@@ -3227,6 +4303,14 @@ class VoidCatalog(Catalog):
         self.los_distance = los_distance
 
     def get_crossing_qso(self, qso_name):
+        """Return, per void, the QSOs whose transverse position lies within it.
+
+        Args:
+            qso_name (str): QSO catalog file.
+
+        Returns:
+            list[numpy.ndarray]: Per-void arrays of crossing-QSO coordinates.
+        """
         qso = QSOCatalog.init_from_fits(qso_name)
         coord_crossing_qso = []
         for i in range(len(self.radius)):
@@ -3237,6 +4321,12 @@ class VoidCatalog(Catalog):
         return coord_crossing_qso
 
     def compute_cross_corr_parameters(self):
+        """Return void ``(X, Y, Z, weight, redshift)`` rows for cross-correlation.
+
+        Returns:
+            numpy.ndarray: ``(N, 5)`` absolute-cartesian coordinates with weight
+            and redshift.
+        """
         self.convert_to_sky()
         redshift = self.coord[:, 2].copy()
         self.convert_to_cartesian()
@@ -3253,6 +4343,15 @@ class VoidCatalog(Catalog):
     def correct_coordinates(
         self, method, name_out, inv_g_function, pixel_name, **kwargs
     ):
+        """Correct void positions for the redshift-space mapping, in place.
+
+        Args:
+            method (str): ``"barycenter"`` or ``"mindist"``.
+            name_out (str): Output name (used by the caller).
+            inv_g_function: Inverse displacement/mapping function.
+            pixel_name (str): Pixel (line-of-sight) file.
+            **kwargs: Method-specific options.
+        """
         if method == "barycenter":
             self.correct_coordinates_barycenter(inv_g_function, pixel_name, **kwargs)
         elif method == "mindist":
@@ -3271,6 +4370,20 @@ class VoidCatalog(Catalog):
         random_catalog_iterate=None,
         pixel_repacked=None,
     ):
+        """Correct void transverse positions by a weighted LOS barycentre shift.
+
+        Args:
+            inv_g: Inverse mapping from redshift- to real-space separation.
+            pixel_name (str): Pixel (line-of-sight) file.
+            r_max (float, optional): Maximum transverse LOS distance considered.
+            weight (str, optional): Weighting (``None``, ``"gauss"``, ``"exp"``).
+            sigma (float, optional): Gaussian weight scale.
+            A (float, optional): Overall displacement amplitude.
+            L_perp (float, optional): Exponential weight scale.
+            iterate (bool, optional): Unused placeholder.
+            random_catalog_iterate (optional): Unused placeholder.
+            pixel_repacked (str, optional): Pre-repacked pixel pickle.
+        """
         pixel = Pixel(name=pixel_name)
         pixel.read()
         if pixel_repacked is not None:
@@ -3315,6 +4428,12 @@ class VoidCatalog(Catalog):
             self.coord[i, 1] = self.coord[i, 1] + d_r_perp_y
 
     def correct_coordinates_mindist(self, inv_g_min, pixel_name):
+        """Correct void transverse positions using the nearest line of sight.
+
+        Args:
+            inv_g_min: Inverse mapping from redshift- to real-space separation.
+            pixel_name (str): Pixel (line-of-sight) file.
+        """
         pixel = Pixel(name=pixel_name)
         pixel.read()
         x, y, z = pixel.repack_by_los()
@@ -3333,6 +4452,16 @@ class VoidCatalog(Catalog):
             self.coord[i, 1] = self.coord[i, 1] + r_perp_i_y - s_perp_i_y
 
     def get_delta_void(self, rmin, rmax, nr, nameout, name_map, map_property_file):
+        """Compute the mean map delta profile around the voids versus radius.
+
+        Args:
+            rmin (float): Minimum radius bin (Mpc.h^-1).
+            rmax (float): Maximum radius bin (Mpc.h^-1).
+            nr (int): Number of radius bins.
+            nameout (str): Output base name.
+            name_map (str): Tomographic map file.
+            map_property_file (str): Map property file.
+        """
         if os.path.isfile("{}_rmin{}_rmax{}_nr{}.fits".format(nameout, rmin, rmax, nr)):
             return ()
         r_array = np.linspace(rmin, rmax, nr)
@@ -3405,6 +4534,21 @@ class VoidCatalog(Catalog):
 
     @staticmethod
     def assessement_matrix_huge_voids(catalog_name, rmin, d_position, d_radius):
+        """Cross-match large voids across catalogs into a reproducibility matrix.
+
+        For each pair of catalogs, counts how many large (``radius > rmin``)
+        voids match within ``d_position`` and ``d_radius``, normalised by the
+        mean count of the pair.
+
+        Args:
+            catalog_name (list[str]): Void catalog files to compare.
+            rmin (float): Minimum radius for a void to be "huge" (Mpc.h^-1).
+            d_position (float): Position match tolerance (Mpc.h^-1).
+            d_radius (float): Radius match tolerance (Mpc.h^-1).
+
+        Returns:
+            numpy.ndarray: The pairwise assessment matrix.
+        """
         catalog = [VoidCatalog.init_from_fits(name) for name in catalog_name]
         radius_list = [cat.radius for cat in catalog]
         coord_list = [cat.coord for cat in catalog]
