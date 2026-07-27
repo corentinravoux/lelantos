@@ -13,8 +13,8 @@ catalogs** and diagnostic plots. Every stage can be run on its own (via a
 launcher, a script or the API) or all at once through a single configuration
 file.
 
-📖 **Full documentation (API reference + user guide): the MkDocs site built
-from this repository** — see [Documentation](#documentation) below.
+📖 **Full documentation (API reference + user guide):**
+**<https://corentinravoux.github.io/lelantos/>**
 
 ---
 
@@ -141,6 +141,8 @@ map shape/size, …), plus `lelantos_interface.py` for the full pipeline.
 ---
 
 ## Documentation
+
+📖 **Online: <https://corentinravoux.github.io/lelantos/>**
 
 Documentation is written with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/)
 and [mkdocstrings](https://mkdocstrings.github.io/) (the API reference is
