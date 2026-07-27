@@ -1,3 +1,7 @@
+"""Launcher: diagnostic plots of a void catalog
+(lelantos.voidfinder.PlotVoid). Edit the variables at the top, then run
+``python lelantos_plot_void.py``."""
+
 import os
 from lelantos import voidfinder
 

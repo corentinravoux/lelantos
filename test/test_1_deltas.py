@@ -1,3 +1,5 @@
+"""Unit tests for the delta / pixel conversion pipeline."""
+
 import unittest
 import os
 import numpy as np

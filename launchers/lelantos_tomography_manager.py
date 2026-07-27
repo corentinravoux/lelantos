@@ -1,3 +1,7 @@
+"""Launcher: run the tomographic solver on the pixel input
+(lelantos.task_manager.TomographyManager). Edit the variables at the top, then
+run ``python lelantos_tomography_manager.py``."""
+
 import os
 from lelantos import task_manager
 

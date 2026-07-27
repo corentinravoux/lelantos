@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""Script: create a placeholder map property file from a shape/size/cosmology
+(lelantos.tomographic_objects.MapPixelProperty.init_false_prop)."""
+
 from lelantos import tomographic_objects
 import numpy as np
 

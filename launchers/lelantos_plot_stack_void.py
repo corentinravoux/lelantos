@@ -1,3 +1,7 @@
+"""Launcher: plot a void stack of a tomographic map
+(lelantos.tomography.TomographyStack.plot_stack). Edit the variables at the
+top, then run ``python lelantos_plot_stack_void.py``."""
+
 import os
 from lelantos import tomography
 

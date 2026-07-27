@@ -1,3 +1,11 @@
+"""Box sky<->cartesian geometry helpers (vendored from SaclayMocks).
+
+Bundled copy of the SaclayMocks ``box`` module, used as a fallback when
+SaclayMocks is not installed. Provides the coordinate transforms between sky
+``(ra, dec, R)`` and box-frame cartesian ``(X, Y, Z)``, plus box-geometry
+helpers. Prefer installing SaclayMocks directly.
+"""
+
 import scipy as sp
 import numpy as np
 from scipy import random
@@ -5,6 +13,18 @@ PI = np.pi
 
 
 def ComputeXYZdeg(ra,dec,R,ra0,dec0) :
+    """Box cartesian coordinates from sky coordinates in degrees.
+
+    Degree-input wrapper around :func:`ComputeXYZ`.
+
+    Args:
+        ra, dec (array-like): Sky angles (degrees).
+        R (array-like): Comoving distance.
+        ra0, dec0 (float): Box-centre sky angles (degrees).
+
+    Returns:
+        tuple: ``(X, Y, Z)`` box-frame cartesian coordinates.
+    """
     return ComputeXYZ(np.radians(ra),np.radians(dec),R,np.radians(ra0),np.radians(dec0))
 
 def ComputeXYZ(ra,dec,R,ra0,dec0) :
@@ -86,6 +106,15 @@ def ComputeRaDecR(R0,ra0,dec0,X,Y,Z) :
     return ra, dec, R
 
 def Compute_cos_min(LX,LY,Rmax) :
+    """Maximum tangents and minimum cosine of the box opening cone.
+
+    Args:
+        LX, LY (float): Transverse box sizes.
+        Rmax (float): Maximum comoving distance.
+
+    Returns:
+        tuple: ``(tanx_max, tany_max, cos_min)``.
+    """
     #
     #  angle for a point at X=Xmax and Rmax from observer
     sinx_max = (LX/2) / Rmax
@@ -101,6 +130,17 @@ def Compute_cos_min(LX,LY,Rmax) :
     return tanx_max,tany_max,cos_min
 
 def box_center(LX,LY,Rmax,Rmin,margin) :
+    """Radial box centre and depth enclosing a cone within a transverse box.
+
+    Args:
+        LX, LY (float): Transverse box sizes.
+        Rmax, Rmin (float): Comoving distance bounds of the cone.
+        margin (float): Margin kept inside the box edges.
+
+    Returns:
+        tuple: ``(R0, LZ, tanx_max, tany_max)`` — box-centre distance, depth and
+        opening tangents.
+    """
     # we want to include a cone Rmin < R < Rmax in a LX x LY box minus margin
     # returns the resulting tan_max, the required LZ and the box_center distance
     tanx_max,tany_max,cos_min = Compute_cos_min(LX-2*margin,LY-2*margin,Rmax)
@@ -110,6 +150,16 @@ def box_center(LX,LY,Rmax,Rmin,margin) :
 
 
 def box_limitOld(LX,LY,LZ,R0,margin) :
+    """Legacy: radial/angular limits of a box at distance R0 (see box_limit).
+
+    Args:
+        LX, LY, LZ (float): Box sizes.
+        R0 (float): Box-centre comoving distance.
+        margin (float): Margin kept inside the box edges.
+
+    Returns:
+        tuple: ``(Rmin, Rmax, tanx_max, tany_max)``.
+    """
     # compute R_min, R_max, tanx_max and tany_max
     # to be inside the box with a margin
     # for a box located at R0 from the observer
@@ -134,6 +184,16 @@ def box_limitOld(LX,LY,LZ,R0,margin) :
     return Rmin,Rmax,tanx_max,tany_max
 
 def box_limit(LX,LY,LZ,R0,margin) :
+    """Radial and angular limits of a box at distance R0 (with a margin).
+
+    Args:
+        LX, LY, LZ (float): Box sizes (requires ``LX == LY``).
+        R0 (float): Box-centre comoving distance.
+        margin (float): Margin kept inside the box edges.
+
+    Returns:
+        tuple: ``(Rmin, Rmax, tanx_max, tany_max)``.
+    """
     # compute R_min, R_max, tanx_max and tany_max
     # to be inside the box with a margin
     # for a box located at R0 from the observer
@@ -163,6 +223,16 @@ def box_limit(LX,LY,LZ,R0,margin) :
 
 
 def sample_box(xbox,ybox,zbox,rho,threshold=2.5):
+    """Obsolete: sample QSO positions at density peaks of a box.
+
+    Args:
+        xbox, ybox, zbox (array-like): Box cell-centre coordinates per axis.
+        rho (numpy.ndarray): Density field.
+        threshold (float, optional): Peak threshold in units of the rms.
+
+    Returns:
+        list: The sampled QSO objects.
+    """
 #                                                               obsolete
 #
     dmax = 3    # we compute rho over +- dmax cells  should be a parameter <==
@@ -199,6 +269,15 @@ def sample_box(xbox,ybox,zbox,rho,threshold=2.5):
 
 
 def ComputeRaDecR2(x, y, z, ra0, dec0):
+    """Sky coordinates from box cartesian coordinates (rotation form).
+
+    Args:
+        x, y, z (array-like): Box-frame cartesian coordinates.
+        ra0, dec0 (float): Box-centre sky angles (radians).
+
+    Returns:
+        tuple: ``(ra, dec, R)`` with angles in radians.
+    """
     # all angles should be in radians
     # x, y, z are arrays of same dimension, and ra0 dec0 floats
     # Compute (ra,dec,R0) in base R of a point P(x,y,z) where (x,y,z)
@@ -238,6 +317,16 @@ def ComputeRaDecR2(x, y, z, ra0, dec0):
 
 
 def ComputeXYZ2(ra, dec, R, ra0, dec0):
+    """Box cartesian coordinates from sky coordinates (rotation form).
+
+    Args:
+        ra, dec (array-like): Sky angles (radians).
+        R (array-like): Comoving distance.
+        ra0, dec0 (float): Box-centre sky angles (radians).
+
+    Returns:
+        tuple: ``(x, y, z)`` box-frame cartesian coordinates.
+    """
     # all angles should be in radians
     x = R * (np.cos(ra0)*np.cos(dec)*np.sin(ra)
              - np.sin(ra0)*np.cos(dec)*np.cos(ra))

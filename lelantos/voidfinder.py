@@ -29,6 +29,13 @@ from lelantos import tomographic_objects, utils
 
 
 def create_merged_catalog(pwd, list_catalog_name, merged_catalog_name):
+    """Merge several void catalogs into one and write it out.
+
+    Args:
+        pwd (str): Output directory.
+        list_catalog_name (list[str]): Void catalog files to merge.
+        merged_catalog_name (str): Output catalog file name.
+    """
     void_merged = tomographic_objects.VoidCatalog.init_by_merging(
         list_catalog_name, name=os.path.join(pwd, merged_catalog_name)
     )
@@ -36,6 +43,15 @@ def create_merged_catalog(pwd, list_catalog_name, merged_catalog_name):
 
 
 def compute_additional_stats(catalog_name, pixel_name):
+    """Add filling factor, QSO-crossing and LOS-distance stats to a catalog.
+
+    Loads the void catalog, computes the extra per-void quantities from the
+    pixel (line-of-sight) file and writes the catalog back.
+
+    Args:
+        catalog_name (str): Void catalog FITS file.
+        pixel_name (str): Pixel (line-of-sight) file.
+    """
     void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
     void.compute_filling_factor()
     void.compute_crossing_criteria(pixel_name)
@@ -56,6 +72,24 @@ def cut_catalog(
     distance_map_param=None,
     distance_map_percent=None,
 ):
+    """Apply cuts to a void catalog and write the cut catalog.
+
+    Args:
+        pwd (str): Output directory.
+        catalog_name (str): Input void catalog FITS file.
+        method_cut (tuple[str]): Cuts to apply, any of ``CROSSING``, ``RADIUS``,
+            ``BORDER``, ``DIST``.
+        coord_min, coord_max (sequence, optional): Cartesian bounds (BORDER cut).
+        cut_crossing_param (float, optional): Threshold for the CROSSING cut.
+        cut_radius (sequence, optional): ``(rmin, rmax)`` for the RADIUS cut.
+        distance_map_name (str, optional): Distance-map file (DIST cut).
+        distance_map_prop (str, optional): Distance-map property file.
+        distance_map_param (float, optional): Distance-map radius (DIST cut).
+        distance_map_percent (float, optional): Required well-sampled fraction.
+
+    Returns:
+        str: Path of the written cut catalog.
+    """
     void_cut = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
     cut_catalog_name = void_cut.cut_catalog_void(
         method_cut,
@@ -76,6 +110,17 @@ def cut_catalog(
 def correct_void_coordinates(
     pwd, catalog_name, method, name_out, inv_g_function, pixel_name, **kwargs
 ):
+    """Apply a coordinate correction to a void catalog and write it out.
+
+    Args:
+        pwd (str): Output directory.
+        catalog_name (str): Input void catalog FITS file.
+        method (str): Correction method name.
+        name_out (str): Output catalog file name.
+        inv_g_function: Inverse growth/mapping function used by the correction.
+        pixel_name (str): Pixel (line-of-sight) file.
+        **kwargs: Extra correction options.
+    """
     void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
     void.correct_coordinates(method, name_out, inv_g_function, pixel_name, **kwargs)
     void.name = os.path.join(pwd, name_out)
@@ -83,12 +128,27 @@ def correct_void_coordinates(
 
 
 def get_crossing_qso(catalog_name, qso_name):
+    """Return the QSOs whose lines of sight cross the catalog voids.
+
+    Args:
+        catalog_name (str): Void catalog FITS file.
+        qso_name (str): QSO catalog file.
+
+    Returns:
+        The crossing-QSO catalog object.
+    """
     void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
     qso = void.get_crossing_qso(qso_name)
     return qso
 
 
 def create_qso_like_catalog(catalog_name):
+    """Write a QSO-like (RA, Dec, z) void catalog for cross-correlation tools.
+
+    Args:
+        catalog_name (str): Input void catalog FITS file. The output is written
+            next to it with a ``_qso_like`` suffix.
+    """
     void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
     void.name = f"""{void.name.split(".fits")[0]}_qso_like.fits"""
     void.convert_to_cross_corr_radec()
@@ -96,11 +156,25 @@ def create_qso_like_catalog(catalog_name):
 
 
 def qso_to_3d(catalog_name, new_name, moveaxis=None):
+    """Export a QSO catalog to a text file for 3D visualisation.
+
+    Args:
+        catalog_name (str): Input QSO catalog FITS file.
+        new_name (str): Output text file.
+        moveaxis (optional): Axis permutation passed to the writer.
+    """
     qso = tomographic_objects.QSOCatalog.init_from_fits(catalog_name)
     qso.writetxt(new_name, moveaxis=moveaxis)
 
 
 def void_to_3d(catalog_name, new_name, moveaxis=None):
+    """Export a void catalog to a text file for 3D visualisation.
+
+    Args:
+        catalog_name (str): Input void catalog FITS file.
+        new_name (str): Output text file.
+        moveaxis (optional): Axis permutation passed to the writer.
+    """
     void = tomographic_objects.VoidCatalog.init_from_fits(catalog_name)
     void.writetxt(new_name, moveaxis=moveaxis)
 
@@ -113,6 +187,21 @@ def void_to_3d(catalog_name, new_name, moveaxis=None):
 
 
 class VoidFinder(object):
+    """Detect voids (or over-density clusters) in a tomographic map.
+
+    Two algorithms are available: a simple spherical growth finder
+    (``SPHERICAL``) and a watershed segmentation (``WATERSHED``). Large maps can
+    be split into overlapping chunks processed in parallel and merged, with
+    optional restart from temporary per-chunk catalogs.
+
+    Attributes:
+        params_void_finder (dict): Finder parameters (``method``, ``threshold``,
+            ``average``, ``minimal_radius``, ``maximal_radius``, ``radius_step``,
+            ``dist_clusters``).
+        find_cluster (bool): Search over-densities instead of voids if True.
+        delete_option (str): Overlap resolution (``CLUSTERS``/``ITERATION``/``NONE``).
+    """
+
     def __init__(
         self,
         pwd,
@@ -128,6 +217,22 @@ class VoidFinder(object):
         restart=False,
         delete_option="CLUSTERS",
     ):
+        """Initialise the void finder and its report log.
+
+        Args:
+            pwd (str): Output directory for the catalog and log.
+            map_name (str): Path to the tomographic map binary.
+            params_void_finder (dict): Finder parameters (see class docstring).
+            map_shape (tuple[int], optional): Map pixel shape (read if None).
+            map_size (tuple[float], optional): Map physical size (read if None).
+            map_property_file (str, optional): Map property/pickle file.
+            number_core (int, optional): Number of parallel processes.
+            find_cluster (bool, optional): Find over-densities instead of voids.
+            split_map (tuple[int], optional): Chunk grid, e.g. ``(2, 2)``.
+            split_overlap (tuple[int], optional): Chunk overlap in pixels.
+            restart (bool, optional): Resume from temporary chunk catalogs.
+            delete_option (str, optional): Overlap resolution policy.
+        """
         self.pwd = pwd
         self.params_void_finder = params_void_finder
         self.number_core = number_core
@@ -156,6 +261,11 @@ class VoidFinder(object):
         )
 
     def initialize_finder(self):
+        """Load the map and cache its geometry/cosmology metadata.
+
+        Returns:
+            numpy.ndarray: The map array to run the finder on.
+        """
         tomographic_map = tomographic_objects.TomographicMap.init_classic(
             name=self.map_name,
             shape=self.map_shape,
@@ -177,6 +287,11 @@ class VoidFinder(object):
         return map_array
 
     def find_voids(self):
+        """Run the finder on the whole map or on chunks and write the catalog.
+
+        Returns:
+            str: Path of the written void catalog.
+        """
         map_array = self.initialize_finder()
         if self.split_map is None:
             return self.find_voids_single_map(map_array)
@@ -184,6 +299,17 @@ class VoidFinder(object):
             return self.find_voids_map_split(map_array)
 
     def find_voids_single_map(self, map_array):
+        """Run the finder on the full map (no splitting) and save the catalog.
+
+        Args:
+            map_array (numpy.ndarray): The full map array.
+
+        Returns:
+            str: Path of the written void catalog.
+
+        Raises:
+            ValueError: If the finder method is neither WATERSHED nor SPHERICAL.
+        """
         if self.params_void_finder["method"].upper() == "WATERSHED":
             (radius, coord, other_array, other_array_name) = self.find_voids_watershed(
                 (self.map_name, self.map_mpc_per_pixel, map_array)
@@ -210,6 +336,21 @@ class VoidFinder(object):
         return name
 
     def find_voids_map_split(self, map_array):
+        """Run the finder on overlapping chunks, then merge and clean voids.
+
+        Splits the map, runs the finder per chunk (optionally in parallel and
+        with restart from temporary catalogs), merges the chunk results while
+        removing overlap duplicates, and writes the final catalog.
+
+        Args:
+            map_array (numpy.ndarray): The full map array.
+
+        Returns:
+            str: Path of the written void catalog.
+
+        Raises:
+            ValueError: If the finder method is neither WATERSHED nor SPHERICAL.
+        """
         self.save_temporary_file = True
         self.log.add(f"Splitting of the map in chunks: {self.split_map}")
         self.log.add("Saving of temporary files activated")
@@ -313,6 +454,15 @@ class VoidFinder(object):
         return name
 
     def split_map_in_chunks(self, map_array):
+        """Split the map into overlapping transverse chunks.
+
+        Args:
+            map_array (numpy.ndarray): The full map array.
+
+        Returns:
+            dict: Per-chunk dict keyed by ``"iiijjj"`` holding the sub-array,
+            its name, size, pixel scale and cartesian origin (``map_min``).
+        """
         subIntervalx = self.map_shape[0] // self.split_map[0]
         subIntervaly = self.map_shape[1] // self.split_map[1]
         if self.split_overlap is None:
@@ -382,6 +532,15 @@ class VoidFinder(object):
         return map_chunks
 
     def merge_chunks(self, map_chunks):
+        """Concatenate per-chunk voids, dropping those inside overlap borders.
+
+        Args:
+            map_chunks (dict): Per-chunk results from the finder.
+
+        Returns:
+            tuple: ``(radius, coord, other_array, other_array_name)`` for the
+            merged catalog (coordinates shifted to the global frame).
+        """
         radius_to_contatenate = []
         coord_to_contatenate = []
         if self.split_overlap is not None:
@@ -456,6 +615,19 @@ class VoidFinder(object):
         return (radius, coord, other_array, other_array_name)
 
     def find_voids_watershed(self, parameters):
+        """Detect voids by watershed clustering of under-density pixels.
+
+        Under-threshold pixels are clustered; each cluster gives a void centre
+        (extremum pixel), an effective radius (from its volume) and its max/mean
+        delta. Small voids are removed and overlaps cleaned.
+
+        Args:
+            parameters (tuple): ``(map_name, map_mpc_per_pixel, map_array)``.
+
+        Returns:
+            tuple: ``(radius, coord, other_array, other_array_name)`` with
+            ``other_array_name = ["VALUE", "MEAN"]``.
+        """
         map_name, map_mpc_per_pixel, map_array = parameters
         self.log.add(f"Beginning of the Watershed finding for the map {map_name}")
         if self.find_cluster:
@@ -520,6 +692,15 @@ class VoidFinder(object):
         return (radius_clean, coord_clean, other_array_clean, other_array_name)
 
     def create_watershed_clusters(self, indices):
+        """Group pixel indices into clusters by a distance threshold (custom).
+
+        Args:
+            indices (numpy.ndarray): ``(N, 3)`` pixel indices to cluster.
+
+        Returns:
+            tuple: ``(cluster_map, clusters)`` — per-pixel cluster labels and
+            the array of unique cluster ids.
+        """
         cluster_map = np.zeros(indices[:, 0].shape, dtype=np.int64)
         mask_clusters = cluster_map == 0
         cluster_number = 0
@@ -550,6 +731,14 @@ class VoidFinder(object):
         return (cluster_map, clusters)
 
     def create_watershed_clusters2(self, indices):
+        """Cluster pixel indices with scikit-learn agglomerative clustering.
+
+        Args:
+            indices (numpy.ndarray): ``(N, 3)`` pixel indices to cluster.
+
+        Returns:
+            tuple: ``(cluster_map, clusters)``.
+        """
         from sklearn.cluster import AgglomerativeClustering
 
         linkage = "simple"
@@ -564,6 +753,14 @@ class VoidFinder(object):
         return (cluster_map, clusters)
 
     def create_watershed_clusters3(self, indices):
+        """Cluster pixel indices with scipy hierarchical ``fclusterdata``.
+
+        Args:
+            indices (numpy.ndarray): ``(N, 3)`` pixel indices to cluster.
+
+        Returns:
+            tuple: ``(cluster_map, clusters)``.
+        """
         from scipy.cluster.hierarchy import fclusterdata
 
         cluster_map = fclusterdata(indices, t=1, criterion="distance")
@@ -571,6 +768,20 @@ class VoidFinder(object):
         return (cluster_map, clusters)
 
     def find_voids_sphere(self, parameters):
+        """Detect voids by growing spheres around under-threshold seed pixels.
+
+        For each seed pixel a sphere is grown while the enclosed mean stays
+        below (voids) / above (clusters) ``average``, up to ``maximal_radius``.
+        Zero-radius seeds are dropped and overlaps cleaned. Uses module-level
+        globals so the per-seed work can be dispatched to a process pool.
+
+        Args:
+            parameters (tuple): ``(map_name, map_mpc_per_pixel, map_array)``.
+
+        Returns:
+            tuple: ``(radius, coord, other_array, other_array_name)`` with
+            ``other_array_name = ["MEAN", "VALUE"]``.
+        """
         global map_array_spherical_voidfinder
         map_name, map_mpc_per_pixel, map_array_spherical_voidfinder = parameters
         self.log.add(
@@ -645,6 +856,17 @@ class VoidFinder(object):
         return (radius_clean, coord_clean, other_array_clean, other_array_name)
 
     def find_the_sphere(self, mpc_per_pixel, maximal_radius, coord):
+        """Grow the largest under-density sphere around a single seed pixel.
+
+        Args:
+            mpc_per_pixel (array-like): Pixel scale per axis (Mpc.h^-1).
+            maximal_radius (array-like): Search half-window in pixels per axis.
+            coord (array-like): Seed pixel index ``(i, j, k)``.
+
+        Returns:
+            tuple: ``(radius, mean_value)`` in Mpc.h^-1 and enclosed mean delta;
+            ``(0, 0)`` if no valid void is found.
+        """
         map_local = map_array_spherical_voidfinder[
             max(coord[0] - maximal_radius[0], 0) : min(
                 map_array_spherical_voidfinder.shape[0], coord[0] + maximal_radius[0]
@@ -704,6 +926,22 @@ class VoidFinder(object):
         return (radius, mean_value)
 
     def delete_voids(self, mpc_per_pixel, radius, coord, other_array=None, mpc=False):
+        """Remove overlapping voids using the configured ``delete_option``.
+
+        Args:
+            mpc_per_pixel (array-like): Pixel scale per axis (Mpc.h^-1).
+            radius (numpy.ndarray): Void radii.
+            coord (numpy.ndarray): Void coordinates.
+            other_array (list[numpy.ndarray], optional): Extra per-void arrays.
+            mpc (bool, optional): True if ``coord`` is already in Mpc.h^-1.
+
+        Returns:
+            tuple: Cleaned ``(coord, radius[, other_array])`` (the third element
+            is omitted when ``other_array`` is None).
+
+        Raises:
+            ValueError: If ``delete_option`` is unknown.
+        """
         if self.delete_option == "CLUSTERS":
             new_coord, new_radius, new_other_array = self.delete_overlapers_clusters(
                 mpc_per_pixel, radius, coord, other_array=other_array, mpc=mpc
@@ -726,6 +964,18 @@ class VoidFinder(object):
     def iterate_overlap_deletion(
         self, mpc_per_pixel, radius, coord, other_array=None, mpc=False
     ):
+        """Repeatedly delete overlappers until no void overlaps remain.
+
+        Args:
+            mpc_per_pixel (array-like): Pixel scale per axis (Mpc.h^-1).
+            radius (numpy.ndarray): Void radii.
+            coord (numpy.ndarray): Void coordinates.
+            other_array (list[numpy.ndarray], optional): Extra per-void arrays.
+            mpc (bool, optional): True if ``coord`` is already in Mpc.h^-1.
+
+        Returns:
+            tuple: Cleaned ``(coord, radius, other_array)``.
+        """
         if other_array is not None:
             others_arrays_copies = []
             for i in range(len(other_array)):
@@ -760,6 +1010,18 @@ class VoidFinder(object):
     def delete_overlapers(
         self, mpc_per_pixel, radius, coord, other_array=None, mpc=False
     ):
+        """One pass of overlap removal, keeping the largest of each overlap set.
+
+        Args:
+            mpc_per_pixel (array-like): Pixel scale per axis (Mpc.h^-1).
+            radius (numpy.ndarray): Void radii.
+            coord (numpy.ndarray): Void coordinates.
+            other_array (list[numpy.ndarray], optional): Extra per-void arrays.
+            mpc (bool, optional): True if ``coord`` is already in Mpc.h^-1.
+
+        Returns:
+            tuple: ``(coord, radius, nb_deleted, other_array)`` after one pass.
+        """
         if other_array is not None:
             other_array_clean = [[] for i in range(len(other_array))]
         else:
@@ -825,6 +1087,21 @@ class VoidFinder(object):
         )
 
     def find_overlapers(self, mpc_per_pixel, index, rad, radius, coord, mpc=False):
+        """Mask the voids that overlap a reference void.
+
+        Two voids overlap when their centre distance is below the sum of radii.
+
+        Args:
+            mpc_per_pixel (array-like): Pixel scale per axis (Mpc.h^-1).
+            index (array-like): Reference void coordinate.
+            rad (float): Reference void radius.
+            radius (numpy.ndarray): Candidate void radii.
+            coord (numpy.ndarray): Candidate void coordinates.
+            mpc (bool, optional): True if coordinates are already in Mpc.h^-1.
+
+        Returns:
+            numpy.ndarray: Boolean mask of overlapping voids.
+        """
         sum_rad = radius + rad
         if mpc:
             indice_normalized = coord - index
@@ -840,6 +1117,18 @@ class VoidFinder(object):
         return overlapers_mask
 
     def create_overlaper_map(self, mpc_per_pixel, radius, coord, mpc=False):
+        """Group overlapping voids into clusters.
+
+        Args:
+            mpc_per_pixel (array-like): Pixel scale per axis (Mpc.h^-1).
+            radius (numpy.ndarray): Void radii.
+            coord (numpy.ndarray): Void coordinates.
+            mpc (bool, optional): True if coordinates are already in Mpc.h^-1.
+
+        Returns:
+            tuple: ``(cluster_map, clusters)`` — per-void cluster labels and the
+            unique cluster ids.
+        """
         cluster_map = np.zeros(radius.shape, dtype=np.int64)
         mask_clusters = cluster_map == 0
         cluster_number = 0
@@ -871,6 +1160,18 @@ class VoidFinder(object):
     def delete_overlapers_clusters(
         self, mpc_per_pixel, radius, coord, other_array=None, mpc=False
     ):
+        """Reduce each overlap cluster to its largest void (CLUSTERS option).
+
+        Args:
+            mpc_per_pixel (array-like): Pixel scale per axis (Mpc.h^-1).
+            radius (numpy.ndarray): Void radii.
+            coord (numpy.ndarray): Void coordinates.
+            other_array (list[numpy.ndarray], optional): Extra per-void arrays.
+            mpc (bool, optional): True if coordinates are already in Mpc.h^-1.
+
+        Returns:
+            tuple: Cleaned ``(coord, radius, other_array)``.
+        """
         if other_array is not None:
             other_array_clean = [[] for i in range(len(other_array))]
         else:
@@ -908,6 +1209,15 @@ class VoidFinder(object):
             return (np.array(coord_cleaned), np.array(radius_cleaned), None)
 
     def convert_to_Mpc(self, mpc_per_pixel, coord):
+        """Convert pixel coordinates to Mpc.h^-1.
+
+        Args:
+            mpc_per_pixel (array-like): Pixel scale per axis (Mpc.h^-1).
+            coord (numpy.ndarray): Coordinates in pixels.
+
+        Returns:
+            numpy.ndarray: Coordinates in Mpc.h^-1.
+        """
         if coord.shape[0] != 0:
             coord = coord * np.array(mpc_per_pixel)
         return coord
@@ -915,6 +1225,15 @@ class VoidFinder(object):
     def save_temporary_catalog(
         self, map_name, radius, coord, other_array, other_array_name
     ):
+        """Write a per-chunk temporary void catalog (used for restart).
+
+        Args:
+            map_name (str): Chunk map name (used to build the file name).
+            radius (numpy.ndarray): Void radii.
+            coord (numpy.ndarray): Void coordinates.
+            other_array (list[numpy.ndarray]): Extra per-void arrays.
+            other_array_name (list[str]): Names of the extra arrays.
+        """
         dict_void = {"R": radius, "COORD": coord}
         for i in range(len(other_array)):
             dict_void[other_array_name[i]] = other_array[i]
@@ -934,6 +1253,12 @@ class VoidFinder(object):
         void.write()
 
     def delete_temporary_files(self, map_chunks, list_index_map_chunks):
+        """Delete the per-chunk temporary catalogs after a successful merge.
+
+        Args:
+            map_chunks (dict): Per-chunk results.
+            list_index_map_chunks (list[str]): Chunk keys.
+        """
         for i in range(len(list_index_map_chunks)):
             map_name = map_chunks[list_index_map_chunks[i]]["map_name"]
             file_name = self.temporary_file_name.format(map_name)
@@ -941,6 +1266,17 @@ class VoidFinder(object):
                 os.remove(file_name)
 
     def restart_calculation(self, map_chunks, list_index_map_chunks, other_array_name):
+        """Load already-computed chunks from temporary catalogs (restart).
+
+        Args:
+            map_chunks (dict): Per-chunk results (filled in place for found ones).
+            list_index_map_chunks (list[str]): All chunk keys.
+            other_array_name (list[str]): Extra arrays to read from the temps.
+
+        Returns:
+            tuple: ``(map_chunks, remaining_chunk_keys)`` — the chunks still to
+            be computed.
+        """
         list_index_map_chunks_restart = []
         for i in range(len(list_index_map_chunks)):
             map_name = map_chunks[list_index_map_chunks[i]]["map_name"]
@@ -975,6 +1311,21 @@ class VoidFinder(object):
         boundary_cartesian_coord,
         boundary_sky_coord,
     ):
+        """Build and write the final void catalog from finder outputs.
+
+        Args:
+            radius (numpy.ndarray): Void radii.
+            coord (numpy.ndarray): Void coordinates (cartesian, Mpc.h^-1).
+            other_array (list[numpy.ndarray]): Extra per-void arrays.
+            other_array_name (list[str]): Names of the extra arrays.
+            coordinate_transform (str): Map sky<->cartesian transform mode.
+            Omega_m (float): Fiducial matter density used for the map.
+            boundary_cartesian_coord: Cartesian bounding box of the map.
+            boundary_sky_coord: Sky bounding box of the map.
+
+        Returns:
+            str: Path of the written catalog.
+        """
         dict_void = {"R": radius, "COORD": coord}
         for i in range(len(other_array)):
             dict_void[other_array_name[i]] = other_array[i]
@@ -995,6 +1346,15 @@ class VoidFinder(object):
         return name
 
     def get_name_catalog(self):
+        """Build the catalog base name encoding the finder parameters.
+
+        Returns:
+            str: A name embedding the method, threshold, average/dist_clusters,
+            minimal radius and delete option.
+
+        Raises:
+            ValueError: If the finder method is neither SPHERICAL nor WATERSHED.
+        """
         if self.find_cluster:
             name_out = "Clusters"
         else:
@@ -1011,13 +1371,30 @@ class VoidFinder(object):
 
 
 class PlotVoid(object):
+    """Diagnostic plots (histograms, redshift trends) for a void catalog."""
+
     def __init__(self, pwd, void_catalog):
+        """Load the void catalog to plot.
+
+        Args:
+            pwd (str): Output directory for the figures.
+            void_catalog (str): Void catalog FITS file.
+        """
         self.pwd = pwd
         self.void = tomographic_objects.Catalog.init_catalog_from_fits(
             void_catalog, "void"
         )
 
     def load_catalog(self, comparison, value_name):
+        """Read a quantity from the main catalog and any comparison catalogs.
+
+        Args:
+            comparison (list[str] | None): Comparison catalog files.
+            value_name (str): Attribute to read (e.g. ``radius``).
+
+        Returns:
+            tuple: ``(value, comparison_value, comparison_redshift)``.
+        """
         comparison_redshift, comparison_value = None, None
         if comparison is not None:
             comparison_value = []
@@ -1040,6 +1417,16 @@ class PlotVoid(object):
         loaded_value=None,
         **kwargs,
     ):
+        """Plot the histogram of a void quantity (with optional comparisons).
+
+        Args:
+            value_name (str): Quantity to histogram (e.g. ``radius``).
+            name (str): Base output name.
+            comparison (list[str] | list[array], optional): Comparison data.
+            comparison_legend (list[str], optional): Legend labels.
+            loaded_value (array-like, optional): Pre-loaded main values.
+            **kwargs: Styling options.
+        """
         if loaded_value is None:
             (value, comparison_value, comparison_redshift) = self.load_catalog(
                 comparison, value_name
@@ -1066,6 +1453,17 @@ class PlotVoid(object):
         loaded_value=None,
         **kwargs,
     ):
+        """Plot the mean of a void quantity versus redshift.
+
+        Args:
+            value_name (str): Quantity to average (e.g. ``radius``).
+            name (str): Base output name.
+            comparison (list[str] | list[array], optional): Comparison data.
+            comparison_redshift (list[array], optional): Comparison redshifts.
+            comparison_legend (list[str], optional): Legend labels.
+            loaded_value (array-like, optional): Pre-loaded main values.
+            **kwargs: Binning/styling options.
+        """
         if loaded_value is None:
             (value, comparison_value, comparison_redshift) = self.load_catalog(
                 comparison, value_name
@@ -1095,6 +1493,17 @@ class PlotVoid(object):
         loaded_value=None,
         **kwargs,
     ):
+        """Scatter a void quantity versus redshift.
+
+        Args:
+            value_name (str): Quantity to plot (e.g. ``radius``).
+            name (str): Base output name.
+            comparison (list[str] | list[array], optional): Comparison data.
+            comparison_redshift (list[array], optional): Comparison redshifts.
+            comparison_legend (list[str], optional): Legend labels.
+            loaded_value (array-like, optional): Pre-loaded main values.
+            **kwargs: Styling options.
+        """
         if loaded_value is None:
             (value, comparison_value, comparison_redshift) = self.load_catalog(
                 comparison, value_name
@@ -1125,6 +1534,18 @@ class PlotVoid(object):
         z_dependence=True,
         **kwargs,
     ):
+        """Produce all requested diagnostic plots for several void quantities.
+
+        Args:
+            value_names (list[str]): Quantities to plot.
+            name (str): Base output name.
+            comparison (list[str], optional): Comparison catalog files.
+            comparison_legend (list[str], optional): Legend labels.
+            histo (bool, optional): Draw histograms.
+            mean_z_dependence (bool, optional): Draw mean-vs-redshift plots.
+            z_dependence (bool, optional): Draw value-vs-redshift plots.
+            **kwargs: Styling options (``style`` selects a matplotlib style).
+        """
         style = utils.return_key(kwargs, "style", None)
         if style is not None:
             plt.style.use(style)
@@ -1164,6 +1585,14 @@ class PlotVoid(object):
                 )
 
     def compute_ks_stat(self, comparison):
+        """Two-sample KS test between this catalog's radii and a comparison.
+
+        Args:
+            comparison (list[str]): Comparison catalog file(s).
+
+        Returns:
+            tuple: ``(KS_stat, p_value)``.
+        """
         (radius, comparison, comparison_redshift) = self.load_catalog(
             comparison, "radius"
         )
@@ -1171,6 +1600,17 @@ class PlotVoid(object):
         return (KS_stat, p_value)
 
     def plot_radius_histo_fit_expo(self, expo_fit_rmin=0, comparison=None, **kwargs):
+        """Plot the void-radius histogram with an exponential tail fit.
+
+        Args:
+            expo_fit_rmin (float, optional): Minimum radius included in the fit.
+            comparison (list[str], optional): Comparison catalog files.
+            **kwargs: Histogram styling options.
+
+        Returns:
+            tuple: ``(perr, perr_comparison)`` — fit-parameter uncertainties for
+            the main catalog and each comparison.
+        """
         fit_function = lambda x, a, b: np.exp(a * x + b)
 
         (radius, comparison, comparison_redshift) = self.load_catalog(

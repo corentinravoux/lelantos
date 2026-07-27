@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""Script (argparse): cut a QSO catalog to a coordinate box
+(lelantos.tomographic_objects.QSOCatalog)."""
+
 from lelantos import tomographic_objects
 import argparse
 import numpy as np

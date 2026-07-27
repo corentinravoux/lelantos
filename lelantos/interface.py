@@ -28,6 +28,15 @@ from lelantos import cosmology, task_manager, tomography, utils, voidfinder
 
 
 def parse_int_tuple(input):
+    """Parse a config string into a tuple of ints.
+
+    Args:
+        input (str): Comma-separated integers (e.g. ``"2,2,300"``) or the
+            literal ``"None"``.
+
+    Returns:
+        tuple[int] | None: Tuple of ints, or ``None`` if ``input == "None"``.
+    """
     if input == "None":
         return None
     else:
@@ -35,6 +44,14 @@ def parse_int_tuple(input):
 
 
 def parse_float_tuple(input):
+    """Parse a config string into a tuple of floats.
+
+    Args:
+        input (str): Comma-separated floats (e.g. ``"7,50"``) or ``"None"``.
+
+    Returns:
+        tuple[float] | None: Tuple of floats, or ``None`` if ``input == "None"``.
+    """
     if input == "None":
         return None
     else:
@@ -42,6 +59,14 @@ def parse_float_tuple(input):
 
 
 def parse_str_tuple(input):
+    """Parse a config string into a tuple of stripped strings.
+
+    Args:
+        input (str): Comma-separated tokens (e.g. ``"snr , delta"``) or ``"None"``.
+
+    Returns:
+        tuple[str] | None: Tuple of strings, or ``None`` if ``input == "None"``.
+    """
     if input == "None":
         return None
     else:
@@ -49,6 +74,17 @@ def parse_str_tuple(input):
 
 
 def parse_dict(input):
+    """Parse a config string into a Python dict.
+
+    Single quotes are normalised to double quotes and the value is evaluated
+    with :func:`ast.literal_eval`.
+
+    Args:
+        input (str): Python-literal dict (e.g. ``{"n": 8}``) or ``"None"``.
+
+    Returns:
+        dict | None: Parsed dict, or ``None`` if ``input == "None"``.
+    """
     if input == "None":
         return None
     else:
@@ -57,6 +93,14 @@ def parse_dict(input):
 
 
 def parse_float(input):
+    """Parse a config string into a float.
+
+    Args:
+        input (str): A float literal or ``"None"``.
+
+    Returns:
+        float | None: The float, or ``None`` if ``input == "None"``.
+    """
     if input == "None":
         return None
     else:
@@ -64,6 +108,14 @@ def parse_float(input):
 
 
 def parse_int(input):
+    """Parse a config string into an int.
+
+    Args:
+        input (str): An integer literal or ``"None"``.
+
+    Returns:
+        int | None: The int, or ``None`` if ``input == "None"``.
+    """
     if input == "None":
         return None
     else:
@@ -71,6 +123,14 @@ def parse_int(input):
 
 
 def parse_string(input):
+    """Parse a config string, mapping the literal ``"None"`` to ``None``.
+
+    Args:
+        input (str): Any string, or ``"None"``.
+
+    Returns:
+        str | None: The string, or ``None`` if ``input == "None"``.
+    """
     if input == "None":
         return None
     else:
@@ -78,6 +138,18 @@ def parse_string(input):
 
 
 def main(input_file):
+    """Run the full lelantos tomography pipeline from a config file.
+
+    Reads the ``.ini`` file, then executes each enabled stage in order:
+    delta transform, delta plot, delta convert, tomography launch, tomography
+    process, void find, void process, void stack, and the void/tomography/stack
+    plots. The set of stages is controlled by the boolean gates in the
+    ``[main]`` section. See ``scripts/interface_explanatory.ini`` for a full
+    description of every option.
+
+    Args:
+        input_file (str): Path to the interface ``.ini`` configuration file.
+    """
     config = configparser.ConfigParser(
         allow_no_value=True,
         converters={
@@ -240,6 +312,19 @@ def main(input_file):
 def transform_delta(
     delta_path, delta_transform_path, delta_transform_config, delta_config, main_config
 ):
+    """Shuffle and redshift-cut the delta files (``[delta transform]`` stage).
+
+    Wraps :class:`lelantos.cosmology.DeltaModifier` to shuffle the deltas within
+    ``n_cut`` redshift chunks, optionally in lock-step with a second
+    (cross-correlation) delta set.
+
+    Args:
+        delta_path (str): Input delta directory.
+        delta_transform_path (str): Output directory for the shuffled deltas.
+        delta_transform_config: ``[delta transform]`` config section.
+        delta_config: ``[delta convert]`` config section (for the z window).
+        main_config: ``[main]`` config section.
+    """
     os.makedirs(delta_transform_path, exist_ok=True)
     if delta_transform_config.getstr("other_delta_path_out") is not None:
         os.makedirs(
@@ -260,6 +345,19 @@ def transform_delta(
 
 
 def convert_delta(pixel_path, delta_path, software_config, delta_config, main_config):
+    """Convert delta files to solver pixel input (``[delta convert]`` stage).
+
+    Wraps :class:`lelantos.cosmology.DeltaConverter` to apply the footprint /
+    redshift / sigma cuts, perform the sky->cartesian transform and write the
+    binary pixel file(s) and property file consumed by the tomographic solver.
+
+    Args:
+        pixel_path (str): Output directory for pixel/binary products.
+        delta_path (str): Input delta directory.
+        software_config: ``[tomography software]`` config section.
+        delta_config: ``[delta convert]`` config section.
+        main_config: ``[main]`` config section.
+    """
     os.makedirs(pixel_path, exist_ok=True)
     properties = {
         "sigma_f": software_config.getfloat("sigmaf"),
@@ -307,6 +405,19 @@ def convert_delta(pixel_path, delta_path, software_config, delta_config, main_co
 def plot_delta(
     plot_delta_path, delta_path, delta_plot_config, delta_config, main_config
 ):
+    """Produce delta diagnostic plots (``[delta plot]`` stage).
+
+    Wraps :class:`lelantos.cosmology.DeltaAnalyzer` to plot histograms, sky
+    scatter and redshift-dependence of the requested delta quantities, with an
+    optional comparison against a second delta set.
+
+    Args:
+        plot_delta_path (str): Output directory for the figures.
+        delta_path (str): Input delta directory.
+        delta_plot_config: ``[delta plot]`` config section.
+        delta_config: ``[delta convert]`` config section (for the cuts).
+        main_config: ``[main]`` config section.
+    """
     os.makedirs(plot_delta_path, exist_ok=True)
     delta_plotter = cosmology.DeltaAnalyzer(
         plot_delta_path,
@@ -348,6 +459,19 @@ def plot_delta(
 def launch_tomography(
     tomo_path, pixel_path, software_config, tomography_config, main_config
 ):
+    """Run the tomographic solver (``[tomography launching]`` stage).
+
+    Wraps :class:`lelantos.task_manager.TomographyManager` to launch the solver
+    (e.g. Dachshund) on the pixel file, wait for completion, copy the outputs
+    back and clean the temporary run directory.
+
+    Args:
+        tomo_path (str): Run/output directory for the solver.
+        pixel_path (str): Directory holding the pixel input and launch pickle.
+        software_config: ``[tomography software]`` config section.
+        tomography_config: ``[tomography launching]`` config section.
+        main_config: ``[main]`` config section.
+    """
     os.makedirs(tomo_path, exist_ok=True)
     manager = task_manager.TomographyManager(
         tomo_path,
@@ -371,6 +495,20 @@ def process_tomography(
     software_config,
     main_config,
 ):
+    """Post-process solver output (``[tomography process]`` stage).
+
+    Optionally merges the per-chunk solver outputs into a single reconstructed
+    map and/or builds the voxel-to-nearest-line-of-sight distance map used for
+    void cuts and plot masking.
+
+    Args:
+        tomo_abs_path (str): Absolute path to the tomography run directory.
+        pixel_path (str): Directory holding the pixel input and property file.
+        tomography_process_config: ``[tomography process]`` config section.
+        delta_config: ``[delta convert]`` config section.
+        software_config: ``[tomography software]`` config section.
+        main_config: ``[main]`` config section.
+    """
     if tomography_process_config.getboolean("merge_output_maps"):
         tomography.create_merged_map(
             tomo_abs_path,
@@ -400,6 +538,22 @@ def find_void(
     tomography_process_config,
     delta_config,
 ):
+    """Run the void finder on the map (``[void finder]`` stage).
+
+    Wraps :class:`lelantos.voidfinder.VoidFinder` to detect voids
+    (SPHERICAL or WATERSHED) on the reconstructed map and write a void catalog.
+
+    Args:
+        void_path (str): Output directory for the void catalog.
+        tomo_abs_path (str): Absolute path to the tomography directory (map).
+        pixel_path (str): Directory holding the pixel input and property file.
+        void_finder_config: ``[void finder]`` config section.
+        tomography_process_config: ``[tomography process]`` config section.
+        delta_config: ``[delta convert]`` config section.
+
+    Returns:
+        str: Path of the void catalog produced by the finder.
+    """
     os.makedirs(void_path, exist_ok=True)
     params_void_finder = {
         "method": void_finder_config.getstr("method_finder"),
@@ -440,6 +594,25 @@ def process_void(
     software_config,
     void_catalog_name_default,
 ):
+    """Post-process the void catalog (``[void process]`` stage).
+
+    Optionally computes additional per-void statistics, applies the configured
+    cuts (CROSSING / RADIUS / BORDER / DIST) writing a cut catalog, and emits a
+    QSO-like catalog for cross-correlation tools.
+
+    Args:
+        void_path (str): Void catalog directory.
+        tomo_abs_path (str): Absolute path to the tomography directory.
+        pixel_path (str): Directory holding the pixel input and property file.
+        void_process_config: ``[void process]`` config section.
+        delta_config: ``[delta convert]`` config section.
+        tomography_process_config: ``[tomography process]`` config section.
+        software_config: ``[tomography software]`` config section.
+        void_catalog_name_default (str | None): Catalog produced by ``find_void``.
+
+    Returns:
+        str: Path of the (possibly cut) void catalog to use downstream.
+    """
     if void_process_config.getstr("void_catalog") is not None:
         void_catalog_name_process = os.path.join(
             void_path, void_process_config.getstr("void_catalog")
@@ -484,6 +657,25 @@ def stack_void(
     delta_config,
     void_catalog_name_default,
 ):
+    """Stack the map at catalog positions (``[void stack]`` stage).
+
+    Wraps :class:`lelantos.tomography.TomographyStack` to stack map cut-outs at
+    each void/QSO/galaxy position and write the stack binary and its property
+    file.
+
+    Args:
+        stack_void_path (str): Output directory for the stack products.
+        tomo_abs_path (str): Absolute path to the tomography directory (map).
+        void_path (str): Void catalog directory.
+        pixel_path (str): Directory holding the property file.
+        stack_void_config: ``[void stack]`` config section.
+        tomography_process_config: ``[tomography process]`` config section.
+        delta_config: ``[delta convert]`` config section.
+        void_catalog_name_default (str | None): Catalog produced earlier.
+
+    Returns:
+        tuple[str, str]: ``(stack_binary_path, stack_property_file_path)``.
+    """
     os.makedirs(stack_void_path, exist_ok=True)
     if stack_void_config.getstr("void_catalog") is not None:
         void_catalog_name = os.path.join(
@@ -517,6 +709,19 @@ def stack_void(
 def plot_void(
     plot_void_path, void_path, void_plot_config, main_config, void_catalog_name_default
 ):
+    """Produce void-catalog diagnostic plots (``[void plot]`` stage).
+
+    Wraps :class:`lelantos.voidfinder.PlotVoid` to plot histograms and
+    redshift-dependence of void quantities (radius, redshift, central value,
+    LOS distance), with an optional comparison catalog.
+
+    Args:
+        plot_void_path (str): Output directory for the figures.
+        void_path (str): Void catalog directory.
+        void_plot_config: ``[void plot]`` config section.
+        main_config: ``[main]`` config section.
+        void_catalog_name_default (str | None): Catalog produced earlier.
+    """
     if void_plot_config.getstr("void_catalog") is not None:
         void_catalog_name_plot = os.path.join(
             void_path, void_plot_config.getstr("void_catalog")
@@ -561,6 +766,25 @@ def plot_tomography(
     main_config,
     void_catalog_name_default,
 ):
+    """Produce tomographic-map plots (``[tomography plot]`` stage).
+
+    Wraps :class:`lelantos.tomography.TomographyPlot` to draw map slices with
+    optional QSO/void/galaxy overlays, delta histograms (single and comparison),
+    the redshift-integrated map, and catalog-centred maps, according to the
+    enabled ``plot_*`` flags.
+
+    Args:
+        plot_tomography_path (str): Output directory for the figures.
+        tomo_abs_path (str): Absolute path to the tomography directory (map).
+        pixel_path (str): Directory holding the pixel input and property file.
+        void_path (str): Void catalog directory.
+        tomography_plot_config: ``[tomography plot]`` config section.
+        tomography_process_config: ``[tomography process]`` config section.
+        software_config: ``[tomography software]`` config section.
+        delta_config: ``[delta convert]`` config section.
+        main_config: ``[main]`` config section.
+        void_catalog_name_default (str | None): Catalog produced earlier.
+    """
     os.makedirs(plot_tomography_path, exist_ok=True)
     Treat = tomography.TomographyPlot(
         plot_tomography_path,
@@ -674,6 +898,24 @@ def plot_stack_void(
     stack_void_name_default,
     property_stack_void_name_default,
 ):
+    """Plot the void stack (``[stack void plot]`` stage).
+
+    Wraps :meth:`lelantos.tomography.TomographyStack.plot_stack` to plot the
+    stacked map, optionally with an ellipticity fit and QSO-distance overlay.
+
+    Note:
+        This stage reads the keys ``stack_name`` and ``property_stack_name``,
+        which differ from the ``name_stack`` / ``property_file_stack`` keys
+        written by the ``[void stack]`` stage (see interface_explanatory.ini).
+
+    Args:
+        plot_stack_void_path (str): Output directory for the figures.
+        stack_void_path (str): Directory holding the stack products.
+        stack_void_plot_config: ``[stack void plot]`` config section.
+        stack_void_name_default (str | None): Stack binary produced earlier.
+        property_stack_void_name_default (str | None): Stack property file
+            produced earlier.
+    """
     os.makedirs(plot_stack_void_path, exist_ok=True)
 
     if stack_void_plot_config.getstr("stack_name") is not None:
@@ -704,6 +946,18 @@ def plot_stack_void(
 
 
 def print_approximate_shape_size_from_interface_file(input_file):
+    """Estimate and log the map shape/size implied by a config file.
+
+    Reads the ``[delta convert]`` geometry (footprint, redshift window,
+    Omega_m, chunking, overlap, sub-map shape) and calls
+    :func:`lelantos.cosmology.compute_shape_size_parallel_from_interface` to
+    report the approximate full-map pixel shape, physical size (Mpc.h^-1) and
+    the Mpc-per-pixel / pixel-per-Mpc resolution. Useful to size a run before
+    launching it.
+
+    Args:
+        input_file (str): Path to the interface ``.ini`` configuration file.
+    """
     config = configparser.ConfigParser(
         allow_no_value=True,
         converters={

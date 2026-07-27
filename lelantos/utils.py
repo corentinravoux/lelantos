@@ -39,22 +39,69 @@ lambdaLy = 1215.673123130217
 
 
 def mpc_per_pixel(size, shape):
+    """Physical size of one pixel along each axis.
+
+    Args:
+        size (array-like): Box physical size per axis (Mpc.h^-1).
+        shape (array-like): Box pixel count per axis.
+
+    Returns:
+        numpy.ndarray: ``size / (shape - 1)`` per axis (Mpc.h^-1 per pixel).
+    """
     return np.array(size) / (np.array(shape) - 1)
 
 
 def pixel_per_mpc(size, shape):
+    """Number of pixels per Mpc.h^-1 along each axis.
+
+    Args:
+        size (array-like): Box physical size per axis (Mpc.h^-1).
+        shape (array-like): Box pixel count per axis.
+
+    Returns:
+        numpy.ndarray: ``(shape - 1) / size`` per axis.
+    """
     return (np.array(shape) - 1) / np.array(size)
 
 
 def get_map_shape(size, mpc_per_pixel):
+    """Pixel shape implied by a physical size and pixel scale.
+
+    Args:
+        size (array-like): Box physical size per axis (Mpc.h^-1).
+        mpc_per_pixel (array-like): Mpc.h^-1 per pixel per axis.
+
+    Returns:
+        numpy.ndarray: ``size / mpc_per_pixel + 1`` per axis.
+    """
     return (np.array(size) / np.array(mpc_per_pixel)) + 1
 
 
 def get_map_size(shape, mpc_per_pixel):
+    """Physical size implied by a pixel shape and pixel scale.
+
+    Args:
+        shape (array-like): Box pixel count per axis.
+        mpc_per_pixel (array-like): Mpc.h^-1 per pixel per axis.
+
+    Returns:
+        numpy.ndarray: ``(shape - 1) * mpc_per_pixel`` per axis (Mpc.h^-1).
+    """
     return (np.array(shape) - 1) * mpc_per_pixel
 
 
 def get_cosmo_function(Omega_m, Omega_k=0.0):
+    """Build comoving-distance functions and their inverses (via picca).
+
+    Args:
+        Omega_m (float): Matter density parameter.
+        Omega_k (float, optional): Curvature density parameter. Defaults to 0.0.
+
+    Returns:
+        tuple: ``(rcomov, distang, inv_rcomov, inv_distang)`` where ``rcomov``
+        and ``distang`` map redshift to comoving / angular-diameter distance and
+        the two ``inv_*`` interpolators map distance back to redshift.
+    """
     Cosmo = constants.Cosmo(Omega_m, Ok=Omega_k)
     rcomov = Cosmo.get_r_comov
     distang = Cosmo.get_dist_m
@@ -67,6 +114,21 @@ def get_cosmo_function(Omega_m, Omega_k=0.0):
 
 
 def return_suplementary_parameters(mode, property=None, zmin=None, zmax=None):
+    """Return the extra parameters needed by a coordinate transform.
+
+    For the ``"middle"`` transform this is the mid-redshift of the box, taken
+    either from a property object or from an explicit ``(zmin, zmax)`` window.
+
+    Args:
+        mode (str): Coordinate transform mode (e.g. ``"middle"``).
+        property (optional): Object exposing ``boundary_sky_coord`` to read the
+            redshift bounds from.
+        zmin (float, optional): Minimum redshift (if ``property`` is None).
+        zmax (float, optional): Maximum redshift (if ``property`` is None).
+
+    Returns:
+        list | None: ``[middle_z]`` for the ``"middle"`` mode, else ``None``.
+    """
     if mode == "middle":
         if property is not None:
             zmin = property.boundary_sky_coord[0][2]
@@ -89,7 +151,21 @@ def convert_cartesian_to_sky(
     distang=None,
     suplementary_parameters=None,
 ):
-    """Mpc.h-1 to radians"""
+    """Convert cartesian coordinates to sky coordinates (Mpc.h-1 to radians).
+
+    Dispatches to the ``full_angle`` / ``full`` / ``middle`` implementation.
+
+    Args:
+        X, Y, Z (array-like): Cartesian comoving coordinates (Mpc.h^-1).
+        method (str): Transform mode (``"full_angle"``, ``"full"``, ``"middle"``).
+        inv_rcomov (callable, optional): Comoving distance -> redshift.
+        inv_distang (callable, optional): Angular-diameter distance -> redshift.
+        distang (callable, optional): Redshift -> angular-diameter distance.
+        suplementary_parameters (list, optional): Extra params (e.g. middle z).
+
+    Returns:
+        tuple: ``(RA, DEC, z)`` with angles in radians.
+    """
     if method == "full_angle":
         (RA, DEC, z) = convert_cartesian_to_sky_full_angle(X, Y, Z, inv_rcomov)
     if method == "full":
@@ -104,7 +180,21 @@ def convert_cartesian_to_sky(
 def convert_sky_to_cartesian(
     RA, DEC, z, method, rcomov=None, distang=None, suplementary_parameters=None
 ):
-    """Radians to Mpc.h-1"""
+    """Convert sky coordinates to cartesian coordinates (radians to Mpc.h-1).
+
+    Dispatches to the ``full_angle`` / ``full`` / ``middle`` implementation.
+
+    Args:
+        RA, DEC (array-like): Sky angles (radians).
+        z (array-like): Redshift.
+        method (str): Transform mode (``"full_angle"``, ``"full"``, ``"middle"``).
+        rcomov (callable, optional): Redshift -> comoving distance.
+        distang (callable, optional): Redshift -> angular-diameter distance.
+        suplementary_parameters (list, optional): Extra params (e.g. middle z).
+
+    Returns:
+        tuple: ``(X, Y, Z)`` cartesian comoving coordinates (Mpc.h^-1).
+    """
     if method == "full_angle":
         (X, Y, Z) = convert_sky_to_cartesian_full_angle(RA, DEC, z, rcomov)
     elif method == "full":
@@ -117,6 +207,15 @@ def convert_sky_to_cartesian(
 
 
 def convert_cartesian_to_sky_full_angle(X, Y, Z, inv_rcomov):
+    """Cartesian -> sky using the exact spherical angles.
+
+    Args:
+        X, Y, Z (array-like): Cartesian comoving coordinates (Mpc.h^-1).
+        inv_rcomov (callable): Comoving distance -> redshift.
+
+    Returns:
+        tuple: ``(RA, DEC, z)`` with angles in radians.
+    """
     RA = np.arctan2(X, Z)
     DEC = np.arcsin(Y / np.sqrt(X**2 + Y**2 + Z**2))
     z = inv_rcomov(np.sqrt(X**2 + Y**2 + Z**2))
@@ -124,6 +223,16 @@ def convert_cartesian_to_sky_full_angle(X, Y, Z, inv_rcomov):
 
 
 def convert_sky_to_cartesian_full_angle(RA, DEC, z, rcomov):
+    """Sky -> cartesian using the exact spherical angles.
+
+    Args:
+        RA, DEC (array-like): Sky angles (radians).
+        z (array-like): Redshift.
+        rcomov (callable): Redshift -> comoving distance.
+
+    Returns:
+        tuple: ``(X, Y, Z)`` cartesian comoving coordinates (Mpc.h^-1).
+    """
     X = rcomov(z) * np.sin(RA) * np.cos(DEC)
     Y = rcomov(z) * np.sin(DEC)
     Z = rcomov(z) * np.cos(RA) * np.cos(DEC)
@@ -131,6 +240,15 @@ def convert_sky_to_cartesian_full_angle(RA, DEC, z, rcomov):
 
 
 def convert_cartesian_to_sky_full(X, Y, Z, inv_rcomov):
+    """Cartesian -> sky using the small-angle (X/Z, Y/Z) approximation.
+
+    Args:
+        X, Y, Z (array-like): Cartesian comoving coordinates (Mpc.h^-1).
+        inv_rcomov (callable): Comoving distance -> redshift.
+
+    Returns:
+        tuple: ``(RA, DEC, z)``.
+    """
     z = inv_rcomov(np.sqrt(X**2 + Y**2 + Z**2))
     RA = X / Z
     DEC = Y / Z
@@ -138,6 +256,16 @@ def convert_cartesian_to_sky_full(X, Y, Z, inv_rcomov):
 
 
 def convert_sky_to_cartesian_full(RA, DEC, z, rcomov):
+    """Sky -> cartesian using the small-angle approximation.
+
+    Args:
+        RA, DEC (array-like): Sky angles (radians).
+        z (array-like): Redshift.
+        rcomov (callable): Redshift -> comoving distance.
+
+    Returns:
+        tuple: ``(X, Y, Z)`` (Mpc.h^-1).
+    """
     X = rcomov(z) * RA
     Y = rcomov(z) * DEC
     Z = rcomov(z)
@@ -145,6 +273,20 @@ def convert_sky_to_cartesian_full(RA, DEC, z, rcomov):
 
 
 def convert_cartesian_to_sky_middle(X, Y, Z, inv_rcomov, distang, middle_z):
+    """Cartesian -> sky using a tangent plane at the box mid-redshift.
+
+    Transverse coordinates are divided by the angular-diameter distance at the
+    fixed ``middle_z``; the radial coordinate maps directly to redshift.
+
+    Args:
+        X, Y, Z (array-like): Cartesian comoving coordinates (Mpc.h^-1).
+        inv_rcomov (callable): Comoving distance -> redshift.
+        distang (callable): Redshift -> angular-diameter distance.
+        middle_z (float): Reference (box centre) redshift.
+
+    Returns:
+        tuple: ``(RA, DEC, z)``.
+    """
     RA = X / distang(middle_z)
     DEC = Y / distang(middle_z)
     z = inv_rcomov(Z)
@@ -152,6 +294,18 @@ def convert_cartesian_to_sky_middle(X, Y, Z, inv_rcomov, distang, middle_z):
 
 
 def convert_sky_to_cartesian_middle(RA, DEC, z, rcomov, distang, middle_z):
+    """Sky -> cartesian using a tangent plane at the box mid-redshift.
+
+    Args:
+        RA, DEC (array-like): Sky angles (radians).
+        z (array-like): Redshift.
+        rcomov (callable): Redshift -> comoving distance.
+        distang (callable): Redshift -> angular-diameter distance.
+        middle_z (float): Reference (box centre) redshift.
+
+    Returns:
+        tuple: ``(X, Y, Z)`` (Mpc.h^-1).
+    """
     X = distang(middle_z) * RA
     Y = distang(middle_z) * DEC
     Z = rcomov(z)
@@ -159,16 +313,44 @@ def convert_sky_to_cartesian_middle(RA, DEC, z, rcomov, distang, middle_z):
 
 
 def convert_z_cartesian_to_sky_middle(Z, inv_rcomov):
+    """Map the radial cartesian coordinate to redshift (middle transform).
+
+    Args:
+        Z (array-like): Radial comoving coordinate (Mpc.h^-1).
+        inv_rcomov (callable): Comoving distance -> redshift.
+
+    Returns:
+        array-like: Redshift.
+    """
     z = inv_rcomov(Z)
     return z
 
 
 def convert_z_sky_to_cartesian_middle(z, rcomov):
+    """Map redshift to the radial cartesian coordinate (middle transform).
+
+    Args:
+        z (array-like): Redshift.
+        rcomov (callable): Redshift -> comoving distance.
+
+    Returns:
+        array-like: Radial comoving coordinate (Mpc.h^-1).
+    """
     Z = rcomov(z)
     return Z
 
 
 def get_direction_indexes(direction, rotate):
+    """Map a slicing direction name to axis indexes and labels.
+
+    Args:
+        direction (str): One of ``x/ra``, ``y/dec``, ``z/redshift``.
+        rotate (bool): Swap the in-plane x/y indexes if True.
+
+    Returns:
+        tuple: ``(x_index, y_index, index_direction, index_dict)`` giving the
+        two in-plane axis indexes, the slice-normal axis index and a label dict.
+    """
     if (direction.lower() == "x") | (direction.lower() == "ra"):
         x_index, y_index, index_direction = 2, 1, 0
     elif (direction.lower() == "y") | (direction.lower() == "dec"):
@@ -199,6 +381,17 @@ saclay_mock_lines_per_box = {
 
 
 def saclay_mock_box_cosmo_parameters(box_shape, size_cell):
+    """Return the SaclayMocks fiducial cosmology and box radial bounds.
+
+    Args:
+        box_shape (tuple[int]): Box pixel shape ``(nx, ny, nz)``.
+        size_cell (float): Cell size (Mpc.h^-1).
+
+    Returns:
+        tuple: ``(R0, z0, R_of_z, z_of_R, Rmin, Rmax, h)`` — box-centre comoving
+        distance and redshift, distance/redshift interpolators, radial box
+        bounds and the reduced Hubble constant.
+    """
     import cosmolopy.distance as dist
 
     try:
@@ -230,12 +423,33 @@ def saclay_mock_box_cosmo_parameters(box_shape, size_cell):
 
 
 def saclay_mock_center_of_the_box(box_bound):
+    """Return the (RA, Dec) centre of a SaclayMocks box footprint.
+
+    Args:
+        box_bound (sequence): ``(ramin, ramax, decmin, decmax)``.
+
+    Returns:
+        tuple: ``(ra0_box, dec0_box)`` footprint centre.
+    """
     ra0_box = (box_bound[0] + box_bound[1]) / 2
     dec0_box = (box_bound[2] + box_bound[3]) / 2
     return (ra0_box, dec0_box)
 
 
 def saclay_mock_coord_dm_map(X, Y, Z, Rmin, size_cell, box_shape, interpolation_method):
+    """Convert cartesian coordinates to SaclayMocks dark-matter box indexes.
+
+    Args:
+        X, Y, Z (array-like): Cartesian coordinates (Mpc.h^-1).
+        Rmin (float): Radial lower bound of the box (Mpc.h^-1).
+        size_cell (float): Cell size (Mpc.h^-1).
+        box_shape (tuple[int]): Box pixel shape.
+        interpolation_method (str): ``"NEAREST"`` rounds to integer indexes;
+            otherwise fractional indexes are returned.
+
+    Returns:
+        tuple: ``(n_i, n_j, n_k)`` box indexes (int for NEAREST, else float).
+    """
     size_cell = size_cell
     center_x = (box_shape[0] - 1) / 2
     center_y = (box_shape[1] - 1) / 2
@@ -251,12 +465,32 @@ def saclay_mock_coord_dm_map(X, Y, Z, Rmin, size_cell, box_shape, interpolation_
 
 
 def saclay_mock_read_box(box_dir, n_x, name_box):
+    """Read one SaclayMocks box FITS slab from disk.
+
+    Args:
+        box_dir (str): Directory holding the box FITS files.
+        n_x (int): Slab index.
+        name_box (str): Box field name (e.g. ``"box"``, ``"vx"``).
+
+    Returns:
+        numpy.ndarray: The slab data array.
+    """
     name = "{}-{}.fits".format(name_box, str(n_x))
     box = fitsio.FITS(os.path.join(box_dir, name))[0][:, :, :][0]
     return box
 
 
 def saclay_mock_get_box(box_dir, box_shape, name_box="box"):
+    """Assemble a full SaclayMocks box from its per-slab FITS files.
+
+    Args:
+        box_dir (str): Directory holding the box FITS files.
+        box_shape (tuple[int]): Full box pixel shape.
+        name_box (str, optional): Box field name. Defaults to ``"box"``.
+
+    Returns:
+        numpy.ndarray: The assembled 3D box.
+    """
     line_per_box = saclay_mock_lines_per_box[name_box]
     DM_mocks = np.zeros((box_shape[0], box_shape[1], box_shape[2]))
     for i in range(box_shape[0] // line_per_box):
@@ -296,6 +530,20 @@ def saclay_mock_sky_to_cartesian(ra, dec, R, ra0, dec0):
 def cut_sky_catalog(
     ra, dec, z, ramin=None, ramax=None, decmin=None, decmax=None, zmin=None, zmax=None
 ):
+    """Boolean mask selecting objects inside a sky/redshift footprint.
+
+    RA/Dec bounds are given in degrees and compared against ``ra``/``dec`` in
+    radians; unset bounds impose no constraint on that edge.
+
+    Args:
+        ra, dec (array-like): Object sky angles (radians).
+        z (array-like): Object redshift.
+        ramin, ramax, decmin, decmax (float, optional): Angular bounds (degrees).
+        zmin, zmax (float, optional): Redshift bounds.
+
+    Returns:
+        numpy.ndarray: Boolean mask of the selected objects.
+    """
     mask = np.full(ra.shape, True)
     if ramin is not None:
         mask &= ra > np.radians(ramin)
@@ -313,6 +561,15 @@ def cut_sky_catalog(
 
 
 def init_shared_array(shape, full_value=np.inf):
+    """Allocate a flat multiprocessing shared array filled with a constant.
+
+    Args:
+        shape (tuple[int]): Logical array shape (flattened for sharing).
+        full_value (float, optional): Fill value. Defaults to ``np.inf``.
+
+    Returns:
+        multiprocessing.Array: Shared double array of ``prod(shape)`` elements.
+    """
     distance_array = np.full(shape, full_value)
     shared_arr = mp.Array("d", distance_array.flatten())
     del distance_array
@@ -320,6 +577,14 @@ def init_shared_array(shape, full_value=np.inf):
 
 
 def mp_array_to_numpyarray(mp_arr):
+    """View a multiprocessing shared array as a numpy array (no copy).
+
+    Args:
+        mp_arr (multiprocessing.Array): Shared array.
+
+    Returns:
+        numpy.ndarray: A numpy view onto the shared buffer.
+    """
     return np.frombuffer(mp_arr.get_obj())
 
 
@@ -368,6 +633,19 @@ def bin_ndarray(ndarray, new_shape, operation="mean"):
 
 
 def interpolate_map(interpolation_method, map_array, coord):
+    """Sample a 3D map at 3D-gridded coordinates.
+
+    Args:
+        interpolation_method (str): ``"NEAREST"``, ``"LINEAR"`` or ``"SPLINE"``.
+        map_array (numpy.ndarray): The 3D map to sample.
+        coord (numpy.ndarray): Coordinate grid of shape ``(a, b, c, 3)``.
+
+    Returns:
+        numpy.ndarray: Sampled values of shape ``(a, b, c)``.
+
+    Raises:
+        ValueError: If ``interpolation_method`` is not supported.
+    """
     if interpolation_method.upper() == "NEAREST":
         coord = np.around(coord, decimals=0).astype(int)
         DM_map = map_array[coord[:, :, :, 0], coord[:, :, :, 1], coord[:, :, :, 2]]
@@ -389,6 +667,19 @@ def interpolate_map(interpolation_method, map_array, coord):
 
 
 def interpolate_and_fill_map(interpolation_method, map_array, coord):
+    """Sample a 3D map at a flat list of 3D coordinates.
+
+    Args:
+        interpolation_method (str): ``"NEAREST"``, ``"LINEAR"`` or ``"SPLINE"``.
+        map_array (numpy.ndarray): The 3D map to sample.
+        coord (numpy.ndarray): Coordinates of shape ``(N, 3)``.
+
+    Returns:
+        numpy.ndarray: Sampled values of length ``N``.
+
+    Raises:
+        ValueError: If ``interpolation_method`` is not supported.
+    """
     if interpolation_method.upper() == "NEAREST":
         coord_nearest = np.around(coord, decimals=0).astype(int)
         map_to_fill = map_array[
@@ -407,12 +698,32 @@ def interpolate_and_fill_map(interpolation_method, map_array, coord):
 
 
 def gaussian_smoothing(mapdata, sigma):
+    """Gaussian-smooth an array.
+
+    Args:
+        mapdata (numpy.ndarray): Input array.
+        sigma (float | sequence): Gaussian kernel standard deviation.
+
+    Returns:
+        numpy.ndarray: The smoothed array.
+    """
     gaussian_map = gaussian_filter(mapdata, sigma)
     return gaussian_map
 
 
 class gaussian_fitter_2d(object):
+    """Fit a rotated 2D Gaussian (plus background) to a 2D array.
+
+    Attributes:
+        inpdata (numpy.ndarray): The 2D data being fitted.
+    """
+
     def __init__(self, inpdata=None):
+        """Store the 2D data to fit.
+
+        Args:
+            inpdata (numpy.ndarray, optional): The 2D data array.
+        """
         self.inpdata = inpdata
 
     def moments2D(self):
@@ -520,12 +831,29 @@ class gaussian_fitter_2d(object):
 
 
 def create_log(log_level="info"):
+    """Create and configure a stream :class:`Logger`.
+
+    Args:
+        log_level (str, optional): ``"info"``, ``"debug"`` or ``"warning"``.
+
+    Returns:
+        Logger: A logger writing to the console.
+    """
     log = Logger(log_level=log_level)
     log.setup_logging()
     return log
 
 
 def create_report_log(name="Python_Report", log_level="info"):
+    """Create and configure a file (report) :class:`Logger`.
+
+    Args:
+        name (str, optional): Report file path. Defaults to ``"Python_Report"``.
+        log_level (str, optional): ``"info"``, ``"debug"`` or ``"warning"``.
+
+    Returns:
+        Logger: A logger writing to ``name``.
+    """
     log = Logger(name=name, log_level=log_level)
     log.setup_report_logging()
     return log
@@ -535,7 +863,20 @@ _logging_handler = None
 
 
 class Logger(object):
+    """Thin wrapper around :mod:`logging` for console or file reports.
+
+    Attributes:
+        name (str): Report file name (file mode).
+        log_level (str): ``"info"``, ``"debug"`` or ``"warning"``.
+    """
+
     def __init__(self, name="Python_Report", log_level="info"):
+        """Store the logger name and level (call a ``setup_*`` method next).
+
+        Args:
+            name (str, optional): Report file path. Defaults to ``"Python_Report"``.
+            log_level (str, optional): Logging level. Defaults to ``"info"``.
+        """
         self.name = name
         self.log_level = log_level
 
@@ -582,6 +923,7 @@ class Logger(object):
         logger.setLevel(levels[self.log_level])
 
     def setup_report_logging(self):
+        """Configure :mod:`logging` to write to the report file ``name``."""
         levels = {
             "info": logging.INFO,
             "debug": logging.DEBUG,
@@ -596,6 +938,12 @@ class Logger(object):
 
     @staticmethod
     def add(line, level="info"):
+        """Emit a log line at the given level.
+
+        Args:
+            line (str): Message to log.
+            level (str, optional): ``"info"``, ``"warning"`` or ``"debug"``.
+        """
         if level == "info":
             logging.info(line)
         if level == "warning":
@@ -605,6 +953,12 @@ class Logger(object):
 
     @staticmethod
     def add_array_statistics(arr, char):
+        """Log the min/max/mean/std of an array.
+
+        Args:
+            arr (numpy.ndarray | None): Array to summarise (no-op if None).
+            char (str): Label used in the log messages.
+        """
         if arr is not None:
             Logger.add(f"Min of {char}: {arr.min()}")
             Logger.add(f"Max of {char}: {arr.max()}")
@@ -613,6 +967,7 @@ class Logger(object):
 
     @staticmethod
     def close():
+        """Flush and shut down the logging system."""
         logging.shutdown()
 
 
@@ -633,6 +988,16 @@ def latex_float(float_input, decimals_input="{0:.2g}"):
 
 
 def return_key(dictionary, string, default_value):
+    """Return ``dictionary[string]`` if present, else a default.
+
+    Args:
+        dictionary (dict): Source mapping.
+        string: Key to look up.
+        default_value: Value returned when the key is absent.
+
+    Returns:
+        The value at ``string`` or ``default_value``.
+    """
     return dictionary[string] if string in dictionary.keys() else default_value
 
 
@@ -648,7 +1013,10 @@ def return_key(dictionary, string, default_value):
 
 
 class ForkingPickler4(ForkingPickler):
+    """ForkingPickler forced to protocol 4 (for >4 GiB multiprocessing payloads)."""
+
     def __init__(self, *args):
+        """Force pickle protocol 4 then delegate to the base pickler."""
         if len(args) > 1:
             args[1] = 2
         else:
@@ -657,14 +1025,36 @@ class ForkingPickler4(ForkingPickler):
 
     @classmethod
     def dumps(cls, obj, protocol=4):
+        """Pickle ``obj`` with protocol 4.
+
+        Args:
+            obj: Object to serialise.
+            protocol (int, optional): Pickle protocol. Defaults to 4.
+
+        Returns:
+            bytes: The pickled payload.
+        """
         return ForkingPickler.dumps(obj, protocol)
 
 
 def dump(obj, file, protocol=4):
+    """Pickle ``obj`` to ``file`` using protocol 4.
+
+    Args:
+        obj: Object to serialise.
+        file: Writable binary file object.
+        protocol (int, optional): Pickle protocol. Defaults to 4.
+    """
     ForkingPickler4(file, protocol).dump(obj)
 
 
 class Pickle4Reducer(AbstractReducer):
+    """Multiprocessing reducer using protocol-4 pickling.
+
+    Assign to a context reducer (``ctx.reducer = Pickle4Reducer()``) to allow
+    multiprocessing payloads larger than 4 GiB.
+    """
+
     ForkingPickler = ForkingPickler4
     register = ForkingPickler4.register
     dump = dump
@@ -737,6 +1127,20 @@ def patch_mp_connection_bpo_17560(log=None):
 
 
 def hist_profile(x, y, bins, range_x, range_y, outlier_insensitive=False):
+    """Binned mean (or median) profile of ``y`` versus ``x`` with errors.
+
+    Args:
+        x (array-like): Values binned along the x-axis.
+        y (array-like): Values averaged within each x-bin.
+        bins (int): Number of x-bins.
+        range_x (sequence): ``(xmin, xmax)`` binning range.
+        range_y (sequence): ``(ymin, ymax)`` pre-selection on ``y``.
+        outlier_insensitive (bool, optional): Use median and a percentile-based
+            spread instead of mean and standard deviation.
+
+    Returns:
+        tuple: ``(bin_centers, means, errors)``.
+    """
     w = (y > range_y[0]) & (y < range_y[1])
     if outlier_insensitive:
         means_result = binned_statistic(
@@ -782,6 +1186,22 @@ def hist_profile(x, y, bins, range_x, range_y, outlier_insensitive=False):
 
 
 def plot_histo(value, value_name, name, dotted=False, **kwargs):
+    """Draw a histogram of ``value`` on the current axes.
+
+    Binning, colour, normalisation, etc. are read from ``kwargs`` keys prefixed
+    by ``value_name`` (see the ``plot_args`` config dicts).
+
+    Args:
+        value (array-like): Values to histogram.
+        value_name (str): Prefix used to look up styling in ``kwargs``.
+        name (str): Base output name (suffixed for norm/cumulative).
+        dotted (bool, optional): Draw a dashed outline-only histogram.
+        **kwargs: Styling options (``{value_name}_bins``, ``_color`` ...).
+
+    Returns:
+        tuple: ``(name, n, bins, patches)`` — updated name and matplotlib
+        histogram outputs.
+    """
     nb_bins = return_key(kwargs, f"{value_name}_bins", 50)
     value_min = return_key(kwargs, f"{value_name}_value_min", np.min(value))
     value_max = return_key(kwargs, f"{value_name}_value_max", np.max(value))
@@ -846,6 +1266,17 @@ def plot_histo(value, value_name, name, dotted=False, **kwargs):
 def save_histo(
     pwd, value, value_name, name, comparison=None, comparison_legend=None, **kwargs
 ):
+    """Plot and save a histogram (with optional comparison series) as a PDF.
+
+    Args:
+        pwd (str): Output directory.
+        value (array-like): Values to histogram.
+        value_name (str): Quantity name (styling prefix + axis label).
+        name (str): Base output name.
+        comparison (list[array-like], optional): Extra series to overplot.
+        comparison_legend (list[str], optional): Legend labels.
+        **kwargs: Styling options.
+    """
     xlabel = return_key(kwargs, f"{value_name}_xlabel", value_name)
     ylabel = return_key(kwargs, f"{value_name}_ylabel", "#")
     min_lim = return_key(kwargs, f"{value_name}_min_lim", np.min(value))
@@ -879,6 +1310,21 @@ def save_histo(
 
 
 def plot_mean_redshift_dependence(value, redshift, value_name, name, **kwargs):
+    """Plot the binned mean of ``value`` versus redshift (or wavelength).
+
+    The x-axis can be converted to observed or rest-frame Lyman-alpha
+    wavelength via the ``{value_name}_lambda_obs`` / ``_lambda_rest`` kwargs.
+
+    Args:
+        value (array-like): Quantity to average.
+        redshift (array-like): Redshift of each value.
+        value_name (str): Styling/label prefix.
+        name (str): Base output name.
+        **kwargs: Binning/labelling options.
+
+    Returns:
+        str: The (possibly suffixed) output name.
+    """
     ax = return_key(kwargs, f"{value_name}_ax", None)
     nb_bins = return_key(kwargs, f"{value_name}_z_bins", 50)
     ls = return_key(kwargs, f"{value_name}_linestyle", None)
@@ -941,6 +1387,23 @@ def save_mean_redshift_dependence(
     comparison_legend=None,
     **kwargs,
 ):
+    """Plot and save the mean-vs-redshift dependence (with comparisons) as PDF.
+
+    Args:
+        pwd (str): Output directory.
+        value (array-like): Quantity to average.
+        redshift (array-like): Redshift of each value.
+        value_name (str): Styling/label prefix.
+        name (str): Base output name.
+        comparison (list[array-like], optional): Extra series to overplot.
+        comparison_redshift (list[array-like], optional): Redshifts of the
+            comparison series.
+        comparison_legend (list[str], optional): Legend labels.
+        **kwargs: Binning/labelling options.
+
+    Raises:
+        ValueError: If both observed- and rest-frame wavelength are requested.
+    """
     ylabel = return_key(kwargs, f"{value_name}_xlabel", value_name)
     lambda_obs = return_key(kwargs, f"{value_name}_lambda_obs", False)
     lambda_rest = return_key(kwargs, f"{value_name}_lambda_rest", False)
@@ -979,6 +1442,18 @@ def save_mean_redshift_dependence(
 
 
 def plot_redshift_dependence(value, redshift, value_name, name, **kwargs):
+    """Scatter ``value`` versus redshift over a redshift window.
+
+    Args:
+        value (array-like): Quantity to plot.
+        redshift (array-like): Redshift of each value.
+        value_name (str): Styling/label prefix.
+        name (str): Base output name.
+        **kwargs: ``{value_name}_zmin`` / ``_zmax`` window options.
+
+    Returns:
+        str: The output name.
+    """
     z_min = return_key(kwargs, f"{value_name}_zmin", np.min(redshift))
     z_max = return_key(kwargs, f"{value_name}_zmax", np.max(redshift))
 
@@ -998,6 +1473,20 @@ def save_redshift_dependence(
     comparison_legend=None,
     **kwargs,
 ):
+    """Plot and save the value-vs-redshift scatter (with comparisons) as PDF.
+
+    Args:
+        pwd (str): Output directory.
+        value (array-like): Quantity to plot.
+        redshift (array-like): Redshift of each value.
+        value_name (str): Styling/label prefix.
+        name (str): Base output name.
+        comparison (list[array-like], optional): Extra series to overplot.
+        comparison_redshift (list[array-like], optional): Redshifts of the
+            comparison series.
+        comparison_legend (list[str], optional): Legend labels.
+        **kwargs: Plot options.
+    """
     ylabel = return_key(kwargs, f"{value_name}_xlabel", value_name)
     xlabel = return_key(kwargs, f"{value_name}_ylabel", "redshift")
 
@@ -1019,6 +1508,17 @@ def save_redshift_dependence(
 
 
 def plot_ra_dec(ra, dec, name, **kwargs):
+    """Scatter objects in the RA/Dec plane, optionally outlining RA sub-cuts.
+
+    Args:
+        ra, dec (array-like): Object sky angles.
+        name (str): Base output name.
+        **kwargs: ``nb_cut`` (number of RA sub-regions to outline) and figure
+            options.
+
+    Returns:
+        str: The output name.
+    """
     nb_cut = return_key(kwargs, "nb_cut", None)
     figsize = return_key(kwargs, "ra_dec_figsize", (7, 3.5))
     plt.figure(figsize=figsize)
@@ -1073,6 +1573,17 @@ def save_ra_dec(
     comparison_legend=None,
     **kwargs,
 ):
+    """Plot and save the RA/Dec diagram (with optional comparison) as a PDF.
+
+    Args:
+        pwd (str): Output directory.
+        ra, dec (array-like): Object sky angles.
+        name (str): Base output name.
+        comparison_ra (list[array-like], optional): Comparison RA series.
+        comparison_dec (list[array-like], optional): Comparison Dec series.
+        comparison_legend (list[str], optional): Legend labels.
+        **kwargs: Axis-limit / label / styling options.
+    """
     grid = return_key(kwargs, "ra_dec_grid", True)
     fontsize = return_key(kwargs, "ra_dec_fontsize", 13)
     fontsize_scale = return_key(kwargs, "ra_dec_fontscalesize", 13)

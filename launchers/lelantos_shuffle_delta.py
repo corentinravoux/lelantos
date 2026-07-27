@@ -1,3 +1,7 @@
+"""Launcher: shuffle picca delta files to build a null field
+(lelantos.cosmology.DeltaModifier). Edit the variables at the top, then run
+``python lelantos_shuffle_delta.py``."""
+
 import os
 from lelantos import cosmology
 

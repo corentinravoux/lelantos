@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""Script: print the contents of a map property file
+(lelantos.tomographic_objects.MapPixelProperty)."""
+
 from lelantos import tomographic_objects
 import argparse
 

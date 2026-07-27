@@ -1,3 +1,7 @@
+"""Launcher: stack a tomographic map at void positions
+(lelantos.tomography.TomographyStack). Edit the variables at the top, then run
+``python lelantos_stack_void.py``."""
+
 import os
 from lelantos import tomography
 

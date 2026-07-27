@@ -1,3 +1,7 @@
+"""Launcher: post-process the solver output into a merged map and/or distance
+map (lelantos.tomography). Edit the variables at the top, then run
+``python lelantos_tomography_process.py``."""
+
 import os
 from lelantos import tomography
 

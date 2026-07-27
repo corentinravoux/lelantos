@@ -33,6 +33,14 @@ from lelantos import tomographic_objects
 
 
 class BoxExtractor:
+    """Extract the underlying SaclayMocks dark-matter field onto a map grid.
+
+    Given the geometry of a tomographic map (or a set of lines of sight /
+    catalog positions), samples the SaclayMocks Gaussian box(es), applies the
+    growth factor and converts to a matter over-density, so a mock can be
+    compared voxel-by-voxel with a reconstruction.
+    """
+
     def __init__(
         self,
         pwd,
@@ -43,6 +51,18 @@ class BoxExtractor:
         master_file,
         interpolation_method="LINEAR",
     ):
+        """Store the box description and open a report log.
+
+        Args:
+            pwd (str): Output directory (and log location).
+            box_dir (str | list[str]): SaclayMocks box directory, or a list of
+                directories for a multi-box footprint.
+            box_shape (tuple[int] | list): Box pixel shape(s).
+            size_cell (float): Box cell size (Mpc.h^-1).
+            box_bound (sequence): ``(ramin, ramax, decmin, decmax)`` footprint(s).
+            master_file (str): SaclayMocks master FITS file (growth table).
+            interpolation_method (str, optional): ``"LINEAR"`` or ``"NEAREST"``.
+        """
         self.pwd = pwd
         self.size_cell = size_cell
         self.box_bound = box_bound
@@ -64,6 +84,16 @@ class BoxExtractor:
         Z_tomo_max,
         shape_map,
     ):
+        """Build the per-axis cartesian coordinate arrays of the output grid.
+
+        Args:
+            X_tomo_min, X_tomo_max, Y_tomo_min, Y_tomo_max, Z_tomo_min,
+                Z_tomo_max (float): Cartesian bounds (Mpc.h^-1).
+            shape_map (tuple[int]): Output pixel shape.
+
+        Returns:
+            tuple: ``(X_array, Y_array, Z_array)`` grid axes.
+        """
         X_tomo_array = np.linspace(X_tomo_min, X_tomo_max, shape_map[0])
         Y_tomo_array = np.linspace(Y_tomo_min, Y_tomo_max, shape_map[1])
         Z_tomo_array = np.linspace(Z_tomo_min, Z_tomo_max, shape_map[2])
@@ -82,6 +112,24 @@ class BoxExtractor:
         h,
         get_prop=None,
     ):
+        """Sample the DM (and optional extra) fields from a single box.
+
+        Converts the output (RA, Dec, z) grid to SaclayMocks box coordinates
+        and interpolates the density (and any requested extra fields) onto it.
+
+        Args:
+            ra_array, dec_array, z_array (array-like): Output grid sky coords.
+            R_of_z (callable): Redshift -> comoving distance.
+            ra0_box, dec0_box (float): Box footprint centre (degrees).
+            shape_map_output (tuple[int]): Output pixel shape (unused directly).
+            Rmin (float): Radial box lower bound (Mpc.h^-1).
+            h (float): Reduced Hubble constant.
+            get_prop (list[str], optional): Extra box fields to also sample.
+
+        Returns:
+            tuple: ``(DM_map, Props_map)`` — the density map and stacked extra
+            fields (or None).
+        """
         self.log.add("Creation of (RA,DEC,R) data matrix")
         coords_ra_dec = np.moveaxis(
             np.array(
@@ -163,6 +211,26 @@ class BoxExtractor:
         get_prop=None,
         Props_map=None,
     ):
+        """Fill the still-empty voxels of the DM map from one box of a set.
+
+        Only voxels not yet filled and inside box ``i_box``'s footprint are
+        sampled, so several boxes can be stitched into one output map.
+
+        Args:
+            ra_array, dec_array, z_array (array-like): Output grid sky coords.
+            R_of_z (callable): Redshift -> comoving distance.
+            ra0_box, dec0_box (float): Box footprint centre (degrees).
+            shape_map_output (tuple[int]): Output pixel shape.
+            Rmin (float): Radial box lower bound (Mpc.h^-1).
+            h (float): Reduced Hubble constant.
+            DM_map (numpy.ndarray): Density map being filled (updated in place).
+            i_box (int): Index of the box in the multi-box set.
+            get_prop (list[str], optional): Extra box fields to also sample.
+            Props_map (numpy.ndarray, optional): Extra-field maps being filled.
+
+        Returns:
+            tuple: ``(DM_map, Props_map)``.
+        """
         self.log.add("Creation of (RA,DEC,R) data matrix")
         coords_ra_dec = np.moveaxis(
             np.array(
@@ -245,6 +313,16 @@ class BoxExtractor:
         return (DM_map, Props_map)
 
     def extract_box(self, ra_array, dec_array, z_array, shape_map_output, rsd_box):
+        """Extract the DM map from a single box (optionally with RSD field).
+
+        Args:
+            ra_array, dec_array, z_array (array-like): Output grid sky coords.
+            shape_map_output (tuple[int]): Output pixel shape.
+            rsd_box (bool): Also sample the ``eta_zz`` field for RSD.
+
+        Returns:
+            tuple: ``(DM_map, Props_map, get_prop)``.
+        """
         (
             R0,
             z0,
@@ -276,6 +354,16 @@ class BoxExtractor:
     def extract_box_multiple(
         self, ra_array, dec_array, z_array, shape_map_output, rsd_box
     ):
+        """Extract the DM map by stitching several boxes over the footprint.
+
+        Args:
+            ra_array, dec_array, z_array (array-like): Output grid sky coords.
+            shape_map_output (tuple[int]): Output pixel shape.
+            rsd_box (bool): Also sample the ``eta_zz`` and ``vz`` fields for RSD.
+
+        Returns:
+            tuple: ``(DM_map, Props_map, get_prop)``.
+        """
         DM_map = np.full(tuple(shape_map_output), None)
         if rsd_box:
             get_prop = ["eta_zz", "vz"]
@@ -320,6 +408,15 @@ class BoxExtractor:
         return (DM_map, Props_map, get_prop)
 
     def multiply_by_growth(self, DM_map, z_array):
+        """Scale each radial slice of the map by the growth factor at its z.
+
+        Args:
+            DM_map (numpy.ndarray): Gaussian density map.
+            z_array (array-like): Redshift of each radial slice.
+
+        Returns:
+            numpy.ndarray: The growth-scaled map.
+        """
         Z = fitsio.FITS(self.master_file)[2]["Z"][:]
         G = fitsio.FITS(self.master_file)[2]["G"][:]
         G_of_Z = interpolate.interp1d(Z, G)
@@ -328,6 +425,15 @@ class BoxExtractor:
         return DM_map
 
     def multiply_los_by_growth(self, DM_los, z_array):
+        """Scale line-of-sight values by the growth factor at each redshift.
+
+        Args:
+            DM_los (numpy.ndarray): Gaussian density along a line of sight.
+            z_array (array-like): Redshift of each pixel.
+
+        Returns:
+            numpy.ndarray: The growth-scaled line of sight.
+        """
         Z = fitsio.FITS(self.master_file)[2]["Z"][:]
         G = fitsio.FITS(self.master_file)[2]["G"][:]
         G_of_Z = interpolate.interp1d(Z, G)
@@ -335,11 +441,30 @@ class BoxExtractor:
         return DM_los
 
     def convert_to_matter_field(self, gaussian_array):
+        """Log-normal transform a Gaussian field into a matter over-density.
+
+        Args:
+            gaussian_array (numpy.ndarray): Gaussian field values.
+
+        Returns:
+            numpy.ndarray: The matter over-density ``exp(g - sigma^2/2) - 1``.
+        """
         sigma_l = np.std(gaussian_array)
         density_matter = np.exp((gaussian_array - (sigma_l**2 / 2)).astype(float)) - 1
         return density_matter
 
     def compute_rsd(self, DM_map, Props_map, z_array, Cosmo):
+        """Apply a redshift-space distortion correction to the DM map.
+
+        Args:
+            DM_map (numpy.ndarray): Density map.
+            Props_map (numpy.ndarray): Extra fields (uses the velocity term).
+            z_array (array-like): Redshift of each radial slice.
+            Cosmo: Object exposing ``hubble(z)``.
+
+        Returns:
+            numpy.ndarray: The RSD-corrected map.
+        """
         for i in range(len(z_array)):
             DM_map[:, :, i] = DM_map[:, :, i] - (
                 ((1 + z_array[i]) * Props_map[0][:, :, i]) / Cosmo.hubble(z_array[i])
@@ -351,6 +476,18 @@ class BoxExtractor:
     def construct_DM_LOS(
         self, ra_array, dec_array, z_array, R_of_z, ra0_box, dec0_box, Rmin, h
     ):
+        """Sample the DM field along lines of sight from a single box.
+
+        Args:
+            ra_array, dec_array, z_array (array-like): Line-of-sight sky coords.
+            R_of_z (callable): Redshift -> comoving distance.
+            ra0_box, dec0_box (float): Box footprint centre (degrees).
+            Rmin (float): Radial box lower bound (Mpc.h^-1).
+            h (float): Reduced Hubble constant.
+
+        Returns:
+            numpy.ndarray: DM field value at each line-of-sight pixel.
+        """
         self.log.add("Creation of (RA,DEC,R) data matrix")
         R_array = h * R_of_z(z_array)
         self.log.add("Conversion to (X,Y,Z) coordinates in the Saclay box")
@@ -393,6 +530,20 @@ class BoxExtractor:
         DM_LOS,
         i_box,
     ):
+        """Fill still-empty line-of-sight pixels from one box of a set.
+
+        Args:
+            ra_array, dec_array, z_array (array-like): Line-of-sight sky coords.
+            R_of_z (callable): Redshift -> comoving distance.
+            ra0_box, dec0_box (float): Box footprint centre (degrees).
+            Rmin (float): Radial box lower bound (Mpc.h^-1).
+            h (float): Reduced Hubble constant.
+            DM_LOS (numpy.ndarray): Line-of-sight values (updated in place).
+            i_box (int): Index of the box in the multi-box set.
+
+        Returns:
+            numpy.ndarray: The updated line-of-sight array.
+        """
         self.log.add("Creation of (RA,DEC,R) data matrix")
         R_array = h * R_of_z(z_array)
         mask1 = DM_LOS[:] == None
@@ -444,6 +595,14 @@ class BoxExtractor:
         return DM_LOS
 
     def extract_los(self, ra_array, dec_array, z_array):
+        """Extract DM lines of sight from a single box.
+
+        Args:
+            ra_array, dec_array, z_array (array-like): Line-of-sight sky coords.
+
+        Returns:
+            numpy.ndarray: DM field along the lines of sight.
+        """
         (
             R0,
             z0,
@@ -460,6 +619,14 @@ class BoxExtractor:
         return los
 
     def extract_los_multiple(self, ra_array, dec_array, z_array):
+        """Extract DM lines of sight by stitching several boxes.
+
+        Args:
+            ra_array, dec_array, z_array (array-like): Line-of-sight sky coords.
+
+        Returns:
+            numpy.ndarray: DM field along the lines of sight.
+        """
         los = np.full(z_array.shape, None)
         for i_box in range(len(self.box_dir)):
             (
@@ -495,6 +662,14 @@ class BoxExtractor:
     ### DELTA ###
 
     def extract_delta_multiple(self, ra, dec, z):
+        """Extract DM values at catalog (QSO) positions from several boxes.
+
+        Args:
+            ra, dec, z (array-like): Catalog sky coordinates.
+
+        Returns:
+            numpy.ndarray: DM field at each catalog position.
+        """
         delta_quasars = np.full(z.shape, None)
         for i_box in range(len(self.box_dir)):
             (
@@ -519,6 +694,14 @@ class BoxExtractor:
         return delta_quasars
 
     def extract_delta(self, ra, dec, z):
+        """Extract DM values at catalog (QSO) positions from a single box.
+
+        Args:
+            ra, dec, z (array-like): Catalog sky coordinates.
+
+        Returns:
+            numpy.ndarray: DM field at each catalog position.
+        """
         (
             R0,
             z0,
@@ -546,6 +729,21 @@ class BoxExtractor:
         gaussian_smoothing=None,
         shape_map_output=None,
     ):
+        """Build the DM map matching a tomographic map and write it to disk.
+
+        Reads the map property file to get the geometry/cosmology, samples the
+        box(es), applies the growth factor, log-normal transform and optional
+        Gaussian smoothing, and writes the resulting map (plus RSD fields).
+
+        Args:
+            map_property_file (str): Property file of the reference map.
+            name (str): Output map file.
+            rsd_box (bool, optional): Also extract RSD fields.
+            growth_multiplication (bool, optional): Apply the growth factor.
+            matter_field (bool, optional): Apply the log-normal transform.
+            gaussian_smoothing (float, optional): Smoothing scale (Mpc.h^-1).
+            shape_map_output (tuple[int], optional): Override the output shape.
+        """
         property_file = tomographic_objects.MapPixelProperty(name=map_property_file)
         property_file.read()
         if shape_map_output is None:
@@ -631,6 +829,15 @@ class BoxExtractor:
         growth_multiplication=True,
         matter_field=True,
     ):
+        """Build DM values along the lines of sight of a pixel file.
+
+        Args:
+            property_file (str): Map property/pixel geometry file.
+            pixel_name (str): Pixel (line-of-sight) file.
+            name (str): Output pixel file.
+            growth_multiplication (bool, optional): Apply the growth factor.
+            matter_field (bool, optional): Apply the log-normal transform.
+        """
         pixel = tomographic_objects.Pixel(name=pixel_name)
         pixel.read()
         property_file = tomographic_objects.MapPixelProperty(name=property_file)
@@ -679,6 +886,18 @@ class BoxExtractor:
         growth_multiplication=True,
         matter_field=True,
     ):
+        """Extract DM over-density at the positions of a catalog.
+
+        Args:
+            cat_name (str): Catalog file.
+            type_catalog (str): Catalog type (``"qso"``/``"void"``/``"galaxy"``).
+            name (str): Output name (unused for the return value).
+            growth_multiplication (bool, optional): Apply the growth factor.
+            matter_field (bool, optional): Apply the log-normal transform.
+
+        Returns:
+            numpy.ndarray: DM over-density at each catalog position.
+        """
         catalog = tomographic_objects.Catalog.init_catalog_from_fits(
             cat_name, type_catalog
         )
@@ -698,7 +917,18 @@ class BoxExtractor:
 
 
 class BoxPlot(object):
+    """Compare a reconstructed map with its underlying DM box via 2D plots."""
+
     def __init__(self, pwd, map_name, box_name, property_file, limit=None):
+        """Store the map / box files and plot limits.
+
+        Args:
+            pwd (str): Output directory.
+            map_name (str): Reconstructed map file.
+            box_name (str): DM box map file.
+            property_file (str): Shared map property file.
+            limit (sequence, optional): ``(xmin, xmax, ymin, ymax)`` plot limits.
+        """
         self.pwd = pwd
         self.map_name = map_name
         self.box_name = box_name
@@ -709,6 +939,16 @@ class BoxPlot(object):
     def contourplot(
         x, y, ncont=10, colors=None, pltclf=True, binsx=100, binsy=100, log=False
     ):
+        """Draw contour lines of the 2D histogram of ``(x, y)``.
+
+        Args:
+            x, y (array-like): Point coordinates.
+            ncont (int, optional): Number of contour levels.
+            colors (optional): Contour colour(s).
+            pltclf (bool, optional): Clear the figure first.
+            binsx, binsy (int, optional): Histogram bin counts.
+            log (bool, optional): Log-scale the histogram counts.
+        """
         H, xedges, yedges = np.histogram2d(x, y, bins=(binsx, binsy))
         H = np.rot90(H)
         H = np.flipud(H)
@@ -732,6 +972,16 @@ class BoxPlot(object):
         pltclf=True,
         logscale=False,
     ):
+        """Draw a normalised 2D density image of ``(x, y)``.
+
+        Args:
+            x, y (array-like): Point coordinates.
+            binsx, binsy (int, optional): Histogram bin counts.
+            scaleperdeg2 (bool, optional): Normalise to a density per deg^2.
+            maxdensity, mindensity (float, optional): Clip the density range.
+            pltclf (bool, optional): Clear the figure first.
+            logscale (bool, optional): Use a logarithmic colour scale.
+        """
         H, xedges, yedges = np.histogram2d(x, y, bins=(binsx, binsy))
         if scaleperdeg2 == True:
             delta_ra = abs(xedges[1] - xedges[0])
@@ -770,6 +1020,17 @@ class BoxPlot(object):
 
     @staticmethod
     def gaussian_plot(X, Y, binsx=200, binsy=200, ncont=4):
+        """Fit a 2D Gaussian to the ``(X, Y)`` histogram and overlay contours.
+
+        Args:
+            X, Y (array-like): Point coordinates.
+            binsx, binsy (int, optional): Histogram bin counts.
+            ncont (int | sequence, optional): Contour levels (scaled by the fit
+                amplitude if not an int).
+
+        Returns:
+            numpy.ndarray: The fitted Gaussian parameters.
+        """
         data, xedges, yedges = np.histogram2d(X, Y, bins=(binsx, binsy))
         xcenters = (xedges[:-1] + xedges[1:]) / 2.0
         ycenters = (yedges[:-1] + yedges[1:]) / 2.0
@@ -792,6 +1053,13 @@ class BoxPlot(object):
 
     @staticmethod
     def plot_gaussian_line(gaussian_fit, binsx, limit):
+        """Plot the major-axis line of a 2D Gaussian fit.
+
+        Args:
+            gaussian_fit (sequence): Fitted Gaussian parameters.
+            binsx (int): Histogram bin count used for the fit.
+            limit (sequence): ``(xmin, xmax, ymin, ymax)`` plot limits.
+        """
         xcenter = (gaussian_fit[1] - binsx) * ((limit[1] - limit[0]) / binsx)
         ycenter = (gaussian_fit[2] - binsx) * ((limit[3] - limit[2]) / binsx)
         xcenter = 0
@@ -804,6 +1072,13 @@ class BoxPlot(object):
 
     @staticmethod
     def plot_scatter_los_DM(self, pixel_dm_name, pixel_name, gaussian_smoothing=None):
+        """2D-histogram the reconstructed vs DM delta along lines of sight.
+
+        Args:
+            pixel_dm_name (str): DM pixel file.
+            pixel_name (str): Reconstructed pixel file.
+            gaussian_smoothing (float, optional): Unused placeholder.
+        """
         pixel_dm = tomographic_objects.Pixel(name=pixel_dm_name)
         pixel_dm.read()
         pixel = tomographic_objects.Pixel(name=pixel_name)
@@ -827,6 +1102,23 @@ class BoxPlot(object):
         ncont=4,
         rotate=False,
     ):
+        """Correlate the reconstructed map with the DM box, voxel by voxel.
+
+        Produces density, Gaussian-fit and 2D-histogram figures of the
+        reconstructed vs DM over-density, with a linear fit and correlation.
+
+        Args:
+            name (str): Output figure base name.
+            gaussian_smoothing (float, optional): Smoothing scale (Mpc.h^-1).
+            cut_redshift_coef (int, optional): Keep only 1/coef of the z range.
+            cut_pixel (int, optional): Keep only the first ``cut_pixel`` slices.
+            binsx, binsy (int, optional): Histogram bin counts.
+            ncont (int, optional): Number of contour levels.
+            rotate (bool, optional): Swap the two axes.
+
+        Returns:
+            tuple: ``(poly_fit, gaussian_fit, correlation_matrix)``.
+        """
         (list_map, list_box) = self.get_list_boxes(
             gaussian_smoothing=gaussian_smoothing,
             cut_redshift_coef=cut_redshift_coef,
@@ -938,6 +1230,16 @@ class BoxPlot(object):
     def get_list_boxes(
         self, gaussian_smoothing=None, cut_redshift_coef=None, cut_pixel=None
     ):
+        """Flatten the reconstructed map and DM box into paired 1D arrays.
+
+        Args:
+            gaussian_smoothing (float, optional): Smoothing scale (Mpc.h^-1).
+            cut_redshift_coef (int, optional): Keep only 1/coef of the z range.
+            cut_pixel (int, optional): Keep only the first ``cut_pixel`` slices.
+
+        Returns:
+            tuple: ``(list_map, list_box)`` — flattened, aligned voxel values.
+        """
         tomography_map = tomographic_objects.TomographicMap.init_from_property_files(
             self.property_file, name=self.map_name
         )

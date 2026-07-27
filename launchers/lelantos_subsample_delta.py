@@ -1,3 +1,7 @@
+"""Launcher: subsample the line-of-sight density of picca delta files
+(lelantos.cosmology.DeltaModifier). Edit the variables at the top, then run
+``python lelantos_subsample_delta.py``."""
+
 import os
 from lelantos import cosmology
 

@@ -26,6 +26,14 @@ from lelantos import tomographic_objects, utils
 
 
 def create_merged_map(submap_directory, launching_file_name, map_name, property_file):
+    """Merge per-chunk solver output maps into a single map and write it.
+
+    Args:
+        submap_directory (str): Directory holding the per-chunk maps.
+        launching_file_name (str): Launch pickle describing the chunk layout.
+        map_name (str): Output merged-map file name.
+        property_file (str): Map property/pickle file.
+    """
     map_merged = tomographic_objects.TomographicMap.init_by_merging(
         submap_directory, launching_file_name, map_name, property_file
     )
@@ -35,6 +43,16 @@ def create_merged_map(submap_directory, launching_file_name, map_name, property_
 def rebin_map(
     map_name, property_file, new_shape, new_name, new_prop_name, operation="mean"
 ):
+    """Rebin a tomographic map to a new pixel shape and write it out.
+
+    Args:
+        map_name (str): Input map file.
+        property_file (str): Input map property file.
+        new_shape (tuple[int]): Target pixel shape.
+        new_name (str): Output map file.
+        new_prop_name (str): Output property file.
+        operation (str, optional): Rebin reduction (``"mean"``, ``"sum"`` ...).
+    """
     map_class = tomographic_objects.TomographicMap.init_from_property_files(
         property_file, name=map_name
     )
@@ -48,6 +66,15 @@ def rebin_map(
 def create_distance_map(
     map_name, pixel_file, property_file, nb_process=1, radius_local=50
 ):
+    """Compute and write a voxel-to-nearest-line-of-sight distance map.
+
+    Args:
+        map_name (str): Output distance-map file.
+        pixel_file (str): Pixel (line-of-sight) file.
+        property_file (str): Map property file defining the grid.
+        nb_process (int, optional): Number of parallel processes.
+        radius_local (float, optional): Local search radius (Mpc.h^-1).
+    """
     pixel = tomographic_objects.Pixel(name=pixel_file)
     pixel.read()
     tomographic_map = tomographic_objects.TomographicMap.init_from_property_files(
@@ -64,6 +91,13 @@ def create_distance_map(
 
 
 def convert_to_vtk(map_name, property_file, new_name):
+    """Export a tomographic map to VTK for 3D visualisation (needs pyevtk).
+
+    Args:
+        map_name (str): Input map file.
+        property_file (str): Map property file.
+        new_name (str): Output VTK base name.
+    """
     map_class = tomographic_objects.TomographicMap.init_from_property_files(
         property_file, name=map_name
     )
@@ -73,6 +107,15 @@ def convert_to_vtk(map_name, property_file, new_name):
 
 
 def mask_map_to_3d(map_name, property_file, new_name, distance_map, distance):
+    """Mask a map beyond a distance-to-LOS threshold and write it out.
+
+    Args:
+        map_name (str): Input map file.
+        property_file (str): Map property file.
+        new_name (str): Output map file.
+        distance_map (str): Distance-map file used for masking.
+        distance (float): Distance-to-LOS threshold (Mpc.h^-1).
+    """
     map_class = tomographic_objects.TomographicMap.init_from_property_files(
         property_file, name=map_name
     )
@@ -83,6 +126,12 @@ def mask_map_to_3d(map_name, property_file, new_name, distance_map, distance):
 
 
 def pixel_to_3d(pixel_name, new_name):
+    """Export a pixel (line-of-sight) file to text for 3D visualisation.
+
+    Args:
+        pixel_name (str): Input pixel file.
+        new_name (str): Output text file.
+    """
     pixel = tomographic_objects.Pixel(name=pixel_name)
     pixel.read()
     pixel.writetxt(new_name)
@@ -96,6 +145,14 @@ def pixel_to_3d(pixel_name, new_name):
 
 
 class TomographyPlot(object):
+    """Plot slices, histograms and derived products of a tomographic map.
+
+    Handles loading the map plus optional QSO/void/galaxy catalogs and distance
+    mask, and drawing map slices (with overlays and an optional redshift axis),
+    delta histograms, integrated maps, 2D shells, catalog-centred maps and 3D
+    power spectra.
+    """
+
     def __init__(
         self,
         pwd,
@@ -105,6 +162,17 @@ class TomographyPlot(object):
         property_file=None,
         **kwargs,
     ):
+        """Store paths and styling for the plots.
+
+        Args:
+            pwd (str): Output directory for the figures.
+            map_name (str, optional): Map binary file.
+            map_shape (tuple[int], optional): Map pixel shape (if no property file).
+            pixel_name (str, optional): Pixel (line-of-sight) file to overlay.
+            property_file (str, optional): Map property/pickle file.
+            **kwargs: Default plot styling (``plot_args``); ``style`` selects a
+                matplotlib style.
+        """
         self.pwd = pwd
         self.map_name = map_name
         self.map_shape = map_shape
@@ -118,6 +186,20 @@ class TomographyPlot(object):
     def load_tomographic_objects(
         self, qso=None, void=None, galaxy=None, distance_mask=None, cut_plot=None
     ):
+        """Load the map and any requested overlay catalogs / distance mask.
+
+        Args:
+            qso (str, optional): QSO catalog file.
+            void (str, optional): Void catalog file.
+            galaxy (str, optional): Galaxy catalog file.
+            distance_mask (str, optional): Distance-map file.
+            cut_plot (sequence, optional): Fractional sub-box crop applied to
+                every loaded object.
+
+        Returns:
+            tuple: ``(tomographic_map, pixel, quasar_catalog, void_catalog,
+            galaxy_catalog, dist_map)`` (unused entries are None).
+        """
         tomographic_map = tomographic_objects.TomographicMap.init_classic(
             name=self.map_name, shape=self.map_shape, property_file=self.property_file
         )
@@ -180,6 +262,18 @@ class TomographyPlot(object):
         galaxy_catalog,
         dist_map,
     ):
+        """Crop the map and all overlay objects to a fractional sub-box.
+
+        Args:
+            cut_plot (sequence): Per-axis fractions in ``[0, 1]`` defining the
+                sub-box to keep.
+            tomographic_map: The map (cropped in place).
+            pixel: Pixel object (masked in place) or None.
+            quasar_catalog: QSO catalog (masked in place) or None.
+            void_catalog: Void catalog (masked in place) or None.
+            galaxy_catalog: Galaxy catalog (masked in place) or None.
+            dist_map: Distance map (cropped in place) or None.
+        """
         size_map = np.array(cut_plot) * tomographic_map.size
         shape_map = np.round(np.array(cut_plot) * tomographic_map.shape, 0).astype(int)
         tomographic_map.shape = shape_map
@@ -235,6 +329,19 @@ class TomographyPlot(object):
         criteria_distance_mask=None,
         minimal_void_crossing=None,
     ):
+        """Mask the map by distance-to-LOS and flag well-crossed voids.
+
+        Args:
+            void_catalog: Void catalog or None.
+            dist_map: Distance map or None.
+            tomographic_map: The map (masked in place).
+            criteria_distance_mask (float, optional): Distance-to-LOS threshold.
+            minimal_void_crossing (float, optional): Minimum void crossing to
+                keep a void in the "in" set.
+
+        Returns:
+            numpy.ndarray | None: Boolean mask of the kept voids, or None.
+        """
         mask_void = None
         if void_catalog is not None:
             if minimal_void_crossing is not None:
@@ -246,6 +353,18 @@ class TomographyPlot(object):
         return mask_void
 
     def delta_histogram(self, listdeltas, nb_bins, norm=True, gauss_fit=True, alpha=1):
+        """Histogram map delta values and optionally overlay a Gaussian fit.
+
+        Args:
+            listdeltas (array-like): Flattened map delta values.
+            nb_bins (int): Number of histogram bins.
+            norm (bool, optional): Normalise to a density.
+            gauss_fit (bool, optional): Fit and draw a Gaussian.
+            alpha (float, optional): Histogram transparency.
+
+        Returns:
+            tuple | None: ``(mu, sigma)`` of the Gaussian fit if ``gauss_fit``.
+        """
         data, bins, patches = plt.hist(
             listdeltas, nb_bins, density=norm, alpha=alpha, range=(-0.4, 0.4)
         )
@@ -266,27 +385,81 @@ class TomographyPlot(object):
             return (mu, sigma)
 
     def select_pixel_in(self, center_mpc, space_mpc, pixel, index_direction):
+        """Mask pixels within half a slab thickness of the slice centre.
+
+        Args:
+            center_mpc (float): Slice centre along the slice-normal axis.
+            space_mpc (float): Slab thickness (Mpc.h^-1).
+            pixel: Pixel object.
+            index_direction (int): Slice-normal axis index.
+
+        Returns:
+            numpy.ndarray: Boolean mask of the selected pixels.
+        """
         mask = pixel.pixel_array[:, index_direction] < center_mpc + space_mpc / 2
         mask &= pixel.pixel_array[:, index_direction] >= center_mpc - space_mpc / 2
         return mask
 
     def select_qso_in(self, center_mpc, space_mpc, quasar_catalog, index_direction):
+        """Mask QSOs within half a slab thickness of the slice centre.
+
+        Args:
+            center_mpc (float): Slice centre along the slice-normal axis.
+            space_mpc (float): Slab thickness (Mpc.h^-1).
+            quasar_catalog: QSO catalog.
+            index_direction (int): Slice-normal axis index.
+
+        Returns:
+            numpy.ndarray: Boolean mask of the selected QSOs.
+        """
         mask = quasar_catalog.coord[:, index_direction] < center_mpc + space_mpc / 2
         mask &= quasar_catalog.coord[:, index_direction] >= center_mpc - space_mpc / 2
         return mask
 
     def select_void_in(self, center_mpc, space_mpc, void, index_direction):
+        """Mask voids whose sphere intersects the slice plane.
+
+        Args:
+            center_mpc (float): Slice centre along the slice-normal axis.
+            space_mpc (float): Slab thickness (unused; radius is used instead).
+            void: Void catalog.
+            index_direction (int): Slice-normal axis index.
+
+        Returns:
+            numpy.ndarray: Boolean mask of the intersecting voids.
+        """
         mask = void.coord[:, index_direction] - void.radius < center_mpc
         mask &= void.coord[:, index_direction] + void.radius >= center_mpc
         return mask
 
     def select_galaxy_in(self, center_mpc, space_mpc, galaxy, index_direction):
+        """Mask galaxies within half a slab thickness of the slice centre.
+
+        Args:
+            center_mpc (float): Slice centre along the slice-normal axis.
+            space_mpc (float): Slab thickness (Mpc.h^-1).
+            galaxy: Galaxy catalog.
+            index_direction (int): Slice-normal axis index.
+
+        Returns:
+            numpy.ndarray: Boolean mask of the selected galaxies.
+        """
         mask = galaxy.coord[:, index_direction] < center_mpc + space_mpc / 2
         mask &= galaxy.coord[:, index_direction] >= center_mpc - space_mpc / 2
         return mask
 
     @staticmethod
     def get_direction_informations(direction, rotate, size_map):
+        """Return plotting metadata for a slicing direction.
+
+        Args:
+            direction (str): Slicing axis (``x``/``y``/``z`` or ra/dec/redshift).
+            rotate (bool): Whether the slice is rotated.
+            size_map (array-like): Map physical size per axis.
+
+        Returns:
+            tuple: ``(x_index, y_index, index_direction, extentmap, xlab, ylab)``.
+        """
         x_index, y_index, index_direction, index_dict = utils.get_direction_indexes(
             direction, rotate
         )
@@ -328,6 +501,25 @@ class TomographyPlot(object):
         rotate=False,
         redshift_axis=False,
     ):
+        """Extract one map slice and draw it with the selected overlays.
+
+        Selects the pixels/QSOs/voids/galaxies within the slab, computes each
+        void's effective (in-plane) radius and calls :meth:`plot_slice`.
+
+        Args:
+            name (str): Base output name.
+            tomographic_map: The map.
+            direction (str): Slicing axis.
+            space_mpc (float): Slab thickness (Mpc.h^-1).
+            center_mpc (float): Slice centre along the slice-normal axis.
+            pixel: Pixel object or None.
+            quasar_catalog: QSO catalog or None.
+            void_catalog: Void catalog or None.
+            mask_void (numpy.ndarray, optional): Which voids are "primary".
+            galaxy_catalog: Galaxy catalog or None.
+            rotate (bool, optional): Rotate the slice.
+            redshift_axis (bool, optional): Draw the secondary redshift axis.
+        """
         size_map = tomographic_map.size
         pixel_per_mpc = tomographic_map.pixel_per_mpc
 
@@ -473,6 +665,23 @@ class TomographyPlot(object):
         save_fig=True,
         **kwargs,
     ):
+        """Render a map slice image with overlays, colour bar and axes.
+
+        Args:
+            pwd (str): Output directory.
+            map_slice (numpy.ndarray): The 2D slice to display.
+            extentmap (list): ``imshow`` extent.
+            xlab, ylab (str): Axis labels.
+            name (str): Output figure base name.
+            x_index, y_index (int): In-plane axis indexes for overlays.
+            pixel_in, pixel_bis_in, qso_in, qso_bis_in, void_in, void_bis_in,
+                galaxy_in (numpy.ndarray, optional): Overlay coordinate arrays.
+            redshift_axis (bool, optional): Add a secondary redshift axis.
+            tomographic_map (optional): Needed for the redshift axis.
+            rotate (bool, optional): Rotated layout.
+            save_fig (bool, optional): Save the figure to disk.
+            **kwargs: Styling options.
+        """
         plt.figure()
         fig = plt.gcf()
         ax = plt.gca()
@@ -554,6 +763,20 @@ class TomographyPlot(object):
         galaxy_in=None,
         **kwargs,
     ):
+        """Draw the slice image and overlay pixels/QSOs/voids/galaxies.
+
+        Args:
+            map_slice (numpy.ndarray): The 2D slice.
+            extentmap (list): ``imshow`` extent.
+            x_index, y_index (int): In-plane axis indexes for overlays.
+            pixel_in, pixel_bis_in, qso_in, qso_bis_in, void_in, void_bis_in,
+                galaxy_in (numpy.ndarray, optional): Overlay coordinate arrays
+                (``_bis_`` = secondary/faded series).
+            **kwargs: Marker/colour styling options.
+
+        Returns:
+            matplotlib.image.AxesImage: The displayed slice image.
+        """
         im = plt.imshow(
             map_slice,
             interpolation=utils.return_key(kwargs, "map_interpolation", "bilinear"),
@@ -673,6 +896,15 @@ class TomographyPlot(object):
 
     @staticmethod
     def add_reshift_axe(tomographic_map, rotate=False, **kwargs):
+        """Add a secondary redshift axis to the current slice figure.
+
+        Only applies to the ``"middle"`` coordinate transform; otherwise a no-op.
+
+        Args:
+            tomographic_map: The map (provides Omega_m and cartesian bounds).
+            rotate (bool, optional): Rotated layout (redshift on the y-axis).
+            **kwargs: Axis position/label styling.
+        """
         if tomographic_map.coordinate_transform != "middle":
             return ()
 
@@ -768,6 +1000,21 @@ class TomographyPlot(object):
         redshift_axis=False,
         cut_plot=None,
     ):
+        """Load objects and plot a single map slice at a given position.
+
+        Args:
+            name (str): Base output name.
+            direction (str): Slicing axis.
+            space (float): Slab thickness (Mpc.h^-1).
+            center_mpc (float): Slice centre along the slice-normal axis.
+            qso, void, galaxy (str, optional): Overlay catalog files.
+            distance_mask (str, optional): Distance-map file for masking.
+            criteria_distance_mask (float, optional): Distance-to-LOS threshold.
+            rotate (bool, optional): Rotate the slice.
+            minimal_void_crossing (float, optional): Void crossing threshold.
+            redshift_axis (bool, optional): Draw the secondary redshift axis.
+            cut_plot (sequence, optional): Fractional sub-box crop.
+        """
         (
             tomographic_map,
             pixel,
@@ -819,6 +1066,20 @@ class TomographyPlot(object):
         redshift_axis=False,
         cut_plot=None,
     ):
+        """Plot successive slices spanning the whole box along a direction.
+
+        Args:
+            name (str): Base output name.
+            direction (str): Slicing axis.
+            space (float): Slab thickness and step between slices (Mpc.h^-1).
+            qso, void, galaxy (str, optional): Overlay catalog files.
+            distance_mask (str, optional): Distance-map file for masking.
+            criteria_distance_mask (float, optional): Distance-to-LOS threshold.
+            rotate (bool, optional): Rotate the slices.
+            minimal_void_crossing (float, optional): Void crossing threshold.
+            redshift_axis (bool, optional): Draw the secondary redshift axis.
+            cut_plot (sequence, optional): Fractional sub-box crop.
+        """
         (
             tomographic_map,
             pixel,
@@ -885,6 +1146,25 @@ class TomographyPlot(object):
         redshift_axis=False,
         cut_plot=None,
     ):
+        """Plot one slice, or every slice, depending on ``center_mpc``.
+
+        Args:
+            name (str): Base output name.
+            direction (str): Slicing axis.
+            space (float): Slab thickness (Mpc.h^-1).
+            center_mpc (float | str): A numeric slice position, or ``"all"`` to
+                sweep the whole box.
+            qso, void, galaxy (str, optional): Overlay catalog files.
+            distance_mask (str, optional): Distance-map file for masking.
+            criteria_distance_mask (float, optional): Distance-to-LOS threshold.
+            rotate (bool, optional): Rotate the slices.
+            minimal_void_crossing (float, optional): Void crossing threshold.
+            redshift_axis (bool, optional): Draw the secondary redshift axis.
+            cut_plot (sequence, optional): Fractional sub-box crop.
+
+        Raises:
+            ValueError: If ``center_mpc`` is neither numeric nor ``"all"``.
+        """
         if (type(center_mpc) == float) | (type(center_mpc) == int):
             self.plot_one_slice(
                 name,
@@ -922,6 +1202,15 @@ class TomographyPlot(object):
             )
 
     def plot_integrate_image(self, zmin, zmax, name, void=None, cut_plot=None):
+        """Plot the map averaged over a radial (z) slab, with void overlays.
+
+        Args:
+            zmin (float): Lower radial bound of the slab (Mpc.h^-1).
+            zmax (float): Upper radial bound of the slab (Mpc.h^-1).
+            name (str): Base output name.
+            void (str, optional): Void catalog to overlay.
+            cut_plot (sequence, optional): Fractional sub-box crop.
+        """
         (
             tomographic_map,
             _,
@@ -992,6 +1281,24 @@ class TomographyPlot(object):
         rebin_shell=None,
         **kwargs,
     ):
+        """Interpolate and plot a 2D (RA, Dec) shell of the map at fixed z.
+
+        Builds an (RA, Dec, z) grid, converts it to map pixel coordinates,
+        interpolates the map onto it, averages over the redshift thickness and
+        displays the resulting shell (optionally rebinned), overlaying voids.
+
+        Args:
+            ra_array (array-like): RA grid (degrees).
+            dec_array (array-like): Dec grid (degrees).
+            redshift (array-like): Redshift slab sampling.
+            interpolation_method (str): Map interpolation mode.
+            void (str, optional): Void catalog to overlay.
+            rebin_shell (tuple[int], optional): Rebin the shell to this shape.
+            **kwargs: Colour-scale styling.
+
+        Returns:
+            tuple: ``(shell_mean, ra_dec_grid)``.
+        """
         (
             tomographic_map,
             _,
@@ -1105,6 +1412,18 @@ class TomographyPlot(object):
         qso=None,
         rotate=False,
     ):
+        """Plot slices centred on the largest voids of a catalog.
+
+        Args:
+            direction (str): Slicing axis.
+            name (str): Base output name.
+            space (float): Slab thickness (Mpc.h^-1).
+            void (str): Void catalog file.
+            nb_plot (int): Number of (largest) voids to centre on.
+            radius_centered (float): Half-size of each cut-out (Mpc.h^-1).
+            qso (str, optional): QSO catalog to overlay.
+            rotate (bool, optional): Rotate the slices.
+        """
         load = self.load_tomographic_objects(void=void, qso=qso)
         tomographic_map, pixel, void_catalog = load[0], load[1], load[3]
         if qso is not None:
@@ -1165,6 +1484,18 @@ class TomographyPlot(object):
         log_scale=True,
         cut_plot=None,
     ):
+        """Plot the histogram of the map delta values (optionally masked).
+
+        Args:
+            name (str): Output figure name.
+            nb_bins (int): Number of histogram bins.
+            gauss_fit (bool, optional): Overlay a Gaussian fit.
+            norm (bool, optional): Normalise to a density.
+            distance_mask (str, optional): Distance-map file for masking.
+            criteria_distance_mask (float, optional): Distance-to-LOS threshold.
+            log_scale (bool, optional): Log-scale the y-axis.
+            cut_plot (sequence, optional): Fractional sub-box crop.
+        """
         (
             tomographic_map,
             pixel,
@@ -1203,6 +1534,21 @@ class TomographyPlot(object):
         log_scale=True,
         cut_plot=None,
     ):
+        """Overlay the delta histograms of two maps for comparison.
+
+        Args:
+            name (str): Output figure name.
+            name_second_map (str): Second map file.
+            nb_bins (int): Number of histogram bins.
+            legend (list[str]): Legend labels for the two maps.
+            gauss_fit (bool, optional): Overlay Gaussian fits.
+            norm (bool, optional): Normalise to a density.
+            distance_mask (str, optional): Distance-map for the first map.
+            distance_mask2 (str, optional): Distance-map for the second map.
+            criteria_distance_mask (float, optional): Distance-to-LOS threshold.
+            log_scale (bool, optional): Log-scale the y-axis.
+            cut_plot (sequence, optional): Fractional sub-box crop.
+        """
         (
             tomographic_map,
             pixel,
@@ -1275,6 +1621,26 @@ class TomographyPlot(object):
         shuffle_map=None,
         cut_plot=None,
     ):
+        """Plot the correlation between two maps versus distance-to-LOS.
+
+        For a range of distance-to-LOS thresholds, computes the Pearson
+        correlation of the two maps over voxels closer than the threshold in
+        both, optionally including a shuffled map as a null reference.
+
+        Args:
+            name (str): Output figure name.
+            name_second_map (str): Second map file.
+            distance_mask (str): Distance-map for the first map.
+            distance_second_mask (str): Distance-map for the second map.
+            dist_extremum (sequence): ``(min, max)`` distance range.
+            bin_dist (int): Number of distance thresholds.
+            legend (list[str]): Legend labels.
+            shuffle_map (str, optional): Shuffled map for the null reference.
+            cut_plot (sequence, optional): Fractional sub-box crop.
+
+        Returns:
+            tuple: ``(corr, dist_range)``.
+        """
         (
             tomographic_map,
             pixel,
@@ -1353,6 +1719,21 @@ class TomographyPlot(object):
         distance_map=None,
         criteria_distance_mask=None,
     ):
+        """Compute and plot the 3D power spectrum of a map.
+
+        Args:
+            name_map (str): Map file.
+            name_prop (str): Map property file.
+            n_k (int): Number of k bins.
+            kmin (float): Minimum wavenumber (h/Mpc).
+            kmax (float): Maximum wavenumber (h/Mpc).
+            log (bool, optional): Use log-spaced k / semilog plot.
+            distance_map (str, optional): Distance-map for masking.
+            criteria_distance_mask (float, optional): Distance-to-LOS threshold.
+
+        Returns:
+            tuple: ``(pk_3D, k_space)``.
+        """
         tomographic_map = tomographic_objects.TomographicMap.init_from_property_files(
             name_prop, name=name_map
         )
@@ -1376,6 +1757,13 @@ class TomographyPlot(object):
 
 
 class TomographyStack(object):
+    """Stack a tomographic map at catalog positions and plot the stack.
+
+    Stacks fixed-size cut-outs of the map around each catalog object
+    (void/QSO/galaxy), optionally radius-normalised, and provides plotting and
+    ellipticity-analysis helpers on the resulting mean stack.
+    """
+
     def __init__(
         self,
         map_name,
@@ -1392,6 +1780,24 @@ class TomographyStack(object):
         interpolation_method="NEAREST",
         normalized=False,
     ):
+        """Load the map and catalog and set the stack geometry.
+
+        Args:
+            map_name (str): Map file.
+            catalog_name (str): Catalog file to stack on.
+            type_catalog (str): Catalog type (``"void"``/``"qso"``/``"galaxy"``).
+            property_file_stack (str): Output stack property file.
+            size_stack (float): Half-size of the stack cube (Mpc.h^-1).
+            name_stack (str): Output stack binary file.
+            shape_stack (tuple[int], optional): Explicit stack pixel shape.
+            map_shape (tuple[int], optional): Map pixel shape (if no property file).
+            map_size (tuple[float], optional): Map physical size.
+            property_file (str, optional): Map property/pickle file.
+            coordinate_convert (str, optional): Coordinate conversion before
+                stacking.
+            interpolation_method (str, optional): ``"NEAREST"`` or ``"LINEAR"``.
+            normalized (bool, optional): Radius-normalise each cut-out.
+        """
         self.size_stack = size_stack
         self.name_stack = name_stack
         self.property_file_stack = property_file_stack
@@ -1418,6 +1824,7 @@ class TomographyStack(object):
             self.shape_stack = shape_stack
 
     def stack(self):
+        """Compute the stack over all catalog positions and write it to disk."""
         stack = tomographic_objects.StackMap.init_by_tomographic_map(
             self.tomographic_map,
             self.catalog,
@@ -1440,6 +1847,16 @@ class TomographyStack(object):
         property_name,
         ellipticity_calculation=False,
     ):
+        """Merge several stacks (optionally with jackknife ellipticity errors).
+
+        Args:
+            stack_name (list[str]): Stack binary files to merge.
+            property_stack_name (list[str]): Their property files.
+            name (str): Output merged stack file.
+            property_name (str): Output merged property file.
+            ellipticity_calculation (bool, optional): Compute the stack
+                ellipticity and its jackknife errors.
+        """
         merge_stack = tomographic_objects.StackMap.init_by_merging(
             stack_name, property_stack_name, name, property_name
         )
@@ -1471,6 +1888,19 @@ class TomographyStack(object):
         pixel_file_qso_distance=None,
         **kwargs,
     ):
+        """Plot the central slices of a stack along x, y and z.
+
+        Args:
+            pwd (str): Output directory.
+            stack_name (str): Stack binary file.
+            stack_property (str): Stack property file.
+            name_plot (str): Output figure base name.
+            rotate (bool, optional): Rotate the slices.
+            ellipticity (bool, optional): Overlay the ellipticity fit.
+            pixel_file_qso_distance (str, optional): Pixel file for the mean
+                QSO-distance overlay.
+            **kwargs: Styling options.
+        """
         stack = tomographic_objects.StackMap.init_classic(
             name=stack_name, property_file=stack_property
         )
@@ -1498,6 +1928,19 @@ class TomographyStack(object):
         pixel_file_qso_distance=None,
         **kwargs,
     ):
+        """Plot the central stack slice along one direction.
+
+        Args:
+            pwd (str): Output directory.
+            stack: The loaded stack object.
+            name_plot (str): Output figure base name.
+            direction (str): Slicing axis (``x``/``y``/``z``).
+            rotate (bool, optional): Rotate the slice.
+            ellipticity (bool, optional): Overlay the ellipticity fit.
+            pixel_file_qso_distance (str, optional): Pixel file for the mean
+                QSO-distance overlay.
+            **kwargs: Styling options.
+        """
         (
             x_index,
             y_index,
@@ -1565,6 +2008,14 @@ class TomographyStack(object):
 
     @staticmethod
     def plot_mean_los_distance(direction, stack, pixel_file_qso_distance=None):
+        """Draw the mean QSO line-of-sight distance as a marker on the stack.
+
+        Args:
+            direction (str): Slicing axis.
+            stack: The loaded stack object.
+            pixel_file_qso_distance (str, optional): Pixel file to compute the
+                mean LOS distance from.
+        """
         if stack.mean_los_distance is None:
             stack.compute_distance_to_los(pixel_file_qso_distance)
         if stack.mean_los_distance < stack.size:
@@ -1575,6 +2026,20 @@ class TomographyStack(object):
     def plot_ellipticity(
         stack_slice, ellipticity, mpx, mpy, direction, rotate, **kwargs
     ):
+        """Overlay Gaussian-fit ellipticity contours on a stack slice.
+
+        Args:
+            stack_slice (numpy.ndarray): The 2D stack slice.
+            ellipticity (dict): Per-direction ellipticity fit parameters.
+            mpx (float): Mpc.h^-1 per pixel along the x display axis.
+            mpy (float): Mpc.h^-1 per pixel along the y display axis.
+            direction (str): Slicing axis.
+            rotate (bool): Must be False (rotation is unsupported here).
+            **kwargs: Contour styling.
+
+        Raises:
+            NotImplementedError: If ``rotate`` is True.
+        """
         if rotate:
             raise NotImplementedError(
                 "showing ellipticity with a rotate figure is not implemented, please put rotate to False"

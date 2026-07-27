@@ -1,3 +1,7 @@
+"""Launcher: convert picca delta files to the tomographic solver pixel input
+(lelantos.cosmology.DeltaConverter). Edit the variables at the top, then run
+``python lelantos_convert_delta.py``."""
+
 import os
 from lelantos import cosmology
 

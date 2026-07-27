@@ -1,3 +1,7 @@
+"""Launcher: post-process a void catalog (stats, cuts, cross-correlation
+catalog) (lelantos.voidfinder). Edit the variables at the top, then run
+``python lelantos_void_process.py``."""
+
 import os
 from lelantos import voidfinder
 

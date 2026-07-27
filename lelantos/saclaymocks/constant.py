@@ -1,3 +1,9 @@
+"""Physical constants and fiducial parameters (vendored from SaclayMocks).
+
+Bundled copy of the SaclayMocks ``constant`` module, used as a fallback when
+SaclayMocks is not installed. Prefer installing SaclayMocks directly.
+"""
+
 # physical constant and parameters
 import scipy as sp
 from scipy import interpolate

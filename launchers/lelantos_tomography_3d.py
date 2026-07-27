@@ -1,3 +1,7 @@
+"""Launcher: export tomographic objects (map, pixels, catalogs) to formats for
+3D visualisation (lelantos.tomography / lelantos.voidfinder). Edit the
+variables at the top, then run ``python lelantos_tomography_3d.py``."""
+
 import os
 from lelantos import tomography,voidfinder
 
