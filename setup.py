@@ -32,6 +32,7 @@ REQUIRED = [
 # What packages are optional?
 EXTRAS = {
     # 'fancy feature': ['pyevtk'],
+    'dev': ['pytest'],
 }
 
 # The rest you shouldn't have to touch too much :)
