@@ -1,3 +1,7 @@
+"""Launcher: plot line-of-sight density / mean separation of a pixel file
+(lelantos.cosmology.PixelAnalizer). Edit the variables at the top, then run
+``python lelantos_plot_pixel.py``."""
+
 import os
 from lelantos import cosmology
 

@@ -1,3 +1,7 @@
+"""Launcher: plot tomographic map slices with QSO/void/galaxy overlays
+(lelantos.tomography.TomographyPlot). Edit the variables at the top, then run
+``python lelantos_plot_tomography.py``."""
+
 import os
 from lelantos import tomography
 

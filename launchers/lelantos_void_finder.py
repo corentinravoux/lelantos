@@ -1,3 +1,7 @@
+"""Launcher: run the void finder on a tomographic map
+(lelantos.voidfinder.VoidFinder). Edit the variables at the top, then run
+``python lelantos_void_finder.py``."""
+
 import os
 from lelantos import voidfinder
 

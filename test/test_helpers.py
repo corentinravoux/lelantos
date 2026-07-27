@@ -1,3 +1,5 @@
+"""Shared test helpers and the AbstractTest base class for the test suite."""
+
 import fitsio
 import os
 import numpy as np

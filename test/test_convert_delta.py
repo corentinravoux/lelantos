@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Unit tests for lelantos.cosmology delta-to-pixel conversion."""
+
 # -*- coding: utf-8 -*-
 """
 Date:
@@ -78,6 +80,7 @@ name_map = os.path.join("./data","pixel","map_stripe82_DR16.bin")
 
 
 def test_transformation():
+    """Check the serial delta->pixel conversion against reference catalogs."""
     delta_converter = cosmology.DeltaConverter("./",
                                                Omega_m,
                                                delta_path,
@@ -125,6 +128,7 @@ def test_transformation():
 
 
 def test_parallel_launch():
+    """Check the parallel (tiled) delta->pixel conversion runs end to end."""
     delta_converter = cosmology.DeltaConverter("./",
                                                Omega_m,
                                                delta_path,

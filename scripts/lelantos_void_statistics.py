@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""Script: print the statistics of a void catalog
+(lelantos.tomographic_objects.VoidCatalog.print_void_statistics)."""
+
 from lelantos import tomographic_objects
 import argparse
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""Script: print the properties/statistics of a pixel (line-of-sight) file
+(lelantos.tomographic_objects.Pixel)."""
+
 from lelantos import tomographic_objects
 import argparse
 

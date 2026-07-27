@@ -1,3 +1,7 @@
+"""Launcher: extract the underlying SaclayMocks dark-matter box matching a
+tomographic map geometry (lelantos.boxdm). Edit the variables at the top of
+the file, then run ``python lelantos_boxdm.py``."""
+
 import os
 pwd = os.getcwd()
 from lelantos import boxdm

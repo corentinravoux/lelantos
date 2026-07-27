@@ -145,3 +145,6 @@ dist/
 
 
 lelantos/exec/dachshund.exe
+
+# MkDocs build output
+site/

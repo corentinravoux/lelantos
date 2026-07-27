@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Script: display the RA/Dec (and redshift) distribution of a QSO catalog."""
+
 import matplotlib.pyplot as plt
 import argparse
 from lelantos import tomographic_objects

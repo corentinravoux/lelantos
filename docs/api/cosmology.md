@@ -1,0 +1,3 @@
+# cosmology
+
+::: lelantos.cosmology

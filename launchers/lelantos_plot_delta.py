@@ -1,3 +1,7 @@
+"""Launcher: diagnostic plots of picca delta files
+(lelantos.cosmology.DeltaAnalyzer). Edit the variables at the top, then run
+``python lelantos_plot_delta.py``."""
+
 
 import os
 from lelantos import cosmology

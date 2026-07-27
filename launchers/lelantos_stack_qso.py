@@ -1,3 +1,7 @@
+"""Launcher: stack a tomographic map at QSO positions
+(lelantos.tomography.TomographyStack). Edit the variables at the top, then run
+``python lelantos_stack_qso.py``."""
+
 import os
 from lelantos import tomography
 
