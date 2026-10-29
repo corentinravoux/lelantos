@@ -8,7 +8,6 @@ helpers. Prefer installing SaclayMocks directly.
 
 import scipy as sp
 import numpy as np
-from scipy import random
 PI = np.pi
 
 
@@ -239,9 +238,9 @@ def sample_box(xbox,ybox,zbox,rho,threshold=2.5):
 
 #.......................    select pixels with rho > threshold*rms
     rms = rho.std()
-    iqso = sp.where(rho > threshold*rms)
+    iqso = np.where(rho > threshold*rms)
 #    print("threshold*rms=", threshold*rms)
-    iqso = sp.array(iqso)        # (3,N_QSO) 3 raws N col
+    iqso = np.array(iqso)        # (3,N_QSO) 3 raws N col
 #.......................   remove QSO at less than dmax cells from the box edges
     imax = xbox.size - dmax
     jmax = ybox.size - dmax
@@ -265,7 +264,9 @@ def sample_box(xbox,ybox,zbox,rho,threshold=2.5):
     print("found: ",len(iqso[0])," quasars")
 
 #    return [x+y+z for x,y,z in zip(xbox[iqso[0]],ybox[iqso[1]],zbox[iqso[2]])]
-    return [qso(x,y,z) for x,y,z in zip(xbox[iqso[0]],ybox[iqso[1]],zbox[iqso[2]])]
+    # The original SaclayMocks code built `qso(x, y, z)` objects, but that class
+    # was never ported to lelantos; return the plain cell coordinates instead.
+    return list(zip(xbox[iqso[0]], ybox[iqso[1]], zbox[iqso[2]]))
 
 
 def ComputeRaDecR2(x, y, z, ra0, dec0):

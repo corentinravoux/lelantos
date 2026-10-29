@@ -1,6 +1,7 @@
 # LELANTOS — Large-scalE LymAN-alpha TOmography Suite
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21646247.svg)](https://doi.org/10.5281/zenodo.21646247)
+[![tests](https://github.com/corentinravoux/lelantos/actions/workflows/tests.yml/badge.svg)](https://github.com/corentinravoux/lelantos/actions/workflows/tests.yml)
 
 LELANTOS — Greek titan associated with hunting and air (name found after
 discussion with [E. Chaussidon](https://github.com/echaussidon)).
